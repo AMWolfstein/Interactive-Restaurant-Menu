@@ -55,6 +55,17 @@ export function SiteTheme() {
       document.head.appendChild(meta);
     }
     meta.setAttribute("content", brand.accent);
+
+    // iOS uses apple-touch-icon instead of the web manifest when the site is
+    // added to the home screen. Keep it aligned with the logo shown in the
+    // header as soon as the saved brand settings are loaded.
+    let appleIcon = document.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"]');
+    if (!appleIcon) {
+      appleIcon = document.createElement("link");
+      appleIcon.rel = "apple-touch-icon";
+      document.head.appendChild(appleIcon);
+    }
+    appleIcon.href = brand.logo || "/apple-touch-icon.png";
   }, [ready, brand, pathname]);
 
   return null;
