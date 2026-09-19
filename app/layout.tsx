@@ -9,6 +9,15 @@ export const metadata: Metadata = {
   description:
     "قائمة مطعم متكاملة مع مخزون وطلبات ولوحة تحكم آمنة متصلة بباك إند.",
   applicationName: "Smart Restaurant Menu",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "قائمة المطعم",
+  },
+  icons: {
+    apple: "/apple-touch-icon.png",
+  },
   openGraph: {
     title: "قائمة المطعم الذكية",
     description: "اطلب بدقيقتين والطلب يوصلك على باب البيت 🍔",
