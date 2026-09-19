@@ -8,17 +8,16 @@ import {
   fetchAdminOverview,
   fetchPublishedMenu,
   isSupabaseStoreConfigured,
-  markAllNotificationsRead,
   placeOrder,
   probeSupabaseStore,
   savePublishedMenu,
   type PlaceOrderInput,
 } from "./supabase-store";
 import { isValidOrderType, sanitizeText } from "./validation";
-import type { AdminOverview, MenuData, SavedOrder, StockNotification } from "./types";
+import type { AdminOverview, MenuData, SavedOrder } from "./types";
 
 /**
- * طبقة الباك إند لحفظ بيانات المطعم: القائمة والطلبات والمخزون.
+ * طبقة الباك إند لحفظ بيانات المطعم والقائمة والطلبات.
  *
  * السائق الأساسي هو Supabase (Postgres) — هو اللي بيشتغل على Vercel وبيحفظ
  * البيانات بشكل دائم. ولو Supabase غير مُعدّ (تطوير محلي من غير مفاتيح) بيتم
@@ -64,10 +63,6 @@ async function storageStatus(force = false): Promise<StorageStatus> {
   return status;
 }
 
-export async function getStorageStatus(): Promise<StorageStatus> {
-  return storageStatus();
-}
-
 /* ------------------------------------------------------------------ */
 /* ملف التطوير المحلي                                                  */
 /* ------------------------------------------------------------------ */
@@ -75,13 +70,11 @@ export async function getStorageStatus(): Promise<StorageStatus> {
 interface FileDatabase {
   menu: MenuData;
   orders: SavedOrder[];
-  notifications: StockNotification[];
 }
 
 const freshDatabase = (): FileDatabase => ({
   menu: normalizeData(structuredClone(DEFAULT_DATA)),
   orders: [],
-  notifications: [],
 });
 
 let queue = Promise.resolve();
@@ -112,7 +105,6 @@ async function readFileDatabase(): Promise<FileDatabase> {
   return {
     menu: normalizeData(parsed.menu ?? DEFAULT_DATA),
     orders: Array.isArray(parsed.orders) ? parsed.orders : [],
-    notifications: Array.isArray(parsed.notifications) ? parsed.notifications : [],
   };
 }
 
@@ -121,51 +113,6 @@ async function writeFileDatabase(database: FileDatabase) {
   const temporary = `${DATABASE_PATH}.${process.pid}.tmp`;
   await fs.writeFile(temporary, JSON.stringify(database, null, 2), "utf8");
   await fs.rename(temporary, DATABASE_PATH);
-}
-
-/* ------------------------------------------------------------------ */
-/* تنبيهات نقص المخزون                                                 */
-/* ------------------------------------------------------------------ */
-
-const LOW_STOCK_WEBHOOK = () => (process.env.LOW_STOCK_WEBHOOK_URL ?? "").trim();
-
-/** التحقق من أن webhook URL آمن (http/https فقط) */
-function isWebhookUrlSafe(url: string): boolean {
-  try {
-    const u = new URL(url);
-    return u.protocol === "http:" || u.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
-/** إرسال التنبيه لأي خدمة خارجية (WhatsApp Business API / Make / n8n / Slack) */
-function sendLowStockWebhook(notifications: StockNotification[]) {
-  const url = LOW_STOCK_WEBHOOK();
-  if (!url || notifications.length === 0) return;
-  if (!isWebhookUrlSafe(url)) {
-    console.error("[restaurant] LOW_STOCK_WEBHOOK_URL غير آمن - تم تجاهله");
-    return;
-  }
-  const payload = {
-    type: "low_stock",
-    sentAt: new Date().toISOString(),
-    count: notifications.length,
-    notifications: notifications.map((notification) => ({
-      id: notification.id,
-      itemId: notification.itemId,
-      itemName: notification.itemName,
-      remaining: notification.remaining,
-      threshold: notification.threshold,
-    })),
-  };
-  void fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(payload),
-  }).catch((error) => {
-    console.error("[restaurant] فشل إرسال webhook نقص المخزون", error);
-  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -234,7 +181,7 @@ export async function replaceMenu(menu: MenuData, token: string | null): Promise
   });
 }
 
-export async function createOrder(input: PlaceOrderInput): Promise<{ order: SavedOrder; lowStock: StockNotification[] }> {
+export async function createOrder(input: PlaceOrderInput): Promise<{ order: SavedOrder }> {
   // تحقق أساسي من نوع الطلب
   if (!isValidOrderType(input.orderType)) throw new StoreError("نوع الطلب غير صالح", 400);
   if (!Array.isArray(input.lines) || input.lines.length === 0) throw new StoreError("السلة فارغة", 400);
@@ -284,24 +231,20 @@ export async function createOrder(input: PlaceOrderInput): Promise<{ order: Save
 
     const result = await placeOrder(sanitizedInput);
     if (!result.ok || !result.data) throw new StoreError("تعذّر تسجيل الطلب", result.status || 400);
-    const lowStock = result.data.lowStock ?? [];
-    sendLowStockWebhook(lowStock);
-    return { order: result.data.order, lowStock };
+    return { order: result.data.order };
   }
 
-  const { order, lowStock } = await serialized(() => createOrderInFile(sanitizedInput));
-  sendLowStockWebhook(lowStock);
-  return { order, lowStock };
+  const order = await serialized(() => createOrderInFile(sanitizedInput));
+  return { order };
 }
 
-/** تسجيل الطلب وخصم المخزون في ملف التطوير المحلي */
+/** تسجيل الطلب في ملف التطوير المحلي */
 async function createOrderInFile(input: PlaceOrderInput) {
   const database = await readFileDatabase();
   if (!Array.isArray(input.lines) || input.lines.length === 0) throw new StoreError("السلة فارغة", 400);
   if (input.lines.length > 50) throw new StoreError("عدد الأصناف كبير جداً", 400);
 
   const orderLines: SavedOrder["lines"] = [];
-  const lowStock: StockNotification[] = [];
 
   for (const line of input.lines) {
     const item = database.menu.items.find((candidate) => candidate.id === line.itemId);
@@ -310,28 +253,8 @@ async function createOrderInFile(input: PlaceOrderInput) {
     const rawQty = Math.floor(Number(line.quantity) || 0);
     if (rawQty < 1 || rawQty > 50) throw new StoreError(`الحد الأقصى 50 قطعة للصنف: ${item.name}`, 400);
     const quantity = rawQty;
-    if (item.trackStock) {
-      const before = Math.max(0, item.stock ?? 0);
-      if (quantity > before) throw new StoreError(`المتاح من ${item.name} هو ${before} فقط`, 409);
-      item.stock = before - quantity;
-      if (item.stock === 0) item.available = false;
-
-      const threshold = Math.max(0, item.lowStockThreshold ?? 2);
-      if (before > threshold && item.stock <= threshold) {
-        const notification: StockNotification = {
-          id: crypto.randomUUID(),
-          itemId: item.id,
-          itemName: item.name,
-          remaining: item.stock,
-          threshold,
-          createdAt: new Date().toISOString(),
-          read: false,
-        };
-        database.notifications.push(notification);
-        lowStock.push(notification);
-      }
-    }
     orderLines.push({ itemId: item.id, name: item.name, quantity, unitPrice: item.price });
+    item.salesCount = Math.max(0, item.salesCount ?? 0) + quantity;
   }
 
   // احسب الإجمالي على السيرفر - تجاهل total القادم من العميل
@@ -359,10 +282,9 @@ async function createOrderInFile(input: PlaceOrderInput) {
   database.orders.push(order);
   // احتفظ بآخر 100 طلب فقط في وضع الملف (منع تضخم)
   if (database.orders.length > 100) database.orders = database.orders.slice(-100);
-  if (database.notifications.length > 100) database.notifications = database.notifications.slice(-100);
   database.menu.updatedAt = new Date().toISOString();
   await writeFileDatabase(database);
-  return { order, lowStock };
+  return order;
 }
 
 export async function getAdminOverview(token: string | null): Promise<AdminOverview> {
@@ -378,24 +300,6 @@ export async function getAdminOverview(token: string | null): Promise<AdminOverv
   const database = await readFileDatabase();
   return {
     orders: database.orders.slice(-30).reverse(),
-    notifications: database.notifications.slice(-50).reverse(),
     storage: { driver: "file", persistent: false },
   };
-}
-
-export async function markNotificationsRead(token: string | null): Promise<void> {
-  const status = await storageStatus();
-
-  if (status.driver === "supabase") {
-    if (!token) throw new StoreError("غير مصرّح", 401);
-    const result = await markAllNotificationsRead(token);
-    if (!result.ok) throw new StoreError("تعذّر تحديث التنبيهات", result.status || 502);
-    return;
-  }
-
-  await serialized(async () => {
-    const database = await readFileDatabase();
-    database.notifications.forEach((notification) => (notification.read = true));
-    await writeFileDatabase(database);
-  });
 }

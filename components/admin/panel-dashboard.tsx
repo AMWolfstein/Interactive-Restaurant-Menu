@@ -3,11 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowUpRight,
-  Bell,
   CircleCheck,
   Database,
   FolderTree,
-  Package,
   Plus,
   Receipt,
   TriangleAlert,
@@ -18,19 +16,17 @@ import { useMenu } from "@/lib/use-menu";
 import { Badge, Button, Panel } from "@/components/ui";
 import { cx } from "@/lib/cx";
 import { subscribeRealtime } from "@/lib/realtime";
-import { NOTIFICATIONS_TABLE, ORDERS_TABLE } from "@/lib/supabase";
+import { ORDERS_TABLE } from "@/lib/supabase";
 import { authenticatedFetch } from "@/lib/supabase-auth-core";
-import type { AdminOverview, SavedOrder, StockNotification } from "@/lib/types";
+import type { AdminOverview, SavedOrder } from "@/lib/types";
 
 interface OverviewState {
   orders: SavedOrder[];
-  notifications: StockNotification[];
   storage: { driver: "supabase" | "file"; persistent: boolean };
 }
 
 const EMPTY_OVERVIEW: OverviewState = {
   orders: [],
-  notifications: [],
   storage: { driver: "file", persistent: false },
 };
 
@@ -58,7 +54,6 @@ export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: str
       const result = (await response.json()) as AdminOverview;
       setOverview({
         orders: result.orders ?? [],
-        notifications: result.notifications ?? [],
         storage: result.storage ?? EMPTY_OVERVIEW.storage,
       });
       setOverviewError(null);
@@ -69,13 +64,10 @@ export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: str
 
   useEffect(() => {
     // متابعة لحظية فورية عبر Supabase Realtime:
-    // أي طلب جديد أو تنبيه مخزون يظهر في اللوحة في نفس اللحظة (WebSocket)
+    // أي طلب جديد يظهر في اللوحة في نفس اللحظة (WebSocket)
     const unsubscribe = subscribeRealtime(
       "realtime:admin-overview",
-      [
-        { table: ORDERS_TABLE, event: "INSERT" },
-        { table: NOTIFICATIONS_TABLE, event: "INSERT" },
-      ],
+      [{ table: ORDERS_TABLE, event: "INSERT" }],
       () => void loadOverview(),
     );
     // شبكة أمان: فحص دوري كل 30 ثانية لو الـ Realtime انقطع
@@ -87,19 +79,6 @@ export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: str
       window.clearTimeout(kick);
     };
   }, [loadOverview]);
-
-  const unread = useMemo(
-    () => overview.notifications.filter((notification) => !notification.read),
-    [overview.notifications],
-  );
-
-  const lowStockItems = useMemo(
-    () =>
-      items
-        .filter((item) => item.trackStock && (item.stock ?? 0) <= (item.lowStockThreshold ?? 2))
-        .sort((a, b) => (a.stock ?? 0) - (b.stock ?? 0)),
-    [items],
-  );
 
   const stats = useMemo(() => {
     const soldOut = items.filter((item) => !item.available).length;
@@ -171,7 +150,7 @@ export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: str
           <p className="mt-1">
             البيانات بتتحفظ في ملف مؤقت على السيرفر وهتضيع مع كل إعادة تشغيل. عشان الحفظ يبقى دائم على Vercel
             نفّذ محتوى <span dir="ltr" className="font-mono">supabase/schema.sql</span> مرة واحدة في Supabase → SQL Editor،
-            وبعدها كل حاجة (القائمة، الطلبات، المخزون) هتتحفظ في Postgres.
+            وبعدها القائمة والطلبات هيتحفظوا في Postgres.
           </p>
         </div>
       ) : null}
@@ -180,71 +159,6 @@ export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: str
         <div className="rounded-card border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] font-bold text-amber-300">
           {overviewError}
         </div>
-      ) : null}
-
-      {unread.length > 0 ? (
-        <Panel
-          title={`تنبيهات نقص المخزون (${unread.length})`}
-          description="تُنشأ تلقائياً عند وصول الكمية للحد المحدد (الافتراضي 2)"
-          icon={<Bell className="h-4 w-4" />}
-          actions={
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={async () => {
-                await authenticatedFetch("/api/admin/overview", { method: "PATCH" });
-                setOverview((current) => ({
-                  ...current,
-                  notifications: current.notifications.map((row) => ({ ...row, read: true })),
-                }));
-              }}
-            >
-              تحديد كمقروء
-            </Button>
-          }
-        >
-          <div className="grid gap-2 sm:grid-cols-2">
-            {unread.slice(0, 6).map((notification) => (
-              <div key={notification.id} className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
-                <Package className="h-5 w-5 shrink-0 text-amber-400" />
-                <div>
-                  <p className="text-xs font-black">{notification.itemName}</p>
-                  <p className="text-[11px] text-amber-300">
-                    متبقي {notification.remaining} (حد التنبيه {notification.threshold}) — راجع المخزون
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-          <p className="mt-2 text-[11px] text-muted">
-            التنبيه نفسه بيتبعت للـ webhook لو <span dir="ltr" className="font-mono">LOW_STOCK_WEBHOOK_URL</span> متظبط.
-          </p>
-        </Panel>
-      ) : null}
-
-      {lowStockItems.length > 0 ? (
-        <Panel
-          title="أصناف قربت تخلص"
-          description="الكمية الحالية مقارنة بحد التنبيه"
-          icon={<Package className="h-4 w-4" />}
-          actions={<Button size="sm" variant="outline" onClick={() => onJump("items")}>تعديل الكميات</Button>}
-        >
-          <div className="flex flex-wrap gap-2">
-            {lowStockItems.slice(0, 12).map((item) => (
-              <span
-                key={item.id}
-                className={cx(
-                  "rounded-xl border px-2.5 py-1.5 text-[11px] font-bold",
-                  (item.stock ?? 0) === 0
-                    ? "border-red-500/30 bg-red-500/10 text-red-300"
-                    : "border-amber-500/30 bg-amber-500/10 text-amber-300",
-                )}
-              >
-                {item.name} — {item.stock ?? 0}
-              </span>
-            ))}
-          </div>
-        </Panel>
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -280,7 +194,7 @@ export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: str
         </Panel>
 
         <div className="space-y-4">
-          <Panel title="آخر الطلبات" description="مسجّلة في الباك إند مع خصم المخزون" icon={<Receipt className="h-4 w-4" />}>
+          <Panel title="آخر الطلبات" description="مسجّلة في الباك إند قبل فتح رسالة واتساب" icon={<Receipt className="h-4 w-4" />}>
             {overview.orders.length === 0 ? (
               <p className="rounded-xl border border-line bg-surface-2/40 p-3 text-[11px] text-muted">
                 لسه مفيش طلبات — أول طلب من الموقع هيتسجّل هنا فوراً.

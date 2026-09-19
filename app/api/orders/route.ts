@@ -6,8 +6,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * تسجيل طلب جديد في الباك إند: يتحقق من الكمية المتاحة،
- * يخصم المخزون، وينشئ تنبيه نقص مخزون عند الوصول للحد المحدد.
+ * تسجيل الطلب في الباك إند قبل فتح رسالة واتساب.
  * محمي بـ Rate Limiting (5 طلبات / دقيقة لكل IP) للـ portfolio demo
  */
 export async function POST(request: NextRequest) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { Moon, Palette, Sun } from "lucide-react";
+import { LayoutGrid, List, Moon, Palette, Sun } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
 import { FONT_OPTIONS } from "@/lib/fonts";
 import { ColorField, Field, Panel, RangeField, Select, Segmented, TextInput, Toggle } from "@/components/ui";
@@ -11,18 +11,28 @@ export function LookPanel() {
 
   return (
     <div className="space-y-4">
-      <Panel title="النمط والألوان" description="الفورم ده بيعدّي على الموقع كله: الأزرار، الأسعار، الشريط العلوي" icon={<Palette className="h-4 w-4" />}>
+      <Panel title="النمط والألوان" description="اختار ستايل أسود أو أبيض للموقع كله، وعدّل لون الأزرار والأسعار" icon={<Palette className="h-4 w-4" />}>
         <div className="space-y-4">
-          <Field label="الوضع الليلي / النهاري">
+          <Field label="ستايل الموقع" hint="الاختيار بيتحفظ وبيظهر فوراً لكل الزوار">
             <Segmented
               className="w-full [&>button]:flex-1"
               value={brand.theme}
               onChange={(value) => patchBrand({ theme: value })}
               options={[
-                { value: "dark", label: <span className="inline-flex items-center gap-1.5"><Moon className="h-3.5 w-3.5" /> دارك</span> },
-                { value: "light", label: <span className="inline-flex items-center gap-1.5"><Sun className="h-3.5 w-3.5" /> لايت</span> },
+                { value: "dark", label: <span className="inline-flex items-center gap-1.5"><Moon className="h-3.5 w-3.5" /> أسود</span> },
+                { value: "light", label: <span className="inline-flex items-center gap-1.5"><Sun className="h-3.5 w-3.5" /> أبيض</span> },
               ]}
             />
+            <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] font-bold">
+              <div className="rounded-xl border border-white/10 bg-[#08090b] p-3 text-white">
+                <span className="mb-2 block h-1.5 w-8 rounded-full bg-accent" />
+                خلفية سوداء
+              </div>
+              <div className="rounded-xl border border-black/10 bg-white p-3 text-[#111318]">
+                <span className="mb-2 block h-1.5 w-8 rounded-full bg-accent" />
+                خلفية بيضاء
+              </div>
+            </div>
           </Field>
           <ColorField
             label="لون الأكسنت"
@@ -50,7 +60,20 @@ export function LookPanel() {
         </div>
       </Panel>
 
-      <Panel title="عناصر الواجهة" description="تتحكم في اللي ظاهر واللي مختفي من غير ما تمسح أي حاجة">
+      <Panel title="عناصر الواجهة" description="تتحكم في شكل عرض المنتجات والعناصر الظاهرة">
+        <div className="mb-3">
+          <Field label="شكل عرض المنتجات" hint="الشبكة تعرض 3 منتجات بجانب بعض بدون الوصف">
+            <Segmented
+              className="w-full [&>button]:flex-1"
+              value={commerce.productLayout}
+              onChange={(value) => patchCommerce({ productLayout: value })}
+              options={[
+                { value: "list", label: <span className="inline-flex items-center gap-1.5"><List className="h-3.5 w-3.5" /> العرض الحالي</span> },
+                { value: "grid", label: <span className="inline-flex items-center gap-1.5"><LayoutGrid className="h-3.5 w-3.5" /> شبكة 3 منتجات</span> },
+              ]}
+            />
+          </Field>
+        </div>
         <div className="grid gap-2.5 sm:grid-cols-2">
           <Toggle
             label="إظهار الأسعار"

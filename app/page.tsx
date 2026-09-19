@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import {
   Clock,
   Utensils,
@@ -17,10 +17,15 @@ import { useMenu } from "@/lib/use-menu";
 import { useCart } from "@/lib/use-cart";
 import { computeTotals, formatPrice, pick } from "@/lib/format";
 import { cx } from "@/lib/cx";
-import { DishCard, DishImage } from "@/components/public/dish-card";
+import { ProductCard, ProductImage } from "@/components/public/product-card";
 import { CartSheet } from "@/components/public/cart-sheet";
+import { ThemeToggle } from "@/components/public/theme-toggle";
+import { PwaInstallButton } from "@/components/public/pwa-install-button";
+import { PreviousOrderButton } from "@/components/public/previous-order-button";
+import { FAVORITES_SERVER_SNAPSHOT, getFavoritesSnapshot, subscribeFavorites } from "@/lib/favorites-store";
 
 const ALL = "all";
+const FAVORITES = "favorites";
 
 function safeHref(url?: string): string | undefined {
   if (!url) return undefined;
@@ -41,9 +46,11 @@ export default function Home() {
 
   const [activeCategory, setActiveCategory] = useState<string>(ALL);
   const [query, setQuery] = useState("");
+  const [supplierFilter, setSupplierFilter] = useState<string | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
 
   const cart = useCart(items);
+  const favoriteIds = useSyncExternalStore(subscribeFavorites, getFavoritesSnapshot, () => FAVORITES_SERVER_SNAPSHOT);
   const totals = useMemo(() => computeTotals(cart.lines, commerce, "delivery"), [cart.lines, commerce]);
 
   const visibleCategories = useMemo(() => categories.filter((category) => category.visible), [categories]);
@@ -59,12 +66,20 @@ export default function Home() {
     );
   }, [items, query]);
   const featured = useMemo(
-    () => (commerce.enableFeatured && activeCategory === ALL && !query ? items.filter((item) => item.bestseller && item.available) : []),
+    () => (commerce.enableFeatured && activeCategory === ALL && !query
+      ? items.filter((item) => item.available && (item.salesCount ?? 0) > 0).sort((a, b) => (b.salesCount ?? 0) - (a.salesCount ?? 0))
+      : []),
     [commerce.enableFeatured, activeCategory, query, items],
   );
 
   const sections = useMemo(() => {
     const pool = searched.filter((item) => item.available || query);
+    if (supplierFilter) {
+      return [{ category: undefined, items: pool.filter((item) => item.supplier?.trim() === supplierFilter) }];
+    }
+    if (activeCategory === FAVORITES) {
+      return [{ category: undefined, items: pool.filter((item) => favoriteIds.includes(item.id)) }];
+    }
     if (activeCategory !== ALL) {
       const category = categories.find((c) => c.id === activeCategory);
       return category ? [{ category, items: pool.filter((item) => item.categoryId === category.id) }] : [];
@@ -72,7 +87,7 @@ export default function Home() {
     return visibleCategories
       .map((category) => ({ category, items: pool.filter((item) => item.categoryId === category.id) }))
       .filter((section) => section.items.length > 0);
-  }, [searched, activeCategory, categories, visibleCategories, query]);
+  }, [searched, activeCategory, categories, visibleCategories, query, favoriteIds, supplierFilter]);
 
   const isEmpty = sections.every((section) => section.items.length === 0);
 
@@ -96,7 +111,7 @@ export default function Home() {
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-3 px-4 py-3">
           <div className="flex min-w-0 items-center gap-2.5">
             {brand.logo ? (
-              <DishImage src={brand.logo} alt="" className="h-11 w-11 rounded-xl border border-line" />
+              <ProductImage src={brand.logo} alt="" className="h-11 w-11 rounded-xl border border-line" />
             ) : (
               <span className="grid h-11 w-11 place-items-center rounded-xl bg-accent text-accent-contrast">
                 <Utensils className="h-5 w-5" />
@@ -120,6 +135,14 @@ export default function Home() {
               <span className={cx("h-1.5 w-1.5 rounded-full", contact.isOpen ? "bg-emerald-400" : "bg-red-400")} />
               {contact.isOpen ? (en ? "Open now" : "مفتوح الآن") : en ? "Closed" : "مقفل"}
             </span>
+            <PreviousOrderButton
+              language={lang}
+              validItemIds={new Set(items.map((item) => item.id))}
+              onRestore={cart.restore}
+              onOpenCart={() => setCartOpen(true)}
+            />
+            <PwaInstallButton language={lang} />
+            <ThemeToggle fallback={brand.theme} language={lang} />
             <a
               href="/admin"
               title={en ? "Admin panel" : "لوحة التحكم"}
@@ -148,7 +171,7 @@ export default function Home() {
         {/* الهيرو */}
         {brand.showHero ? (
           <section className="relative mt-5 overflow-hidden rounded-xl2 border border-line">
-            <DishImage src={brand.heroImage} alt="" className="absolute inset-0 h-full w-full" />
+            <ProductImage src={brand.heroImage} alt="" className="absolute inset-0 h-full w-full" />
             <div className="relative bg-[linear-gradient(100deg,rgba(0,0,0,.86),rgba(0,0,0,.35))] p-6 sm:p-8">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/15 px-2.5 py-1 text-[11px] font-black text-accent">
                 <Sparkles className="h-3 w-3" />
@@ -201,15 +224,21 @@ export default function Home() {
           <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
             <CategoryChip
               active={activeCategory === ALL}
-              onClick={() => setActiveCategory(ALL)}
+              onClick={() => { setActiveCategory(ALL); setSupplierFilter(null); }}
               label={en ? "All" : "الكل"}
               emoji="🍽️"
+            />
+            <CategoryChip
+              active={activeCategory === FAVORITES}
+              onClick={() => { setActiveCategory(FAVORITES); setSupplierFilter(null); }}
+              label={en ? "Favorites" : "المفضلة"}
+              emoji="❤️"
             />
             {visibleCategories.map((category) => (
               <CategoryChip
                 key={category.id}
                 active={activeCategory === category.id}
-                onClick={() => setActiveCategory(category.id)}
+                onClick={() => { setActiveCategory(category.id); setSupplierFilter(null); }}
                 label={nameOf(category)}
                 emoji={category.emoji}
               />
@@ -228,7 +257,7 @@ export default function Home() {
                   onClick={() => cart.add(item.id)}
                   className="w-40 shrink-0 snap-start overflow-hidden rounded-card border border-line bg-surface text-start transition hover:border-accent/50"
                 >
-                  <DishImage src={item.image} alt={nameOf(item)} className="h-24 w-full" />
+                  <ProductImage src={item.image} alt={nameOf(item)} className="h-24 w-full" />
                   <div className="p-2.5">
                     <p className="truncate text-xs font-bold">{nameOf(item)}</p>
                     <p className="mt-1 text-[11px] font-black text-accent">
@@ -248,12 +277,18 @@ export default function Home() {
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="flex items-center gap-2 text-base font-black">
                   <span aria-hidden>{section.category?.emoji}</span>
-                  {section.category ? nameOf(section.category) : en ? "Menu" : "القائمة"}
+                  {supplierFilter
+                    ? `منتجات المورد: ${supplierFilter}`
+                    : section.category
+                      ? nameOf(section.category)
+                      : activeCategory === FAVORITES
+                        ? "المفضلة"
+                        : "القائمة"}
                   <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-bold text-muted">
                     {section.items.length}
                   </span>
                 </h3>
-                {activeCategory === ALL ? (
+                {activeCategory === ALL && section.category ? (
                   <button
                     onClick={() => setActiveCategory(section.category!.id)}
                     className="flex items-center gap-0.5 text-[11px] font-bold text-muted transition hover:text-accent"
@@ -263,9 +298,12 @@ export default function Home() {
                   </button>
                 ) : null}
               </div>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className={cx(
+                "grid",
+                commerce.productLayout === "grid" ? "grid-cols-3 gap-2 sm:gap-3" : "grid-cols-1 gap-3 md:grid-cols-2",
+              )}>
                 {section.items.map((item) => (
-                  <DishCard
+                  <ProductCard
                     key={item.id}
                     item={item}
                     lang={lang}
@@ -273,6 +311,8 @@ export default function Home() {
                     quantity={cart.quantityOf(item.id)}
                     onAdd={() => cart.add(item.id)}
                     onRemoveOne={() => cart.setQuantity(item.id, cart.quantityOf(item.id) - 1)}
+                    onSupplierClick={(supplier) => { setSupplierFilter(supplier.trim()); setActiveCategory(ALL); }}
+                    layout={commerce.productLayout}
                     disabled={!contact.isOpen || !commerce.enableCart}
                   />
                 ))}

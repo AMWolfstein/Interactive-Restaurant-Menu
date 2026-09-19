@@ -16,8 +16,21 @@ function read(): CartLine[] {
   try {
     const raw = window.localStorage.getItem(CART_KEY);
     if (!raw) return CART_SERVER_SNAPSHOT;
-    const parsed = JSON.parse(raw) as CartLine[];
-    return Array.isArray(parsed) ? parsed : [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+
+    // localStorage is user-controlled and can also contain data written by an
+    // older app version. Normalize it before exposing it to the UI.
+    const quantities = new Map<string, number>();
+    for (const value of parsed) {
+      if (!value || typeof value !== "object") continue;
+      const { itemId, quantity } = value as Partial<CartLine>;
+      if (typeof itemId !== "string" || !itemId || itemId.length > 50) continue;
+      const normalizedQuantity = Math.floor(Number(quantity));
+      if (!Number.isFinite(normalizedQuantity) || normalizedQuantity < 1) continue;
+      quantities.set(itemId, Math.min(50, (quantities.get(itemId) ?? 0) + normalizedQuantity));
+    }
+    return [...quantities].map(([itemId, quantity]) => ({ itemId, quantity }));
   } catch {
     return CART_SERVER_SNAPSHOT;
   }
@@ -60,20 +73,29 @@ export function getCartSnapshot(): CartLine[] {
 
 export function addToCart(itemId: string) {
   const existing = snapshot.find((line) => line.itemId === itemId);
+  if (existing?.quantity === 50) return;
   write(
     existing
-      ? snapshot.map((line) => (line.itemId === itemId ? { ...line, quantity: line.quantity + 1 } : line))
+      ? snapshot.map((line) => (line.itemId === itemId ? { ...line, quantity: Math.min(50, line.quantity + 1) } : line))
       : [...snapshot, { itemId, quantity: 1 }],
   );
 }
 
 export function setCartQuantity(itemId: string, quantity: number) {
-  if (quantity <= 0) return removeFromCart(itemId);
-  write(snapshot.map((line) => (line.itemId === itemId ? { ...line, quantity } : line)));
+  const normalized = Math.floor(Number(quantity));
+  if (!Number.isFinite(normalized) || normalized <= 0) return removeFromCart(itemId);
+  write(snapshot.map((line) => (line.itemId === itemId ? { ...line, quantity: Math.min(50, normalized) } : line)));
 }
 
 export function removeFromCart(itemId: string) {
   write(snapshot.filter((line) => line.itemId !== itemId));
+}
+
+export function replaceCart(lines: CartLine[]) {
+  const normalized = lines
+    .filter((line) => typeof line.itemId === "string" && Number.isFinite(line.quantity) && line.quantity > 0)
+    .map((line) => ({ itemId: line.itemId, quantity: Math.min(50, Math.floor(line.quantity)) }));
+  write(normalized);
 }
 
 export function clearCart() {

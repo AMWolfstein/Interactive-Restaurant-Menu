@@ -62,7 +62,7 @@ export function DataPanel() {
     <div className="space-y-4">
       <Panel
         title="نسخة احتياطية من بيانات الباك إند"
-        description="كل الإعدادات والأصناف والمخزون المحفوظة في قاعدة البيانات"
+        description="كل الإعدادات والأصناف المحفوظة في قاعدة البيانات"
         icon={<Database className="h-4 w-4" />}
       >
         <div className="flex flex-wrap items-center gap-2">
@@ -147,7 +147,7 @@ export function DataPanel() {
               الدخول للوحة يتم بالإيميل والباسورد من حساب الأدمن في Supabase (Authentication → Users) فقط.
             </p>
             <p className="text-muted">
-              كل طلبات الأدمن (حفظ القائمة، الطلبات، تنبيهات المخزون) بتتحقق من access token على السيرفر،
+              كل طلبات الأدمن (حفظ القائمة وقراءة الطلبات) بتتحقق من access token على السيرفر،
               وأي طلب من غير توكن صالح بيرجع 401. إدارة الحسابات (إضافة أو إيقاف مستخدم) من لوحة Supabase.
             </p>
           </div>

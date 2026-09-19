@@ -10,7 +10,7 @@ const EMOJIS = ["🍔", "🍕", "🍢", "🍟", "🥤", "🍮", "🥗", "🌯", 
 
 export function CategoriesPanel({ intent, nonce }: { intent?: string; nonce: number }) {
   const { data, addCategory, updateCategory, deleteCategory, moveCategory } = useMenu();
-  const [draft, setDraft] = useState({ name: "", nameEn: "", emoji: "🍽️" });
+  const [draft, setDraft] = useState({ name: "", emoji: "🍽️" });
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const addRef = useRef<HTMLInputElement>(null);
   const { toast, show } = useToast();
@@ -27,8 +27,8 @@ export function CategoriesPanel({ intent, nonce }: { intent?: string; nonce: num
       show("اكتب اسم القسم الأول", "error");
       return;
     }
-    addCategory({ name: draft.name.trim(), nameEn: draft.nameEn.trim(), emoji: draft.emoji, visible: true });
-    setDraft({ name: "", nameEn: "", emoji: "🍽️" });
+    addCategory({ name: draft.name.trim(), emoji: draft.emoji, visible: true });
+    setDraft({ name: "", emoji: "🍽️" });
     show("تمت إضافة القسم ✅");
   };
 
@@ -68,12 +68,6 @@ export function CategoriesPanel({ intent, nonce }: { intent?: string; nonce: num
                       value={category.name}
                       onChange={(event) => updateCategory(category.id, { name: event.target.value })}
                       className="h-9 min-w-32 flex-1 py-1.5"
-                    />
-                    <TextInput
-                      value={category.nameEn ?? ""}
-                      onChange={(event) => updateCategory(category.id, { nameEn: event.target.value })}
-                      className="h-9 min-w-28 flex-1 py-1.5"
-                      placeholder="English name"
                     />
                     <span className="shrink-0 rounded-lg bg-surface px-2 py-1 text-[11px] font-bold text-muted">
                       {count} صنف
@@ -151,11 +145,8 @@ export function CategoriesPanel({ intent, nonce }: { intent?: string; nonce: num
 
       <Panel title="قسم جديد" icon={<Plus className="h-4 w-4" />}>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="الاسم بالعربي">
+          <Field label="اسم القسم">
             <TextInput ref={addRef} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="فطور" />
-          </Field>
-          <Field label="الاسم بالإنجليزي">
-            <TextInput value={draft.nameEn} onChange={(event) => setDraft({ ...draft, nameEn: event.target.value })} placeholder="Breakfast" />
           </Field>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-1.5">

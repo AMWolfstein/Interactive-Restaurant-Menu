@@ -37,10 +37,8 @@ export function OrderingPanel() {
     name,
     price,
     available: true,
-    bestseller: false,
     isNew: false,
     spicy: 0,
-    order: 1,
   });
 
   const demoLines: DetailedLine[] = [
@@ -105,11 +103,8 @@ export function OrderingPanel() {
 
       <Panel title="الأسعار والمصاريف" icon={<CircleDollarSign className="h-4 w-4" />}>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <Field label="علامة العملة (عربي)">
+          <Field label="علامة العملة">
             <TextInput value={commerce.currency} onChange={(event) => patchCommerce({ currency: event.target.value })} placeholder="ج.م" />
-          </Field>
-          <Field label="علامة العملة (إنجليزي)">
-            <TextInput value={commerce.currencyEn} onChange={(event) => patchCommerce({ currencyEn: event.target.value })} placeholder="EGP" />
           </Field>
           <Field label="أقل مبلغ للطلب" hint="0 = من غير حد أدنى">
             <NumberInput value={commerce.minimumOrder} onValueChange={(value) => patchCommerce({ minimumOrder: value })} suffix={commerce.currency} />

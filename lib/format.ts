@@ -116,9 +116,12 @@ export function buildOrderMessage(
       const name = pick(lang, item.name, item.nameEn);
       const price = formatPrice(item.price, lang, commerce);
       const lineTotal = formatPrice(item.price * line.quantity, lang, commerce);
+      const details = [item.weight, item.supplier ? `${en ? "Supplier" : "المورد"}: ${item.supplier}` : ""]
+        .filter(Boolean)
+        .join(" — ");
       return en
-        ? `- ${line.quantity}x ${name} — ${lineTotal}`
-        : `- ${line.quantity}x ${name} (${price} × ${line.quantity} = ${lineTotal})`;
+        ? `- ${line.quantity}x ${name}${details ? ` (${details})` : ""} — ${lineTotal}`
+        : `- ${line.quantity}x ${name}${details ? ` (${details})` : ""} — ${price} × ${line.quantity} = ${lineTotal}`;
     })
     .join("\n");
 

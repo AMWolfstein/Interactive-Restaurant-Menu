@@ -2,22 +2,20 @@ import "server-only";
 
 import {
   MENU_TABLE,
-  NOTIFICATIONS_TABLE,
   ORDERS_TABLE,
   PLACE_ORDER_FUNCTION,
   PUBLISHED_SLUG,
 } from "./supabase";
 import { normalizeData } from "./normalize";
-import type { AdminOverview, CartLine, MenuData, OrderType, SavedOrder, StockNotification } from "./types";
+import type { AdminOverview, CartLine, MenuData, OrderType, SavedOrder } from "./types";
 
 /**
  * مخزن البيانات السحابي — Supabase (Postgres) عن طريق REST API.
  *
  * بيستخدم مفتاح anon العام فقط:
  *   - قراءة القائمة: مسموحة للجميع (العملاء).
- *   - تعديل القائمة والطلبات والتنبيهات: بتوكن الأدمن (RLS لدور authenticated).
- *   - تسجيل الطلب: عن طريق دالة place_order في قاعدة البيانات (security definer)
- *     عشان خصم المخزون يحصل بشكل ذرّي ومفيش تضارب بين طلبين.
+ *   - تعديل القائمة وقراءة الطلبات: بتوكن الأدمن (RLS لدور authenticated).
+ *   - تسجيل الطلب: عن طريق دالة place_order في قاعدة البيانات.
  */
 
 export const SUPABASE_URL = () => (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim().replace(/\/$/, "");
@@ -152,7 +150,6 @@ export interface PlaceOrderInput {
 
 interface PlaceOrderResult {
   order: SavedOrder;
-  lowStock: StockNotification[];
 }
 
 export async function placeOrder(input: PlaceOrderInput): Promise<RestResult<PlaceOrderResult>> {
@@ -168,43 +165,12 @@ interface OrderRow {
   data: SavedOrder;
 }
 
-interface NotificationRow {
-  id: string;
-  item_id: string;
-  item_name: string;
-  remaining: number;
-  threshold: number;
-  created_at: string;
-  read: boolean;
-}
-
-const toNotification = (row: NotificationRow): StockNotification => ({
-  id: row.id,
-  itemId: row.item_id,
-  itemName: row.item_name,
-  remaining: row.remaining,
-  threshold: row.threshold ?? 2,
-  createdAt: row.created_at,
-  read: Boolean(row.read),
-});
-
 export async function fetchAdminOverview(token: string): Promise<RestResult<AdminOverview>> {
-  const [orders, notifications] = await Promise.all([
-    rest<OrderRow[]>(`${ORDERS_TABLE}?select=id,created_at,data&order=created_at.desc&limit=30`, { token }),
-    rest<NotificationRow[]>(
-      `${NOTIFICATIONS_TABLE}?select=*&order=created_at.desc&limit=50`,
-      { token },
-    ),
-  ]);
+  const orders = await rest<OrderRow[]>(
+    `${ORDERS_TABLE}?select=id,created_at,data&order=created_at.desc&limit=30`,
+    { token },
+  );
   if (!orders.ok) return { ok: false, status: orders.status, data: null, message: orders.message, code: orders.code };
-  if (!notifications.ok)
-    return {
-      ok: false,
-      status: notifications.status,
-      data: null,
-      message: notifications.message,
-      code: notifications.code,
-    };
 
   return {
     ok: true,
@@ -213,17 +179,7 @@ export async function fetchAdminOverview(token: string): Promise<RestResult<Admi
     message: "",
     data: {
       orders: (orders.data ?? []).map((row) => row.data),
-      notifications: (notifications.data ?? []).map(toNotification),
       storage: { driver: "supabase", persistent: true },
     },
   };
-}
-
-export async function markAllNotificationsRead(token: string): Promise<RestResult<unknown>> {
-  return rest(`${NOTIFICATIONS_TABLE}?read=eq.false`, {
-    method: "PATCH",
-    body: { read: true },
-    token,
-    prefer: "return=minimal",
-  });
 }

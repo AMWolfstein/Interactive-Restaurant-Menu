@@ -1,7 +1,7 @@
 # 🍔 Interactive Restaurant Menu — Full Stack (Next.js + Supabase)
 
 تطبيق مطعم عربي **Full Stack**: واجهة عملاء RTL + لوحة تحكم + باك إند حقيقي يحفظ
-القائمة والطلبات والمخزون في قاعدة بيانات Supabase (Postgres).
+القائمة والطلبات في قاعدة بيانات Supabase (Postgres).
 
 ## المميزات
 
@@ -9,9 +9,12 @@
 - **دخول لوحة التحكم حصرياً بـ Supabase Auth (إيميل + باسورد)** من الحساب الموجود في
   `Authentication → Users`. مفيش أي دخول محلي أو رقم سري في المشروع.
 - كل API خاص بالأدمن بيتحقق من **Supabase access token على السيرفر** — أي طلب من غير توكن صالح بيرجع `401`.
-- **كمية (مخزون) لكل صنف** مع حد تنبيه قابل للتعديل، و**خصم تلقائي** للكمية عند تسجيل الطلب.
-- **تنبيه نقص المخزون** داخل لوحة التحكم عند وصول الكمية للحد (الافتراضي **2**) + إرساله لأي خدمة خارجية عبر webhook.
-- سجل الطلبات والتنبيهات محفوظ في قاعدة البيانات ويظهر في لوحة التحكم.
+- رفع صور المنتجات إلى Cloudinary مع الاسم والوصف والسعر والوزن والمورد.
+- سعر قديم وجديد مع حساب نسبة الخصم تلقائياً وعداد اختياري يُدخل باليوم والشهر والسنة.
+- قسم «الأكثر طلباً» يُرتّب تلقائياً من بيانات الطلبات الفعلية، بدون ترتيب يدوي.
+- واجهة وإعدادات عربية فقط، مع مفضلة محفوظة على جهاز الزائر وإمكانية إعادة آخر طلب بضغطة واحدة.
+- اختيار من لوحة التحكم بين العرض التفصيلي الحالي أو شبكة من 3 منتجات، مع تصفية كل منتجات المورد بالضغط على اسمه.
+- تسجيل الطلب قبل فتح رسالة واتساب، مع سجل للطلبات داخل لوحة التحكم.
 - حفظ لحظي مركزي: تعديل الأدمن يظهر لكل العملاء على كل الأجهزة.
 
 ## الباك إند
@@ -20,9 +23,8 @@
 | --- | --- | --- |
 | `GET /api/menu` | قراءة القائمة | عام |
 | `PUT /api/menu` | حفظ القائمة | أدمن (Supabase token) |
-| `POST /api/orders` | تسجيل طلب + خصم المخزون + إنشاء تنبيه النقص | عام |
-| `GET /api/admin/overview` | الطلبات + تنبيهات المخزون + حالة التخزين | أدمن (Supabase token) |
-| `PATCH /api/admin/overview` | تحديد التنبيهات كمقروءة | أدمن (Supabase token) |
+| `POST /api/orders` | تسجيل الطلب قبل فتح رسالة واتساب | عام |
+| `GET /api/admin/overview` | سجل الطلبات + حالة التخزين | أدمن (Supabase token) |
 | `GET /api/admin/session` | التحقق من جلسة الأدمن على السيرفر | أدمن (Supabase token) |
 
 التحقق من التوكن بيتم في `lib/server-auth.ts` بمخاطبة `SUPABASE_URL/auth/v1/user`،
@@ -35,17 +37,13 @@
 
 - `menu_data` — القائمة (قراءة عامة، كتابة للأدمن).
 - `orders` — الطلبات (قراءة للأدمن).
-- `stock_notifications` — تنبيهات نقص المخزون.
-- `place_order(payload jsonb)` — دالة `SECURITY DEFINER` بتسجّل الطلب وتخصم المخزون
-  بشكل ذرّي (`SELECT … FOR UPDATE`) وتنشئ تنبيه النقص.
+- `place_order(payload jsonb)` — دالة `SECURITY DEFINER` تتحقق من المنتجات والأسعار وتسجّل الطلب بدون أي متابعة للمخزون.
 - تفعيل **Supabase Realtime** على الجداول (`alter publication supabase_realtime add table ...`)
   عشان التحديث اللحظي يوصل فوراً لكل الأجهزة عبر WebSocket.
 
-> **التحديث اللحظي الفوري:** تعديلات الأدمن، خصم المخزون بعد أي طلب، الطلبات الجديدة،
-> وتنبيهات النقص بتوصل لكل الأجهزة في نفس اللحظة عن طريق Supabase Realtime (مع فحص
-> دوري احتياطي كل 30-60 ثانية لو الـ WebSocket انقطع). لو البيانات مش بتتحدث لحظياً،
-> نفّذ جزء **Realtime** في آخر `supabase/schema.sql` في SQL Editor — أو شغّل الأمر:
-> `alter publication supabase_realtime add table public.menu_data, public.orders, public.stock_notifications;`
+> **بداية ببيانات فارغة:** بيانات البداية لا تحتوي على أي أقسام أو أصناف. لو سبق وشغّلت نسخة قديمة، نفّذ [`supabase/clear-data.sql`](supabase/clear-data.sql) مرة واحدة لمسح القائمة والطلبات التجريبية، ثم أدخل بياناتك من لوحة التحكم.
+
+> **التحديث اللحظي:** تعديلات القائمة والطلبات الجديدة بتوصل فوراً عن طريق Supabase Realtime، مع فحص دوري احتياطي لو الاتصال انقطع.
 
 > لحد ما تنفّذ الملف، الموقع بيشتغل على ملف مؤقت للتطوير، وتظهر لك لافتة حمراء في لوحة
 > التحكم تطلب تنفيذ الـ schema.
@@ -55,26 +53,23 @@
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_...
-LOW_STOCK_WEBHOOK_URL=https://...   # اختياري
+NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=your-cloud-name
+NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET=restaurant-menu
 ```
 
 القيم متظبطة في **Vercel → Project Settings → Environment Variables**.
 المشروع بيستخدم مفتاح `anon` العام فقط — **مفيش `service_role` في أي مكان في الكود**.
 
-### شكل رسالة الـ webhook
+### إعداد Cloudinary للصور
 
-```json
-{
-  "type": "low_stock",
-  "sentAt": "2026-09-06T12:00:00.000Z",
-  "count": 1,
-  "notifications": [
-    { "id": "…", "itemId": "i1", "itemName": "برجر السعادة", "remaining": 2, "threshold": 2 }
-  ]
-}
-```
+1. من Cloudinary افتح **Settings → Upload → Upload presets**.
+2. أنشئ preset من نوع **Unsigned** ويفضّل تقييده بملفات الصور وبحد أقصى 5MB.
+3. أضف اسم الـ cloud والـ preset في متغيرات البيئة الموضحة فوق.
+4. أعد نشر المشروع. بعدها رفع اللوجو وصورة الغلاف وصور الأصناف من لوحة التحكم
+   يرفعها مباشرةً إلى Cloudinary ويحفظ رابط `https` فقط بدل تخزين الصورة داخل بيانات القائمة.
 
-ممكن تربطه بـ WhatsApp Business API أو Make أو n8n أو Slack.
+> اسم الـ cloud والـ unsigned preset قيم عامة مصممة للاستخدام من المتصفح؛ لا تضف
+> `API Secret` أو `API Key` إلى متغيرات تبدأ بـ `NEXT_PUBLIC_`.
 
 ## التشغيل محلياً
 

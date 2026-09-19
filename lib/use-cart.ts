@@ -7,6 +7,7 @@ import {
   clearCart,
   getCartSnapshot,
   removeFromCart,
+  replaceCart,
   setCartQuantity,
   subscribeCart,
 } from "./cart-store-core";
@@ -32,23 +33,17 @@ export function useCart(menuItems: MenuItem[]) {
     [lines, menuItems],
   );
 
-  const add = useCallback((id: string) => {
-    const item = menuItems.find((candidate) => candidate.id === id);
-    const current = lines.find((line) => line.itemId === id)?.quantity ?? 0;
-    if (item?.trackStock && current >= (item.stock ?? 0)) return;
-    addToCart(id);
-  }, [lines, menuItems]);
+  const add = useCallback((id: string) => addToCart(id), []);
   const setQuantity = useCallback((id: string, quantity: number) => {
-    const item = menuItems.find((candidate) => candidate.id === id);
-    const capped = item?.trackStock ? Math.min(quantity, item.stock ?? 0) : quantity;
-    setCartQuantity(id, capped);
-  }, [menuItems]);
+    setCartQuantity(id, quantity);
+  }, []);
   const remove = useCallback((id: string) => removeFromCart(id), []);
   const clear = useCallback(() => clearCart(), []);
+  const restore = useCallback((previous: CartLine[]) => replaceCart(previous), []);
   const quantityOf = useCallback(
     (id: string) => lines.find((line) => line.itemId === id)?.quantity ?? 0,
     [lines],
   );
 
-  return { lines: detailed, loaded: true, add, setQuantity, remove, clear, quantityOf };
+  return { lines: detailed, loaded: true, add, setQuantity, remove, clear, restore, quantityOf };
 }

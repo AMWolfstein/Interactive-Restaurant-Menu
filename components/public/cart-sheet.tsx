@@ -20,7 +20,8 @@ import { buildOrderMessage, computeTotals, formatPrice, ORDER_TYPE_LABEL, pick, 
 import type { OrderType } from "@/lib/types";
 import type { DetailedLine } from "@/lib/use-cart";
 import { cx } from "@/lib/cx";
-import { DishImage } from "./dish-card";
+import { ProductImage } from "./product-card";
+import { PREVIOUS_ORDER_KEY } from "./previous-order-button";
 
 const TYPE_ICON: Record<OrderType, typeof Truck> = {
   delivery: Truck,
@@ -115,6 +116,11 @@ export function CartSheet({
       const url = `https://wa.me/${number}?text=${encodeURIComponent(`${message}\n\nرقم الطلب: ${result.order.id}`)}`;
       if (whatsappWindow) whatsappWindow.location.href = url;
       else window.location.href = url;
+      try {
+        window.localStorage.setItem(PREVIOUS_ORDER_KEY, JSON.stringify(lines.map(({ line }) => line)));
+      } catch {
+        // إعادة الطلب ميزة اختيارية؛ فشل التخزين لا يمنع إكمال الطلب.
+      }
       clear();
       onClose();
     } catch (error) {
@@ -217,7 +223,7 @@ export function CartSheet({
                   key={line.itemId}
                   className="flex items-center gap-3 rounded-xl border border-line bg-surface p-2.5"
                 >
-                  <DishImage src={item.image} alt="" className="h-11 w-11 rounded-lg" />
+                  <ProductImage src={item.image} alt="" className="h-11 w-11 rounded-lg" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[13px] font-bold">{pick(lang, item.name, item.nameEn)}</p>
                     <p className="text-[11px] text-muted">

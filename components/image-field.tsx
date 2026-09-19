@@ -3,11 +3,12 @@
 import { useRef, useState } from "react";
 import { ImagePlus, Link2, LoaderCircle, Trash2, Upload } from "lucide-react";
 import { fileToOptimizedDataUrl, MAX_UPLOAD_KB } from "@/lib/image";
+import { isCloudinaryConfigured, uploadImageToCloudinary } from "@/lib/cloudinary";
 import { Button, Field } from "./ui";
 
 /**
- * حقل صورة يقبل رابط أو رفع من الجهاز (الصورة بتتضغط وتتحول dataURL
- * وتترفع ضمن بيانات الموقع على الباك إند).
+ * حقل صورة يقبل رابط أو رفع من الجهاز. عند إعداد Cloudinary تُرفع الصورة
+ * مباشرة إليه ويُحفظ الرابط فقط؛ مع dataURL احتياطي للتطوير المحلي.
  */
 export function ImageField({
   label,
@@ -37,12 +38,17 @@ export function ImageField({
     setError("");
     setBusy(true);
     try {
-      const { dataUrl, kb } = await fileToOptimizedDataUrl(file, { maxSize: 1000 });
-      if (kb > MAX_UPLOAD_KB) {
-        setError(`الصورة لسه تقيلة (${kb}KB) — الحد ${MAX_UPLOAD_KB}KB، قلّل الدقة أو اختار صورة أصغر`);
-        return;
+      if (isCloudinaryConfigured()) {
+        onChange(await uploadImageToCloudinary(file));
+      } else {
+        // وضع تطوير احتياطي فقط؛ في الإنتاج تُرفع الصورة إلى Cloudinary.
+        const { dataUrl, kb } = await fileToOptimizedDataUrl(file, { maxSize: 1000 });
+        if (kb > MAX_UPLOAD_KB) {
+          setError(`الصورة لسه تقيلة (${kb}KB) — الحد ${MAX_UPLOAD_KB}KB، قلّل الدقة أو اختار صورة أصغر`);
+          return;
+        }
+        onChange(dataUrl);
       }
-      onChange(dataUrl);
     } catch (err) {
       setError(err instanceof Error ? err.message : "حصلت مشكلة في الصورة");
     } finally {
@@ -52,7 +58,12 @@ export function ImageField({
   };
 
   return (
-    <Field label={label} hint={hint ?? "ارفع صورة من الموبايل أو احط رابط مباشر (jpg / png / webp)"}>
+    <Field
+      label={label}
+      hint={hint ?? (isCloudinaryConfigured()
+        ? "ارفع صورة من الموبايل — هتتحفظ تلقائياً على Cloudinary"
+        : "ارفع صورة من الموبايل أو حط رابط مباشر (فعّل Cloudinary في متغيرات البيئة للإنتاج)")}
+    >
       <div className="flex flex-col gap-3 sm:flex-row">
         <div
           className={`relative w-full shrink-0 overflow-hidden rounded-xl border border-line bg-surface-2 sm:w-40 ${aspect}`}

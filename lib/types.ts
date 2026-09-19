@@ -21,24 +21,25 @@ export interface MenuItem {
   nameEn?: string;
   description?: string;
   descriptionEn?: string;
+  /** الوزن أو حجم العبوة، مثال: 1 كجم */
+  weight?: string;
+  /** اسم المورد المصري */
+  supplier?: string;
   price: number;
   /** السعر قبل الخصم — لو موجود يظهر مشطوب مع نسبة توفير */
   oldPrice?: number | null;
+  /** تاريخ انتهاء العرض — يُدخل كاليوم والشهر والسنة */
+  offerEndDay?: number | null;
+  offerEndMonth?: number | null;
+  offerEndYear?: number | null;
+  /** عدد مرات طلب المنتج، يُحدّث تلقائياً عند إكمال الطلب */
+  salesCount?: number;
   /** رابط صورة أو dataURL مرفوعة من الجهاز */
   image?: string;
   available: boolean;
-  bestseller: boolean;
   isNew: boolean;
-  /** 0 = بدون حارة، 1..3 = عدد الشطات */
-  spicy: 0 | 1 | 2 | 3;
-  /** ترتيب يدوي داخل القسم (الأصغر يظهر أولاً) */
-  order: number;
-  /** تفعيل متابعة المخزون لهذا الصنف */
-  trackStock?: boolean;
-  /** الكمية المتاحة حالياً */
-  stock?: number;
-  /** إنشاء تنبيه عند الوصول لهذا العدد (الافتراضي 2) */
-  lowStockThreshold?: number;
+  /** 0 = بارد (الافتراضي)، 1 = حار */
+  spicy: 0 | 1;
 }
 
 export interface BrandSettings {
@@ -91,6 +92,8 @@ export interface CommerceSettings {
   requireAddress: boolean;
   enableNotes: boolean;
   enableSearch: boolean;
+  /** شكل عرض المنتجات: قائمة تفصيلية أو شبكة من 3 أعمدة */
+  productLayout: "list" | "grid";
   enableFeatured: boolean;
   featuredLabel: string;
   enableConfetti: boolean;
@@ -111,7 +114,7 @@ export interface MenuData {
   items: MenuItem[];
 }
 
-/** طلب مسجّل في الباك إند بعد خصم المخزون */
+/** طلب مسجّل في الباك إند قبل فتح رسالة واتساب */
 export interface SavedOrder {
   id: string;
   createdAt: string;
@@ -121,20 +124,8 @@ export interface SavedOrder {
   total: number;
 }
 
-/** تنبيه نقص مخزون — يظهر في لوحة التحكم ويمكن إرساله للـ webhook */
-export interface StockNotification {
-  id: string;
-  itemId: string;
-  itemName: string;
-  remaining: number;
-  threshold: number;
-  createdAt: string;
-  read: boolean;
-}
-
 export interface AdminOverview {
   orders: SavedOrder[];
-  notifications: StockNotification[];
   storage: { driver: "supabase" | "file"; persistent: boolean };
 }
 
@@ -142,12 +133,4 @@ export interface AdminOverview {
 export interface CartLine {
   itemId: string;
   quantity: number;
-}
-
-export interface Totals {
-  subtotal: number;
-  delivery: number;
-  service: number;
-  total: number;
-  itemCount: number;
 }

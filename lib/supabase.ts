@@ -4,7 +4,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
  * عميل Supabase للمتصفح — مسؤوليته الوحيدة هي مصادقة صاحب المطعم
  * (إيميل + باسورد من Authentication → Users) والحصول على access token.
  *
- * القراءة والكتابة على بيانات المطعم (القائمة / الطلبات / المخزون) بتتم عن طريق
+ * القراءة والكتابة على بيانات المطعم (القائمة / الطلبات) بتتم عن طريق
  * API routes في الباك إند — شوف lib/server-database.ts.
  *
  * المفاتيح المستخدمة هنا هي المفاتيح العامة بس (NEXT_PUBLIC_):
@@ -22,9 +22,7 @@ export const MENU_TABLE = "menu_data";
 export const PUBLISHED_SLUG = "main";
 /** جدول الطلبات */
 export const ORDERS_TABLE = "orders";
-/** جدول تنبيهات نقص المخزون */
-export const NOTIFICATIONS_TABLE = "stock_notifications";
-/** دالة تسجيل الطلب وخصم المخزون في قاعدة البيانات */
+/** دالة تسجيل الطلب في قاعدة البيانات */
 export const PLACE_ORDER_FUNCTION = "place_order";
 /** مفتاح تخزين جلسة الدخول في المتصفح */
 export const AUTH_STORAGE_KEY = "royal-menu:sb-auth:v1";
@@ -54,5 +52,3 @@ export function createBrowserClient(): SupabaseClient | null {
 
   return browserClient;
 }
-
-export const getSupabase = createBrowserClient;

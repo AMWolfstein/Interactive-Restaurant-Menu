@@ -1,10 +1,5 @@
 import { DEFAULT_DATA } from "./defaults";
-import type { MenuData } from "./types";
-
-export const DATA_VERSION = 1;
-
-/** حد التنبيه الافتراضي لنقص المخزون (عدد القطع المتبقية) */
-export const DEFAULT_LOW_STOCK_THRESHOLD = 2;
+import type { MenuData, MenuItem } from "./types";
 
 type Plain = Record<string, unknown>;
 
@@ -57,6 +52,9 @@ const LOCAL_IMAGE_MAP: Record<string, string> = {
 /** تطبيع أي قائمة قادمة من الباك إند قبل ما تُعرض أو تُحفظ */
 export function normalizeData(raw: unknown): MenuData {
   const merged = mergeWithDefaults<MenuData>(DEFAULT_DATA, raw);
+  // الموقع عربي فقط حتى لو البيانات القديمة كانت محفوظة بالإنجليزية.
+  merged.brand.language = "ar";
+  merged.commerce.productLayout = merged.commerce.productLayout === "grid" ? "grid" : "list";
   // ترقية الصور القديمة (unsplash) للصور الجديدة المحلية — بدون ما نغير أي شيء تاني
   if (merged.brand.heroImage?.includes("unsplash.com")) {
     merged.brand.heroImage = "/images/menu/hero.jpg";
@@ -102,17 +100,40 @@ export function normalizeData(raw: unknown): MenuData {
   return {
     ...merged,
     items: merged.items
-      .map((item) => ({
-        ...item,
-        // كل صنف عنده كمية ومخزون وحد تنبيه قابل للتعديل من اللوحة
-        trackStock: item.trackStock ?? true,
-        stock: Math.max(0, Math.floor(item.stock ?? (item.available ? 25 : 0))),
-        lowStockThreshold: Math.max(0, Math.floor(item.lowStockThreshold ?? DEFAULT_LOW_STOCK_THRESHOLD)),
-        // الأمان: أي صنف قسمه اتحذف ينزل في أول قسم بدل ما يختفي
-        categoryId: knownCats.has(item.categoryId)
-          ? item.categoryId
-          : (merged.categories[0]?.id ?? ""),
-      }))
-      .sort((a, b) => a.order - b.order),
+      .map((item) => {
+        // تنظيف حقول المخزون القديمة من البيانات التي حُفظت قبل إلغاء الميزة.
+        const legacy = item as MenuItem & {
+          trackStock?: boolean;
+          stock?: number;
+          lowStockThreshold?: number;
+          bestseller?: boolean;
+          order?: number;
+          offerEndsAt?: string | null;
+        };
+        const {
+          trackStock: _trackStock,
+          stock: _stock,
+          lowStockThreshold: _threshold,
+          bestseller: _bestseller,
+          order: _order,
+          offerEndsAt: _offerEndsAt,
+          ...cleanItem
+        } = legacy;
+        void [_trackStock, _stock, _threshold, _bestseller, _order];
+        const oldOfferDate = _offerEndsAt ? new Date(_offerEndsAt) : null;
+        return {
+          ...cleanItem,
+          // النظام الحالي له اختياران فقط: بارد افتراضياً أو حار.
+          spicy: cleanItem.spicy > 0 ? 1 : 0,
+          salesCount: Math.max(0, Math.floor(cleanItem.salesCount ?? 0)),
+          offerEndDay: cleanItem.offerEndDay ?? (oldOfferDate && !Number.isNaN(oldOfferDate.getTime()) ? oldOfferDate.getDate() : null),
+          offerEndMonth: cleanItem.offerEndMonth ?? (oldOfferDate && !Number.isNaN(oldOfferDate.getTime()) ? oldOfferDate.getMonth() + 1 : null),
+          offerEndYear: cleanItem.offerEndYear ?? (oldOfferDate && !Number.isNaN(oldOfferDate.getTime()) ? oldOfferDate.getFullYear() : null),
+          // أي صنف قسمه اتحذف ينزل في أول قسم بدل ما يختفي
+          categoryId: knownCats.has(item.categoryId)
+            ? item.categoryId
+            : (merged.categories[0]?.id ?? ""),
+        };
+      }),
   };
 }

@@ -3,7 +3,7 @@
 import { Globe, Sparkles, Store } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
 import { ImageField } from "@/components/image-field";
-import { Button, ColorField, Field, Panel, Segmented, TextArea, TextInput, Toggle } from "@/components/ui";
+import { Button, ColorField, Field, Panel, TextArea, TextInput, Toggle } from "@/components/ui";
 
 export function BrandPanel() {
   const { data, patchBrand, patchContact } = useMenu();
@@ -17,32 +17,18 @@ export function BrandPanel() {
         icon={<Store className="h-4 w-4" />}
       >
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="اسم المطعم (عربي)">
+          <Field label="اسم المتجر">
             <TextInput
               value={brand.restaurantName}
               onChange={(event) => patchBrand({ restaurantName: event.target.value })}
               placeholder="مطعم البرجر الملكي"
             />
           </Field>
-          <Field label="اسم المطعم (إنجليزي)">
-            <TextInput
-              value={brand.restaurantNameEn}
-              onChange={(event) => patchBrand({ restaurantNameEn: event.target.value })}
-              placeholder="Royal Burger"
-            />
-          </Field>
-          <Field label="الشعار النصي (عربي)">
+          <Field label="الشعار النصي">
             <TextInput
               value={brand.tagline}
               onChange={(event) => patchBrand({ tagline: event.target.value })}
               placeholder="أسرع ديليفري وأعلى جودة"
-            />
-          </Field>
-          <Field label="الشعار النصي (إنجليزي)">
-            <TextInput
-              value={brand.taglineEn}
-              onChange={(event) => patchBrand({ taglineEn: event.target.value })}
-              placeholder="Fastest delivery, best taste"
             />
           </Field>
         </div>
@@ -56,17 +42,6 @@ export function BrandPanel() {
             aspect="aspect-square"
           />
           <div className="space-y-3">
-            <Field label="لغة الموقع" hint="لو إنجليزي هيتعرض الاسم الوصف الإنجليزي (ولو فاضي بيرجع للعربي)">
-              <Segmented
-                className="w-full [&>button]:flex-1"
-                value={brand.language}
-                onChange={(value) => patchBrand({ language: value })}
-                options={[
-                  { value: "ar", label: "🇪🇬 عربي RTL" },
-                  { value: "en", label: "🇬🇧 English LTR" },
-                ]}
-              />
-            </Field>
             <ColorField
               label="لون البراند"
               value={brand.accent}

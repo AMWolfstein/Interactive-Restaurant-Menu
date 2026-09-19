@@ -32,6 +32,8 @@ const listeners = new Set<() => void>();
 let initialized = false;
 let persistTimer: number | undefined;
 let resetTimer: number | undefined;
+let persistRevision = 0;
+let persistQueue: Promise<void> = Promise.resolve();
 
 function emit() {
   for (const listener of [...listeners]) listener();
@@ -59,6 +61,9 @@ export async function refreshMenu() {
     const response = await authenticatedFetch("/api/menu", { cache: "no-store" });
     if (!response.ok) throw new Error((await errorMessage(response)) ?? "تعذّر قراءة القائمة من الباك إند");
     const data = normalizeData(await response.json());
+    // A refresh can finish after the admin has started editing. Never replace
+    // unsaved local changes with a stale response that was already in flight.
+    if (state.saveState === "dirty") return;
     set({ data, ready: true, isCustomized: true, storageKb: sizeOf(data), saveState: "idle", saveError: null });
   } catch (error) {
     set({
@@ -91,7 +96,7 @@ function ensureInit() {
   void refreshMenu();
   window.addEventListener("focus", refreshFromRemote);
 
-  // تحديث لحظي فوري: أي تعديل من الأدمن أو خصم مخزون من طلب جديد يوصل لكل الأجهزة
+  // تحديث لحظي فوري: أي تعديل من الأدمن يوصل لكل الأجهزة
   subscribeRealtime(
     "realtime:menu",
     [{ table: MENU_TABLE, event: "UPDATE", filter: `slug=eq.${PUBLISHED_SLUG}` }],
@@ -118,27 +123,36 @@ export function getMenuSnapshot() {
 function schedulePersist(value: MenuData) {
   if (typeof window === "undefined") return;
   lastLocalWriteAt = Date.now();
+  const revision = ++persistRevision;
   window.clearTimeout(persistTimer);
-  persistTimer = window.setTimeout(async () => {
-    try {
-      const response = await authenticatedFetch("/api/menu", {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(value),
-      });
-      if (!response.ok) throw new Error((await errorMessage(response)) ?? "تعذّر حفظ التعديلات");
-      const data = normalizeData(await response.json());
-      set({ data, saveState: "saved", saveError: null, isCustomized: true, storageKb: sizeOf(data) });
-    } catch (error) {
-      set({
-        saveState: "error",
-        saveError: error instanceof Error && error.message ? error.message : "تعذّر حفظ التعديلات",
-      });
-    }
-    window.clearTimeout(resetTimer);
-    resetTimer = window.setTimeout(() => {
-      if (state.saveState === "saved") set({ saveState: "idle" });
-    }, 1500);
+  persistTimer = window.setTimeout(() => {
+    // Keep writes ordered. Without this queue, two slow requests can finish in
+    // reverse order and an older menu snapshot can overwrite the latest edit.
+    persistQueue = persistQueue.then(async () => {
+      try {
+        const response = await authenticatedFetch("/api/menu", {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(value),
+        });
+        if (!response.ok) throw new Error((await errorMessage(response)) ?? "تعذّر حفظ التعديلات");
+        const data = normalizeData(await response.json());
+        // A newer edit may have been made while this request was running. Its
+        // local snapshot must remain visible until the newer save completes.
+        if (revision !== persistRevision) return;
+        set({ data, saveState: "saved", saveError: null, isCustomized: true, storageKb: sizeOf(data) });
+      } catch (error) {
+        if (revision !== persistRevision) return;
+        set({
+          saveState: "error",
+          saveError: error instanceof Error && error.message ? error.message : "تعذّر حفظ التعديلات",
+        });
+      }
+      window.clearTimeout(resetTimer);
+      resetTimer = window.setTimeout(() => {
+        if (state.saveState === "saved" && revision === persistRevision) set({ saveState: "idle" });
+      }, 1500);
+    });
   }, 220);
 }
 
@@ -194,10 +208,7 @@ export function moveCategory(id: string, dir: -1 | 1) {
 }
 export function addItem(input: Omit<MenuItem, "id">) {
   const id = `i_${newId()}`;
-  updateMenu((d) => {
-    const max = Math.max(0, ...d.items.filter((x) => x.categoryId === input.categoryId).map((x) => x.order));
-    d.items.push({ ...input, id, order: max + 1 });
-  });
+  updateMenu((d) => d.items.push({ ...input, id }));
   return id;
 }
 export function updateItem(id: string, patch: Partial<MenuItem>) {
@@ -215,19 +226,7 @@ export function duplicateItem(id: string) {
   updateMenu((d) => {
     const row = d.items.find((x) => x.id === id);
     if (!row) return;
-    d.items.push({ ...row, id: `i_${newId()}`, name: `${row.name} (نسخة)`, order: row.order + 0.5 });
-  });
-}
-export function moveItem(id: string, dir: -1 | 1) {
-  updateMenu((d) => {
-    const current = d.items.find((x) => x.id === id);
-    if (!current) return;
-    const rows = d.items.filter((x) => x.categoryId === current.categoryId).sort((a, b) => a.order - b.order);
-    const i = rows.findIndex((x) => x.id === id);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= rows.length) return;
-    [rows[i], rows[j]] = [rows[j], rows[i]];
-    rows.forEach((x, n) => (x.order = n + 1));
+    d.items.push({ ...row, id: `i_${newId()}`, name: `${row.name} (نسخة)`, salesCount: 0 });
   });
 }
 export function setCategoryAvailability(categoryId: string, available: boolean) {
