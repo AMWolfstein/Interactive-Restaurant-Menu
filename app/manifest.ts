@@ -6,12 +6,6 @@ import { getMenu } from "@/lib/server-database";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const FALLBACK_ICONS: NonNullable<MetadataRoute.Manifest["icons"]> = [
-  { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
-  { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-  { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
-];
-
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
   let logo = "";
   try {
@@ -20,13 +14,13 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     // A storage outage must not make the PWA manifest unavailable.
   }
 
-  const icons: NonNullable<MetadataRoute.Manifest["icons"]> = logo
+  const icons: MetadataRoute.Manifest["icons"] = logo
     ? [
         { src: logo, sizes: "192x192", purpose: "any" },
         { src: logo, sizes: "512x512", purpose: "any" },
         { src: logo, sizes: "512x512", purpose: "maskable" },
       ]
-    : FALLBACK_ICONS;
+    : undefined;
 
   return {
     name: "قائمة المطعم الذكية",

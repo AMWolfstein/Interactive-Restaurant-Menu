@@ -19,9 +19,13 @@ export function isSafeHttpUrl(url: string): boolean {
 
 export function sanitizeText(input: string, maxLen = 500): string {
   if (!input || typeof input !== "string") return "";
-  // إزالة control characters وحروف غير مرئية
-  return input
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
+  // إزالة control characters وحروف غير مرئية، مع السماح بـ tab/newline/CR.
+  return [...input]
+    .filter((character) => {
+      const code = character.charCodeAt(0);
+      return code === 9 || code === 10 || code === 13 || (code >= 32 && code !== 127);
+    })
+    .join("")
     .trim()
     .slice(0, maxLen);
 }

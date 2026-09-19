@@ -34,7 +34,7 @@ export async function uploadImageToCloudinary(file: File): Promise<string> {
     return payload.secure_url;
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new Error("رفع الصورة استغرق وقتاً طويلاً — حاول مرة أخرى");
+      throw new Error("رفع الصورة استغرق وقتاً طويلاً — حاول مرة أخرى", { cause: error });
     }
     throw error;
   } finally {

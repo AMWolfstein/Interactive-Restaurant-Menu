@@ -15,9 +15,6 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
     title: "قائمة المطعم",
   },
-  icons: {
-    apple: "/apple-touch-icon.png",
-  },
   openGraph: {
     title: "قائمة المطعم الذكية",
     description: "اطلب بدقيقتين والطلب يوصلك على باب البيت 🍔",
