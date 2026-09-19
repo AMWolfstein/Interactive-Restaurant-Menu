@@ -32,6 +32,8 @@ const listeners = new Set<() => void>();
 let initialized = false;
 let persistTimer: number | undefined;
 let resetTimer: number | undefined;
+let persistRevision = 0;
+let persistQueue: Promise<void> = Promise.resolve();
 
 function emit() {
   for (const listener of [...listeners]) listener();
@@ -59,6 +61,9 @@ export async function refreshMenu() {
     const response = await authenticatedFetch("/api/menu", { cache: "no-store" });
     if (!response.ok) throw new Error((await errorMessage(response)) ?? "تعذّر قراءة القائمة من الباك إند");
     const data = normalizeData(await response.json());
+    // A refresh can finish after the admin has started editing. Never replace
+    // unsaved local changes with a stale response that was already in flight.
+    if (state.saveState === "dirty") return;
     set({ data, ready: true, isCustomized: true, storageKb: sizeOf(data), saveState: "idle", saveError: null });
   } catch (error) {
     set({
@@ -118,27 +123,36 @@ export function getMenuSnapshot() {
 function schedulePersist(value: MenuData) {
   if (typeof window === "undefined") return;
   lastLocalWriteAt = Date.now();
+  const revision = ++persistRevision;
   window.clearTimeout(persistTimer);
-  persistTimer = window.setTimeout(async () => {
-    try {
-      const response = await authenticatedFetch("/api/menu", {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(value),
-      });
-      if (!response.ok) throw new Error((await errorMessage(response)) ?? "تعذّر حفظ التعديلات");
-      const data = normalizeData(await response.json());
-      set({ data, saveState: "saved", saveError: null, isCustomized: true, storageKb: sizeOf(data) });
-    } catch (error) {
-      set({
-        saveState: "error",
-        saveError: error instanceof Error && error.message ? error.message : "تعذّر حفظ التعديلات",
-      });
-    }
-    window.clearTimeout(resetTimer);
-    resetTimer = window.setTimeout(() => {
-      if (state.saveState === "saved") set({ saveState: "idle" });
-    }, 1500);
+  persistTimer = window.setTimeout(() => {
+    // Keep writes ordered. Without this queue, two slow requests can finish in
+    // reverse order and an older menu snapshot can overwrite the latest edit.
+    persistQueue = persistQueue.then(async () => {
+      try {
+        const response = await authenticatedFetch("/api/menu", {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(value),
+        });
+        if (!response.ok) throw new Error((await errorMessage(response)) ?? "تعذّر حفظ التعديلات");
+        const data = normalizeData(await response.json());
+        // A newer edit may have been made while this request was running. Its
+        // local snapshot must remain visible until the newer save completes.
+        if (revision !== persistRevision) return;
+        set({ data, saveState: "saved", saveError: null, isCustomized: true, storageKb: sizeOf(data) });
+      } catch (error) {
+        if (revision !== persistRevision) return;
+        set({
+          saveState: "error",
+          saveError: error instanceof Error && error.message ? error.message : "تعذّر حفظ التعديلات",
+        });
+      }
+      window.clearTimeout(resetTimer);
+      resetTimer = window.setTimeout(() => {
+        if (state.saveState === "saved" && revision === persistRevision) set({ saveState: "idle" });
+      }, 1500);
+    });
   }, 220);
 }
 
