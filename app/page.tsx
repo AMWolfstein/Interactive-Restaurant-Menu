@@ -46,6 +46,7 @@ export default function Home() {
 
   const [activeCategory, setActiveCategory] = useState<string>(ALL);
   const [query, setQuery] = useState("");
+  const [supplierFilter, setSupplierFilter] = useState<string | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
 
   const cart = useCart(items);
@@ -73,6 +74,9 @@ export default function Home() {
 
   const sections = useMemo(() => {
     const pool = searched.filter((item) => item.available || query);
+    if (supplierFilter) {
+      return [{ category: undefined, items: pool.filter((item) => item.supplier?.trim() === supplierFilter) }];
+    }
     if (activeCategory === FAVORITES) {
       return [{ category: undefined, items: pool.filter((item) => favoriteIds.includes(item.id)) }];
     }
@@ -83,7 +87,7 @@ export default function Home() {
     return visibleCategories
       .map((category) => ({ category, items: pool.filter((item) => item.categoryId === category.id) }))
       .filter((section) => section.items.length > 0);
-  }, [searched, activeCategory, categories, visibleCategories, query, favoriteIds]);
+  }, [searched, activeCategory, categories, visibleCategories, query, favoriteIds, supplierFilter]);
 
   const isEmpty = sections.every((section) => section.items.length === 0);
 
@@ -220,13 +224,13 @@ export default function Home() {
           <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
             <CategoryChip
               active={activeCategory === ALL}
-              onClick={() => setActiveCategory(ALL)}
+              onClick={() => { setActiveCategory(ALL); setSupplierFilter(null); }}
               label={en ? "All" : "الكل"}
               emoji="🍽️"
             />
             <CategoryChip
               active={activeCategory === FAVORITES}
-              onClick={() => setActiveCategory(FAVORITES)}
+              onClick={() => { setActiveCategory(FAVORITES); setSupplierFilter(null); }}
               label={en ? "Favorites" : "المفضلة"}
               emoji="❤️"
             />
@@ -234,7 +238,7 @@ export default function Home() {
               <CategoryChip
                 key={category.id}
                 active={activeCategory === category.id}
-                onClick={() => setActiveCategory(category.id)}
+                onClick={() => { setActiveCategory(category.id); setSupplierFilter(null); }}
                 label={nameOf(category)}
                 emoji={category.emoji}
               />
@@ -273,12 +277,18 @@ export default function Home() {
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="flex items-center gap-2 text-base font-black">
                   <span aria-hidden>{section.category?.emoji}</span>
-                  {section.category ? nameOf(section.category) : activeCategory === FAVORITES ? (en ? "Favorites" : "المفضلة") : (en ? "Menu" : "القائمة")}
+                  {supplierFilter
+                    ? `منتجات المورد: ${supplierFilter}`
+                    : section.category
+                      ? nameOf(section.category)
+                      : activeCategory === FAVORITES
+                        ? "المفضلة"
+                        : "القائمة"}
                   <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-bold text-muted">
                     {section.items.length}
                   </span>
                 </h3>
-                {activeCategory === ALL ? (
+                {activeCategory === ALL && section.category ? (
                   <button
                     onClick={() => setActiveCategory(section.category!.id)}
                     className="flex items-center gap-0.5 text-[11px] font-bold text-muted transition hover:text-accent"
@@ -288,7 +298,10 @@ export default function Home() {
                   </button>
                 ) : null}
               </div>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className={cx(
+                "grid",
+                commerce.productLayout === "grid" ? "grid-cols-3 gap-2 sm:gap-3" : "grid-cols-1 gap-3 md:grid-cols-2",
+              )}>
                 {section.items.map((item) => (
                   <DishCard
                     key={item.id}
@@ -298,6 +311,8 @@ export default function Home() {
                     quantity={cart.quantityOf(item.id)}
                     onAdd={() => cart.add(item.id)}
                     onRemoveOne={() => cart.setQuantity(item.id, cart.quantityOf(item.id) - 1)}
+                    onSupplierClick={(supplier) => { setSupplierFilter(supplier.trim()); setActiveCategory(ALL); }}
+                    layout={commerce.productLayout}
                     disabled={!contact.isOpen || !commerce.enableCart}
                   />
                 ))}

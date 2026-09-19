@@ -1,6 +1,6 @@
 "use client";
 
-import { Moon, Palette, Sun } from "lucide-react";
+import { LayoutGrid, List, Moon, Palette, Sun } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
 import { FONT_OPTIONS } from "@/lib/fonts";
 import { ColorField, Field, Panel, RangeField, Select, Segmented, TextInput, Toggle } from "@/components/ui";
@@ -60,7 +60,20 @@ export function LookPanel() {
         </div>
       </Panel>
 
-      <Panel title="عناصر الواجهة" description="تتحكم في اللي ظاهر واللي مختفي من غير ما تمسح أي حاجة">
+      <Panel title="عناصر الواجهة" description="تتحكم في شكل عرض المنتجات والعناصر الظاهرة">
+        <div className="mb-3">
+          <Field label="شكل عرض المنتجات" hint="الشبكة تعرض 3 منتجات بجانب بعض بدون الوصف">
+            <Segmented
+              className="w-full [&>button]:flex-1"
+              value={commerce.productLayout}
+              onChange={(value) => patchCommerce({ productLayout: value })}
+              options={[
+                { value: "list", label: <span className="inline-flex items-center gap-1.5"><List className="h-3.5 w-3.5" /> العرض الحالي</span> },
+                { value: "grid", label: <span className="inline-flex items-center gap-1.5"><LayoutGrid className="h-3.5 w-3.5" /> شبكة 3 منتجات</span> },
+              ]}
+            />
+          </Field>
+        </div>
         <div className="grid gap-2.5 sm:grid-cols-2">
           <Toggle
             label="إظهار الأسعار"

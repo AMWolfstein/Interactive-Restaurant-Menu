@@ -110,6 +110,8 @@ export function ItemsPanel({ intent, nonce }: { intent?: string; nonce: number }
       ...editing.draft,
       name: editing.draft.name.trim(),
       description: editing.draft.description?.trim() ?? "",
+      weight: editing.draft.weight?.trim() ?? "",
+      supplier: editing.draft.supplier?.trim() ?? "",
       oldPrice: editing.draft.oldPrice && editing.draft.oldPrice > 0 ? editing.draft.oldPrice : null,
     };
     if (!draft.name) {

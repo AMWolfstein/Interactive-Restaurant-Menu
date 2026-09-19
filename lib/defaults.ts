@@ -51,6 +51,7 @@ export const DEFAULT_DATA: MenuData = {
     requireAddress: true,
     enableNotes: true,
     enableSearch: true,
+    productLayout: "list",
     enableFeatured: true,
     featuredLabel: "الأكثر طلباً ⭐",
     enableConfetti: true,

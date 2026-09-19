@@ -56,6 +56,7 @@ export function normalizeData(raw: unknown): MenuData {
   const merged = mergeWithDefaults<MenuData>(DEFAULT_DATA, raw);
   // الموقع عربي فقط حتى لو البيانات القديمة كانت محفوظة بالإنجليزية.
   merged.brand.language = "ar";
+  merged.commerce.productLayout = merged.commerce.productLayout === "grid" ? "grid" : "list";
   // ترقية الصور القديمة (unsplash) للصور الجديدة المحلية — بدون ما نغير أي شيء تاني
   if (merged.brand.heroImage?.includes("unsplash.com")) {
     merged.brand.heroImage = "/images/menu/hero.jpg";

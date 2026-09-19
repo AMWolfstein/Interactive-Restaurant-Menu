@@ -92,6 +92,8 @@ export interface CommerceSettings {
   requireAddress: boolean;
   enableNotes: boolean;
   enableSearch: boolean;
+  /** شكل عرض المنتجات: قائمة تفصيلية أو شبكة من 3 أعمدة */
+  productLayout: "list" | "grid";
   enableFeatured: boolean;
   featuredLabel: string;
   enableConfetti: boolean;
