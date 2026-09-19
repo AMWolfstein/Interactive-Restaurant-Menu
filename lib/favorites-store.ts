@@ -37,7 +37,11 @@ export function getFavoritesSnapshot() {
 export function toggleFavorite(itemId: string) {
   init();
   snapshot = snapshot.includes(itemId) ? snapshot.filter((id) => id !== itemId) : [...snapshot, itemId];
-  try { window.localStorage.setItem(KEY, JSON.stringify(snapshot)); } catch {}
+  try {
+    window.localStorage.setItem(KEY, JSON.stringify(snapshot));
+  } catch {
+    // Favorites still work for this tab when storage is unavailable.
+  }
   listeners.forEach((listener) => listener());
 }
 

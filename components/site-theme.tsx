@@ -55,6 +55,22 @@ export function SiteTheme() {
       document.head.appendChild(meta);
     }
     meta.setAttribute("content", brand.accent);
+
+    // Browsers use these links for the tab and iOS home-screen icon. Create
+    // them only when the owner has uploaded a logo; there is no default icon.
+    for (const rel of ["icon", "apple-touch-icon"] as const) {
+      let link = document.querySelector<HTMLLinkElement>(`link[rel="${rel}"]`);
+      if (!brand.logo) {
+        link?.remove();
+        continue;
+      }
+      if (!link) {
+        link = document.createElement("link");
+        link.rel = rel;
+        document.head.appendChild(link);
+      }
+      link.href = brand.logo;
+    }
   }, [ready, brand, pathname]);
 
   return null;

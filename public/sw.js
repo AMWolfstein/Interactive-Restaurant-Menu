@@ -1,5 +1,7 @@
-const CACHE_NAME = "restaurant-menu-v1";
-const OFFLINE_URLS = ["/", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
+const CACHE_NAME = "restaurant-menu-v2";
+// Do not precache the manifest: it is generated from the current brand
+// settings and must be refetched when the owner changes the header logo.
+const OFFLINE_URLS = ["/"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(OFFLINE_URLS)));

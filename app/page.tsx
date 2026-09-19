@@ -34,7 +34,9 @@ function safeHref(url?: string): string | undefined {
   try {
     const u = new URL(trimmed);
     if (u.protocol === "http:" || u.protocol === "https:") return trimmed;
-  } catch {}
+  } catch {
+    // Invalid URLs are intentionally ignored.
+  }
   return undefined;
 }
 
