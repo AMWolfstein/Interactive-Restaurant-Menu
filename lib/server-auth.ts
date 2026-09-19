@@ -83,14 +83,3 @@ export async function checkAdmin(token: string | null): Promise<AdminCheck> {
   if (!user) return { ok: false, status: 401, error: UNAUTHORIZED };
   return { ok: true, user };
 }
-
-/** true لو الطلب من أدمن مسجّل دخول بتوكن Supabase صالح */
-export async function isAdminRequest(request: NextRequest): Promise<boolean> {
-  return (await checkAdmin(bearerToken(request))).ok;
-}
-
-/** يوزر الأدمن من الطلب — null لو غير مصرّح */
-export async function requireAdminUser(request: NextRequest): Promise<AdminUser | null> {
-  const result = await checkAdmin(bearerToken(request));
-  return result.ok ? result.user : null;
-}

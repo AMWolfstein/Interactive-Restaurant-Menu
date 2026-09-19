@@ -63,10 +63,6 @@ async function storageStatus(force = false): Promise<StorageStatus> {
   return status;
 }
 
-export async function getStorageStatus(): Promise<StorageStatus> {
-  return storageStatus();
-}
-
 /* ------------------------------------------------------------------ */
 /* ملف التطوير المحلي                                                  */
 /* ------------------------------------------------------------------ */

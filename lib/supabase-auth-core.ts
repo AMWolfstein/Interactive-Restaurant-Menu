@@ -92,11 +92,6 @@ export function getAuthSnapshot(): AuthState {
   return state;
 }
 
-/** true لو مسجّل دخول دلوقتي */
-export function isAuthenticated(): boolean {
-  return state.configured && Boolean(state.userId);
-}
-
 export async function signInWithPassword(email: string, password: string): Promise<boolean> {
   const client = createBrowserClient();
   if (!client) {

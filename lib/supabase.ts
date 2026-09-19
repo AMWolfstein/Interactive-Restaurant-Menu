@@ -52,5 +52,3 @@ export function createBrowserClient(): SupabaseClient | null {
 
   return browserClient;
 }
-
-export const getSupabase = createBrowserClient;

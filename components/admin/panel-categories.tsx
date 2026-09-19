@@ -10,7 +10,7 @@ const EMOJIS = ["🍔", "🍕", "🍢", "🍟", "🥤", "🍮", "🥗", "🌯", 
 
 export function CategoriesPanel({ intent, nonce }: { intent?: string; nonce: number }) {
   const { data, addCategory, updateCategory, deleteCategory, moveCategory } = useMenu();
-  const [draft, setDraft] = useState({ name: "", nameEn: "", emoji: "🍽️" });
+  const [draft, setDraft] = useState({ name: "", emoji: "🍽️" });
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const addRef = useRef<HTMLInputElement>(null);
   const { toast, show } = useToast();
@@ -27,8 +27,8 @@ export function CategoriesPanel({ intent, nonce }: { intent?: string; nonce: num
       show("اكتب اسم القسم الأول", "error");
       return;
     }
-    addCategory({ name: draft.name.trim(), nameEn: draft.nameEn.trim(), emoji: draft.emoji, visible: true });
-    setDraft({ name: "", nameEn: "", emoji: "🍽️" });
+    addCategory({ name: draft.name.trim(), emoji: draft.emoji, visible: true });
+    setDraft({ name: "", emoji: "🍽️" });
     show("تمت إضافة القسم ✅");
   };
 

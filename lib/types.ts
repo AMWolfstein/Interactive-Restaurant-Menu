@@ -134,11 +134,3 @@ export interface CartLine {
   itemId: string;
   quantity: number;
 }
-
-export interface Totals {
-  subtotal: number;
-  delivery: number;
-  service: number;
-  total: number;
-  itemCount: number;
-}

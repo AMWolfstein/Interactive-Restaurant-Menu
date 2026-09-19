@@ -38,9 +38,7 @@ type Draft = Omit<MenuItem, "id">;
 const emptyDraft = (categoryId: string): Draft => ({
   categoryId,
   name: "",
-  nameEn: "",
   description: "",
-  descriptionEn: "",
   weight: "",
   supplier: "",
   price: 0,
@@ -85,7 +83,7 @@ export function ItemsPanel({ intent, nonce }: { intent?: string; nonce: number }
       })
       .filter((item) =>
         term
-          ? [item.name, item.nameEn, item.description, item.descriptionEn]
+          ? [item.name, item.description]
               .filter(Boolean)
               .some((text) => String(text).toLowerCase().includes(term))
           : true,

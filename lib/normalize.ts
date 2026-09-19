@@ -1,8 +1,6 @@
 import { DEFAULT_DATA } from "./defaults";
 import type { MenuData, MenuItem } from "./types";
 
-export const DATA_VERSION = 1;
-
 type Plain = Record<string, unknown>;
 
 const isPlainObject = (value: unknown): value is Plain =>

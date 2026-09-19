@@ -17,11 +17,6 @@ export function isSafeHttpUrl(url: string): boolean {
   }
 }
 
-export function sanitizeUrl(url: string): string {
-  if (!url) return "";
-  return isSafeHttpUrl(url) ? url.trim() : "";
-}
-
 export function sanitizeText(input: string, maxLen = 500): string {
   if (!input || typeof input !== "string") return "";
   // إزالة control characters وحروف غير مرئية
@@ -33,11 +28,6 @@ export function sanitizeText(input: string, maxLen = 500): string {
 
 export function isValidOrderType(value: string): boolean {
   return ["delivery", "takeaway", "dinein"].includes(value);
-}
-
-export function clampQuantity(q: unknown, max = 50): number {
-  const n = Math.floor(Number(q) || 0);
-  return Math.max(1, Math.min(max, n));
 }
 
 // تحقق من ملف JSON المستورد للأدمن

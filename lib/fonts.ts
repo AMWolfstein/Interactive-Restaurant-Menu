@@ -38,7 +38,3 @@ export const FONT_OPTIONS: FontOption[] = [
 
 export const GOOGLE_FONTS_HREF =
   "https://fonts.googleapis.com/css2?family=Almarai:wght@400;700&family=Cairo:wght@400;700;900&family=Tajawal:wght@400;500;700&family=Amiri:wght@400;700&display=swap";
-
-export function fontStackFor(key: string): string {
-  return FONT_OPTIONS.find((option) => option.key === key)?.stack ?? FONT_OPTIONS[0].stack;
-}
