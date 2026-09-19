@@ -44,8 +44,11 @@ const emptyDraft = (categoryId: string, order: number): Draft => ({
   nameEn: "",
   description: "",
   descriptionEn: "",
+  weight: "",
+  supplier: "",
   price: 0,
   oldPrice: null,
+  offerEndsAt: null,
   image: "",
   available: true,
   bestseller: false,
@@ -114,6 +117,10 @@ export function ItemsPanel({ intent, nonce }: { intent?: string; nonce: number }
     };
     if (!draft.name) {
       show("اسم الصنف مطلوب", "error");
+      return;
+    }
+    if (!draft.categoryId || !categories.some((category) => category.id === draft.categoryId)) {
+      show("أضف قسماً أولاً ثم اختاره للصنف", "error");
       return;
     }
     if (editing.id) {
@@ -384,11 +391,24 @@ function ItemEditor({
           <Field label="الوصف (إنجليزي)">
             <TextArea value={draft.descriptionEn ?? ""} onChange={(event) => set({ descriptionEn: event.target.value })} rows={2} />
           </Field>
-          <Field label="السعر">
+          <Field label="الوزن / حجم العبوة" hint="مثال: 1 كجم أو 500 جم">
+            <TextInput value={draft.weight ?? ""} onChange={(event) => set({ weight: event.target.value })} placeholder="1 كجم" />
+          </Field>
+          <Field label="المورد">
+            <TextInput value={draft.supplier ?? ""} onChange={(event) => set({ supplier: event.target.value })} placeholder="اسم المورد" />
+          </Field>
+          <Field label="السعر الجديد">
             <NumberInput value={draft.price} onValueChange={(value) => set({ price: value })} suffix={commerce.currency} />
           </Field>
-          <Field label="السعر قبل الخصم" hint="حط 0 لو مفيش خصم">
+          <Field label="السعر قبل الخصم" hint="اكتب السعر القديم والنظام هيحسب نسبة الخصم تلقائياً">
             <NumberInput value={draft.oldPrice ?? 0} onValueChange={(value) => set({ oldPrice: value || null })} suffix={commerce.currency} />
+          </Field>
+          <Field label="انتهاء العرض" hint="اختياري — يظهر عداد تنازلي للعميل">
+            <TextInput
+              type="datetime-local"
+              value={draft.offerEndsAt ? draft.offerEndsAt.slice(0, 16) : ""}
+              onChange={(event) => set({ offerEndsAt: event.target.value ? new Date(event.target.value).toISOString() : null })}
+            />
           </Field>
           <Field label="القسم">
             <Select value={draft.categoryId} onChange={(event) => set({ categoryId: event.target.value, order: siblings + 1 })}>

@@ -21,9 +21,15 @@ export interface MenuItem {
   nameEn?: string;
   description?: string;
   descriptionEn?: string;
+  /** الوزن أو حجم العبوة، مثال: 1 كجم */
+  weight?: string;
+  /** اسم المورد المصري */
+  supplier?: string;
   price: number;
   /** السعر قبل الخصم — لو موجود يظهر مشطوب مع نسبة توفير */
   oldPrice?: number | null;
+  /** موعد انتهاء العرض بصيغة ISO — فارغ يعني عرض بدون عداد */
+  offerEndsAt?: string | null;
   /** رابط صورة أو dataURL مرفوعة من الجهاز */
   image?: string;
   available: boolean;

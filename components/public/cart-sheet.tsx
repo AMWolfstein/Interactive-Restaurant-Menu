@@ -21,6 +21,7 @@ import type { OrderType } from "@/lib/types";
 import type { DetailedLine } from "@/lib/use-cart";
 import { cx } from "@/lib/cx";
 import { DishImage } from "./dish-card";
+import { PREVIOUS_ORDER_KEY } from "./previous-order-button";
 
 const TYPE_ICON: Record<OrderType, typeof Truck> = {
   delivery: Truck,
@@ -115,6 +116,11 @@ export function CartSheet({
       const url = `https://wa.me/${number}?text=${encodeURIComponent(`${message}\n\nرقم الطلب: ${result.order.id}`)}`;
       if (whatsappWindow) whatsappWindow.location.href = url;
       else window.location.href = url;
+      try {
+        window.localStorage.setItem(PREVIOUS_ORDER_KEY, JSON.stringify(lines.map(({ line }) => line)));
+      } catch {
+        // إعادة الطلب ميزة اختيارية؛ فشل التخزين لا يمنع إكمال الطلب.
+      }
       clear();
       onClose();
     } catch (error) {

@@ -1,10 +1,16 @@
 "use client";
 
-import { useState } from "react";
-import { Flame, Minus, Plus, Star } from "lucide-react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { Flame, Heart, Minus, Plus, Star } from "lucide-react";
 import { pick, formatPrice } from "@/lib/format";
 import type { CommerceSettings, MenuItem, SiteLanguage } from "@/lib/types";
 import { cx } from "@/lib/cx";
+import {
+  FAVORITES_SERVER_SNAPSHOT,
+  getFavoritesSnapshot,
+  subscribeFavorites,
+  toggleFavorite,
+} from "@/lib/favorites-store";
 
 export function DishImage({
   src,
@@ -62,6 +68,8 @@ export function DishCard({
   const price = formatPrice(item.price, lang, commerce);
   const hasDiscount = !!item.oldPrice && item.oldPrice > item.price;
   const off = hasDiscount ? Math.round(((item.oldPrice! - item.price) / item.oldPrice!) * 100) : 0;
+  const favorites = useSyncExternalStore(subscribeFavorites, getFavoritesSnapshot, () => FAVORITES_SERVER_SNAPSHOT);
+  const favorite = favorites.includes(item.id);
 
   return (
     <article
@@ -70,6 +78,17 @@ export function DishCard({
         !item.available && "opacity-70",
       )}
     >
+      <button
+        type="button"
+        onClick={() => toggleFavorite(item.id)}
+        aria-label={favorite ? (en ? "Remove from favorites" : "إزالة من المفضلة") : (en ? "Add to favorites" : "إضافة للمفضلة")}
+        className={cx(
+          "absolute end-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-full border border-line bg-bg/85 backdrop-blur transition",
+          favorite ? "text-red-500" : "text-muted hover:text-red-500",
+        )}
+      >
+        <Heart className={cx("h-4 w-4", favorite && "fill-current")} />
+      </button>
       <div className="relative">
         <DishImage src={item.image} alt={pick(lang, item.name, item.nameEn)} className="h-24 w-24 rounded-xl sm:h-28 sm:w-28" />
         {!item.available ? (
@@ -106,6 +125,13 @@ export function DishCard({
               {pick(lang, item.description, item.descriptionEn)}
             </p>
           ) : null}
+          {item.weight || item.supplier ? (
+            <p className="mt-1 flex flex-wrap gap-1.5 text-[10px] font-bold text-muted">
+              {item.weight ? <span className="rounded-md bg-surface-2 px-1.5 py-0.5">⚖️ {item.weight}</span> : null}
+              {item.supplier ? <span className="rounded-md bg-surface-2 px-1.5 py-0.5">المورد: {item.supplier}</span> : null}
+            </p>
+          ) : null}
+          {hasDiscount && item.offerEndsAt ? <OfferCountdown endsAt={item.offerEndsAt} en={en} /> : null}
         </div>
 
         <div className="flex items-end justify-between gap-2">
@@ -164,4 +190,26 @@ export function DishCard({
       </div>
     </article>
   );
+}
+
+function OfferCountdown({ endsAt, en }: { endsAt: string; en: boolean }) {
+  const [remaining, setRemaining] = useState(() => Math.max(0, new Date(endsAt).getTime() - Date.now()));
+
+  useEffect(() => {
+    const update = () => setRemaining(Math.max(0, new Date(endsAt).getTime() - Date.now()));
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [endsAt]);
+
+  if (remaining <= 0) return null;
+  const totalSeconds = Math.floor(remaining / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const time = [days ? `${days}${en ? "d" : "ي"}` : "", `${hours}`.padStart(2, "0"), `${minutes}`.padStart(2, "0"), `${seconds}`.padStart(2, "0")]
+    .filter(Boolean)
+    .join(":");
+
+  return <p className="mt-1 text-[10px] font-black text-red-400">⏳ {en ? "Offer ends in" : "ينتهي العرض خلال"}: <span dir="ltr">{time}</span></p>;
 }

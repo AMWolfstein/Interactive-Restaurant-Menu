@@ -7,6 +7,7 @@ import {
   clearCart,
   getCartSnapshot,
   removeFromCart,
+  replaceCart,
   setCartQuantity,
   subscribeCart,
 } from "./cart-store-core";
@@ -38,10 +39,11 @@ export function useCart(menuItems: MenuItem[]) {
   }, []);
   const remove = useCallback((id: string) => removeFromCart(id), []);
   const clear = useCallback(() => clearCart(), []);
+  const restore = useCallback((previous: CartLine[]) => replaceCart(previous), []);
   const quantityOf = useCallback(
     (id: string) => lines.find((line) => line.itemId === id)?.quantity ?? 0,
     [lines],
   );
 
-  return { lines: detailed, loaded: true, add, setQuantity, remove, clear, quantityOf };
+  return { lines: detailed, loaded: true, add, setQuantity, remove, clear, restore, quantityOf };
 }

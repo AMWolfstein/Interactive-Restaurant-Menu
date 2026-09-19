@@ -91,6 +91,13 @@ export function removeFromCart(itemId: string) {
   write(snapshot.filter((line) => line.itemId !== itemId));
 }
 
+export function replaceCart(lines: CartLine[]) {
+  const normalized = lines
+    .filter((line) => typeof line.itemId === "string" && Number.isFinite(line.quantity) && line.quantity > 0)
+    .map((line) => ({ itemId: line.itemId, quantity: Math.min(50, Math.floor(line.quantity)) }));
+  write(normalized);
+}
+
 export function clearCart() {
   write([]);
 }

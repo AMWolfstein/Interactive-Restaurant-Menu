@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import {
   Clock,
   Utensils,
@@ -21,8 +21,11 @@ import { DishCard, DishImage } from "@/components/public/dish-card";
 import { CartSheet } from "@/components/public/cart-sheet";
 import { ThemeToggle } from "@/components/public/theme-toggle";
 import { PwaInstallButton } from "@/components/public/pwa-install-button";
+import { PreviousOrderButton } from "@/components/public/previous-order-button";
+import { FAVORITES_SERVER_SNAPSHOT, getFavoritesSnapshot, subscribeFavorites } from "@/lib/favorites-store";
 
 const ALL = "all";
+const FAVORITES = "favorites";
 
 function safeHref(url?: string): string | undefined {
   if (!url) return undefined;
@@ -46,6 +49,7 @@ export default function Home() {
   const [cartOpen, setCartOpen] = useState(false);
 
   const cart = useCart(items);
+  const favoriteIds = useSyncExternalStore(subscribeFavorites, getFavoritesSnapshot, () => FAVORITES_SERVER_SNAPSHOT);
   const totals = useMemo(() => computeTotals(cart.lines, commerce, "delivery"), [cart.lines, commerce]);
 
   const visibleCategories = useMemo(() => categories.filter((category) => category.visible), [categories]);
@@ -67,6 +71,9 @@ export default function Home() {
 
   const sections = useMemo(() => {
     const pool = searched.filter((item) => item.available || query);
+    if (activeCategory === FAVORITES) {
+      return [{ category: undefined, items: pool.filter((item) => favoriteIds.includes(item.id)) }];
+    }
     if (activeCategory !== ALL) {
       const category = categories.find((c) => c.id === activeCategory);
       return category ? [{ category, items: pool.filter((item) => item.categoryId === category.id) }] : [];
@@ -74,7 +81,7 @@ export default function Home() {
     return visibleCategories
       .map((category) => ({ category, items: pool.filter((item) => item.categoryId === category.id) }))
       .filter((section) => section.items.length > 0);
-  }, [searched, activeCategory, categories, visibleCategories, query]);
+  }, [searched, activeCategory, categories, visibleCategories, query, favoriteIds]);
 
   const isEmpty = sections.every((section) => section.items.length === 0);
 
@@ -122,6 +129,12 @@ export default function Home() {
               <span className={cx("h-1.5 w-1.5 rounded-full", contact.isOpen ? "bg-emerald-400" : "bg-red-400")} />
               {contact.isOpen ? (en ? "Open now" : "مفتوح الآن") : en ? "Closed" : "مقفل"}
             </span>
+            <PreviousOrderButton
+              language={lang}
+              validItemIds={new Set(items.map((item) => item.id))}
+              onRestore={cart.restore}
+              onOpenCart={() => setCartOpen(true)}
+            />
             <PwaInstallButton language={lang} />
             <ThemeToggle fallback={brand.theme} language={lang} />
             <a
@@ -209,6 +222,12 @@ export default function Home() {
               label={en ? "All" : "الكل"}
               emoji="🍽️"
             />
+            <CategoryChip
+              active={activeCategory === FAVORITES}
+              onClick={() => setActiveCategory(FAVORITES)}
+              label={en ? "Favorites" : "المفضلة"}
+              emoji="❤️"
+            />
             {visibleCategories.map((category) => (
               <CategoryChip
                 key={category.id}
@@ -252,7 +271,7 @@ export default function Home() {
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="flex items-center gap-2 text-base font-black">
                   <span aria-hidden>{section.category?.emoji}</span>
-                  {section.category ? nameOf(section.category) : en ? "Menu" : "القائمة"}
+                  {section.category ? nameOf(section.category) : activeCategory === FAVORITES ? (en ? "Favorites" : "المفضلة") : (en ? "Menu" : "القائمة")}
                   <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-bold text-muted">
                     {section.items.length}
                   </span>
