@@ -28,17 +28,18 @@ export interface MenuItem {
   price: number;
   /** السعر قبل الخصم — لو موجود يظهر مشطوب مع نسبة توفير */
   oldPrice?: number | null;
-  /** موعد انتهاء العرض بصيغة ISO — فارغ يعني عرض بدون عداد */
-  offerEndsAt?: string | null;
+  /** تاريخ انتهاء العرض — يُدخل كاليوم والشهر والسنة */
+  offerEndDay?: number | null;
+  offerEndMonth?: number | null;
+  offerEndYear?: number | null;
+  /** عدد مرات طلب المنتج، يُحدّث تلقائياً عند إكمال الطلب */
+  salesCount?: number;
   /** رابط صورة أو dataURL مرفوعة من الجهاز */
   image?: string;
   available: boolean;
-  bestseller: boolean;
   isNew: boolean;
   /** 0 = بدون حارة، 1..3 = عدد الشطات */
   spicy: 0 | 1 | 2 | 3;
-  /** ترتيب يدوي داخل القسم (الأصغر يظهر أولاً) */
-  order: number;
 }
 
 export interface BrandSettings {

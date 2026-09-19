@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { Flame, Heart, Minus, Plus, Star } from "lucide-react";
+import { Flame, Heart, Minus, Plus } from "lucide-react";
 import { pick, formatPrice } from "@/lib/format";
 import type { CommerceSettings, MenuItem, SiteLanguage } from "@/lib/types";
 import { cx } from "@/lib/cx";
@@ -102,11 +102,6 @@ export function DishCard({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-1.5">
             <h3 className="truncate text-[15px] font-extrabold">{pick(lang, item.name, item.nameEn)}</h3>
-            {item.bestseller ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold text-accent">
-                <Star className="h-2.5 w-2.5 fill-current" /> {en ? "Best" : "الأكثر طلباً"}
-              </span>
-            ) : null}
             {item.isNew ? (
               <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400">
                 {en ? "NEW" : "جديد"}
@@ -131,7 +126,9 @@ export function DishCard({
               {item.supplier ? <span className="rounded-md bg-surface-2 px-1.5 py-0.5">المورد: {item.supplier}</span> : null}
             </p>
           ) : null}
-          {hasDiscount && item.offerEndsAt ? <OfferCountdown endsAt={item.offerEndsAt} en={en} /> : null}
+          {hasDiscount && item.offerEndDay && item.offerEndMonth && item.offerEndYear ? (
+            <OfferCountdown day={item.offerEndDay} month={item.offerEndMonth} year={item.offerEndYear} />
+          ) : null}
         </div>
 
         <div className="flex items-end justify-between gap-2">
@@ -192,11 +189,12 @@ export function DishCard({
   );
 }
 
-function OfferCountdown({ endsAt, en }: { endsAt: string; en: boolean }) {
-  const [remaining, setRemaining] = useState(() => Math.max(0, new Date(endsAt).getTime() - Date.now()));
+function OfferCountdown({ day, month, year }: { day: number; month: number; year: number }) {
+  const endsAt = new Date(year, month - 1, day, 23, 59, 59).getTime();
+  const [remaining, setRemaining] = useState(() => Math.max(0, endsAt - Date.now()));
 
   useEffect(() => {
-    const update = () => setRemaining(Math.max(0, new Date(endsAt).getTime() - Date.now()));
+    const update = () => setRemaining(Math.max(0, endsAt - Date.now()));
     const timer = window.setInterval(update, 1000);
     return () => window.clearInterval(timer);
   }, [endsAt]);
@@ -207,9 +205,9 @@ function OfferCountdown({ endsAt, en }: { endsAt: string; en: boolean }) {
   const hours = Math.floor((totalSeconds % 86400) / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-  const time = [days ? `${days}${en ? "d" : "ي"}` : "", `${hours}`.padStart(2, "0"), `${minutes}`.padStart(2, "0"), `${seconds}`.padStart(2, "0")]
+  const time = [days ? `${days}ي` : "", `${hours}`.padStart(2, "0"), `${minutes}`.padStart(2, "0"), `${seconds}`.padStart(2, "0")]
     .filter(Boolean)
     .join(":");
 
-  return <p className="mt-1 text-[10px] font-black text-red-400">⏳ {en ? "Offer ends in" : "ينتهي العرض خلال"}: <span dir="ltr">{time}</span></p>;
+  return <p className="mt-1 text-[10px] font-black text-red-400">⏳ ينتهي العرض خلال: <span dir="ltr">{time}</span></p>;
 }

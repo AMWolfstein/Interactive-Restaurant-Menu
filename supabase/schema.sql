@@ -49,6 +49,7 @@ declare
   v_lines jsonb := coalesce(payload -> 'lines', '[]'::jsonb);
   v_line jsonb;
   v_item jsonb;
+  v_items jsonb;
   v_item_id text;
   v_item_name text;
   v_item_price numeric;
@@ -75,7 +76,7 @@ begin
     raise exception 'عدد الأصناف كبير جداً (الحد 50)' using errcode = '22023';
   end if;
 
-  select data into v_menu from public.menu_data where slug = 'main';
+  select data into v_menu from public.menu_data where slug = 'main' for update;
   if v_menu is null then
     raise exception 'قائمة المطعم لسه مش محفوظة' using errcode = '22023';
   end if;
@@ -101,6 +102,18 @@ begin
       'itemId', v_item_id, 'name', v_item_name,
       'quantity', v_quantity, 'unitPrice', v_item_price
     );
+
+    -- الأكثر طلباً يُحسب تلقائياً من الكميات الموجودة في الطلبات المكتملة.
+    select jsonb_agg(
+      case when elem ->> 'id' = v_item_id
+        then elem || jsonb_build_object(
+          'salesCount', greatest(0, coalesce((elem ->> 'salesCount')::integer, 0)) + v_quantity
+        )
+        else elem end
+      order by ordinality
+    ) into v_items
+    from jsonb_array_elements(v_menu -> 'items') with ordinality as t(elem, ordinality);
+    v_menu := jsonb_set(v_menu, '{items}', v_items);
   end loop;
 
   v_commerce := v_menu -> 'commerce';
@@ -136,6 +149,9 @@ begin
   );
 
   insert into public.orders (id, created_at, data) values (v_order_id, v_now, v_order);
+  update public.menu_data
+    set data = jsonb_set(v_menu, '{updatedAt}', to_jsonb(v_now_iso)), updated_at = v_now
+    where slug = 'main';
   return jsonb_build_object('order', v_order);
 end;
 $function$;

@@ -54,6 +54,8 @@ const LOCAL_IMAGE_MAP: Record<string, string> = {
 /** تطبيع أي قائمة قادمة من الباك إند قبل ما تُعرض أو تُحفظ */
 export function normalizeData(raw: unknown): MenuData {
   const merged = mergeWithDefaults<MenuData>(DEFAULT_DATA, raw);
+  // الموقع عربي فقط حتى لو البيانات القديمة كانت محفوظة بالإنجليزية.
+  merged.brand.language = "ar";
   // ترقية الصور القديمة (unsplash) للصور الجديدة المحلية — بدون ما نغير أي شيء تاني
   if (merged.brand.heroImage?.includes("unsplash.com")) {
     merged.brand.heroImage = "/images/menu/hero.jpg";
@@ -105,19 +107,32 @@ export function normalizeData(raw: unknown): MenuData {
           trackStock?: boolean;
           stock?: number;
           lowStockThreshold?: number;
+          bestseller?: boolean;
+          order?: number;
+          offerEndsAt?: string | null;
         };
-        const { trackStock: _trackStock, stock: _stock, lowStockThreshold: _threshold, ...cleanItem } = legacy;
-        void _trackStock;
-        void _stock;
-        void _threshold;
+        const {
+          trackStock: _trackStock,
+          stock: _stock,
+          lowStockThreshold: _threshold,
+          bestseller: _bestseller,
+          order: _order,
+          offerEndsAt: _offerEndsAt,
+          ...cleanItem
+        } = legacy;
+        void [_trackStock, _stock, _threshold, _bestseller, _order];
+        const oldOfferDate = _offerEndsAt ? new Date(_offerEndsAt) : null;
         return {
           ...cleanItem,
+          salesCount: Math.max(0, Math.floor(cleanItem.salesCount ?? 0)),
+          offerEndDay: cleanItem.offerEndDay ?? (oldOfferDate && !Number.isNaN(oldOfferDate.getTime()) ? oldOfferDate.getDate() : null),
+          offerEndMonth: cleanItem.offerEndMonth ?? (oldOfferDate && !Number.isNaN(oldOfferDate.getTime()) ? oldOfferDate.getMonth() + 1 : null),
+          offerEndYear: cleanItem.offerEndYear ?? (oldOfferDate && !Number.isNaN(oldOfferDate.getTime()) ? oldOfferDate.getFullYear() : null),
           // أي صنف قسمه اتحذف ينزل في أول قسم بدل ما يختفي
           categoryId: knownCats.has(item.categoryId)
             ? item.categoryId
             : (merged.categories[0]?.id ?? ""),
         };
-      })
-      .sort((a, b) => a.order - b.order),
+      }),
   };
 }

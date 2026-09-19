@@ -2,15 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  ChevronDown,
-  ChevronUp,
   Copy,
   Flame,
   ListFilter,
   Pencil,
   Plus,
   Search,
-  Star,
   Trash2,
   UtensilsCrossed,
 } from "lucide-react";
@@ -38,7 +35,7 @@ import { cx } from "@/lib/cx";
 
 type Draft = Omit<MenuItem, "id">;
 
-const emptyDraft = (categoryId: string, order: number): Draft => ({
+const emptyDraft = (categoryId: string): Draft => ({
   categoryId,
   name: "",
   nameEn: "",
@@ -48,17 +45,18 @@ const emptyDraft = (categoryId: string, order: number): Draft => ({
   supplier: "",
   price: 0,
   oldPrice: null,
-  offerEndsAt: null,
+  offerEndDay: null,
+  offerEndMonth: null,
+  offerEndYear: null,
+  salesCount: 0,
   image: "",
   available: true,
-  bestseller: false,
   isNew: false,
   spicy: 0,
-  order,
 });
 
 export function ItemsPanel({ intent, nonce }: { intent?: string; nonce: number }) {
-  const { data, updateItem, deleteItem, duplicateItem, moveItem, addItem, setCategoryAvailability } = useMenu();
+  const { data, updateItem, deleteItem, duplicateItem, addItem, setCategoryAvailability } = useMenu();
   const { items, categories, brand, commerce } = data;
   const lang = brand.language;
   const [query, setQuery] = useState("");
@@ -92,7 +90,7 @@ export function ItemsPanel({ intent, nonce }: { intent?: string; nonce: number }
               .some((text) => String(text).toLowerCase().includes(term))
           : true,
       )
-      .sort((a, b) => a.order - b.order);
+;
   }, [items, categoryFilter, only, query]);
 
   const groups = useMemo(() => {
@@ -103,8 +101,7 @@ export function ItemsPanel({ intent, nonce }: { intent?: string; nonce: number }
 
   function openNew() {
     const categoryId = categoryFilter === "all" ? categories[0]?.id ?? "" : categoryFilter;
-    const order = items.filter((item) => item.categoryId === categoryId).length + 1;
-    setEditing({ id: null, draft: emptyDraft(categoryId, order) });
+    setEditing({ id: null, draft: emptyDraft(categoryId) });
   }
 
   const save = () => {
@@ -122,6 +119,18 @@ export function ItemsPanel({ intent, nonce }: { intent?: string; nonce: number }
     if (!draft.categoryId || !categories.some((category) => category.id === draft.categoryId)) {
       show("أضف قسماً أولاً ثم اختاره للصنف", "error");
       return;
+    }
+    const offerParts = [draft.offerEndDay, draft.offerEndMonth, draft.offerEndYear];
+    if (offerParts.some(Boolean) && !offerParts.every(Boolean)) {
+      show("اكتب يوم وشهر وسنة انتهاء العرض بالكامل", "error");
+      return;
+    }
+    if (draft.offerEndDay && draft.offerEndMonth && draft.offerEndYear) {
+      const date = new Date(draft.offerEndYear, draft.offerEndMonth - 1, draft.offerEndDay);
+      if (date.getDate() !== draft.offerEndDay || date.getMonth() !== draft.offerEndMonth - 1) {
+        show("تاريخ انتهاء العرض غير صحيح", "error");
+        return;
+      }
     }
     if (editing.id) {
       updateItem(editing.id, draft);
@@ -216,7 +225,7 @@ export function ItemsPanel({ intent, nonce }: { intent?: string; nonce: number }
                   </button>
                 </header>
                 <ul className="space-y-2">
-                  {rows.map((item, index) => (
+                  {rows.map((item) => (
                     <li
                       key={item.id}
                       className={cx(
@@ -224,25 +233,6 @@ export function ItemsPanel({ intent, nonce }: { intent?: string; nonce: number }
                         !item.available && "opacity-70",
                       )}
                     >
-                      <div className="flex flex-col gap-0.5">
-                        <IconButton
-                          label="لأعلى"
-                          className="h-5"
-                          disabled={index === 0}
-                          onClick={() => moveItem(item.id, -1)}
-                        >
-                          <ChevronUp className="h-3 w-3" />
-                        </IconButton>
-                        <IconButton
-                          label="لأسفل"
-                          className="h-5"
-                          disabled={index === rows.length - 1}
-                          onClick={() => moveItem(item.id, 1)}
-                        >
-                          <ChevronDown className="h-3 w-3" />
-                        </IconButton>
-                      </div>
-
                       {item.image ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={item.image} alt="" className="h-11 w-11 shrink-0 rounded-lg object-cover" />
@@ -262,7 +252,6 @@ export function ItemsPanel({ intent, nonce }: { intent?: string; nonce: number }
                           >
                             {item.available ? "متاح" : "خلصت"}
                           </span>
-                          {item.bestseller ? <Star className="h-3 w-3 fill-accent text-accent" /> : null}
                           {item.isNew ? <span className="text-emerald-400">جديد</span> : null}
                           {item.spicy ? <Flame className="h-3 w-3 text-red-500" /> : null}
                           {item.oldPrice && item.oldPrice > item.price ? (
@@ -350,11 +339,10 @@ function ItemEditor({
   onSave: () => void;
 }) {
   const { data } = useMenu();
-  const { categories, items, brand, commerce } = data;
+  const { categories, brand, commerce } = data;
   if (!editing) return null;
   const draft = editing.draft;
   const set = (patch: Partial<Draft>) => onChange({ ...draft, ...patch });
-  const siblings = items.filter((item) => item.categoryId === draft.categoryId).length;
 
   return (
     <Modal
@@ -379,17 +367,11 @@ function ItemEditor({
     >
       <div className="space-y-3.5">
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="اسم الصنف (عربي)">
-            <TextInput value={draft.name} onChange={(event) => set({ name: event.target.value })} placeholder="برجر دبل تشيز" />
+          <Field label="اسم الصنف">
+            <TextInput value={draft.name} onChange={(event) => set({ name: event.target.value })} placeholder="صدور دجاج مجمدة" />
           </Field>
-          <Field label="اسم الصنف (إنجليزي)">
-            <TextInput value={draft.nameEn ?? ""} onChange={(event) => set({ nameEn: event.target.value })} placeholder="Double Cheese Burger" />
-          </Field>
-          <Field label="الوصف (عربي)">
+          <Field label="وصف الصنف">
             <TextArea value={draft.description ?? ""} onChange={(event) => set({ description: event.target.value })} rows={2} />
-          </Field>
-          <Field label="الوصف (إنجليزي)">
-            <TextArea value={draft.descriptionEn ?? ""} onChange={(event) => set({ descriptionEn: event.target.value })} rows={2} />
           </Field>
           <Field label="الوزن / حجم العبوة" hint="مثال: 1 كجم أو 500 جم">
             <TextInput value={draft.weight ?? ""} onChange={(event) => set({ weight: event.target.value })} placeholder="1 كجم" />
@@ -403,24 +385,36 @@ function ItemEditor({
           <Field label="السعر قبل الخصم" hint="اكتب السعر القديم والنظام هيحسب نسبة الخصم تلقائياً">
             <NumberInput value={draft.oldPrice ?? 0} onValueChange={(value) => set({ oldPrice: value || null })} suffix={commerce.currency} />
           </Field>
-          <Field label="انتهاء العرض" hint="اختياري — يظهر عداد تنازلي للعميل">
-            <TextInput
-              type="datetime-local"
-              value={draft.offerEndsAt ? draft.offerEndsAt.slice(0, 16) : ""}
-              onChange={(event) => set({ offerEndsAt: event.target.value ? new Date(event.target.value).toISOString() : null })}
-            />
+          <Field label="تاريخ انتهاء العرض" hint="اختياري — اليوم / الشهر / السنة">
+            <div className="grid grid-cols-3 gap-2" dir="rtl">
+              <TextInput
+                inputMode="numeric"
+                placeholder="اليوم"
+                value={draft.offerEndDay ?? ""}
+                onChange={(event) => set({ offerEndDay: event.target.value ? Math.min(31, Math.max(1, Number(event.target.value))) : null })}
+              />
+              <TextInput
+                inputMode="numeric"
+                placeholder="الشهر"
+                value={draft.offerEndMonth ?? ""}
+                onChange={(event) => set({ offerEndMonth: event.target.value ? Math.min(12, Math.max(1, Number(event.target.value))) : null })}
+              />
+              <TextInput
+                inputMode="numeric"
+                placeholder="السنة"
+                value={draft.offerEndYear ?? ""}
+                onChange={(event) => set({ offerEndYear: event.target.value ? Math.max(new Date().getFullYear(), Number(event.target.value)) : null })}
+              />
+            </div>
           </Field>
           <Field label="القسم">
-            <Select value={draft.categoryId} onChange={(event) => set({ categoryId: event.target.value, order: siblings + 1 })}>
+            <Select value={draft.categoryId} onChange={(event) => set({ categoryId: event.target.value })}>
               {categories.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.emoji} {pick(brand.language, category.name, category.nameEn)}
                 </option>
               ))}
             </Select>
-          </Field>
-          <Field label="الترتيب داخل القسم">
-            <NumberInput value={draft.order} onValueChange={(value) => set({ order: value })} />
           </Field>
         </div>
 
@@ -434,9 +428,6 @@ function ItemEditor({
         <div className="flex flex-wrap items-center gap-2">
           <CheckboxPill active={draft.available} onClick={() => set({ available: !draft.available })}>
             متاح للطلب
-          </CheckboxPill>
-          <CheckboxPill active={draft.bestseller} onClick={() => set({ bestseller: !draft.bestseller })}>
-            الأكثر طلباً ⭐
           </CheckboxPill>
           <CheckboxPill active={draft.isNew} onClick={() => set({ isNew: !draft.isNew })}>
             جديد 🆕

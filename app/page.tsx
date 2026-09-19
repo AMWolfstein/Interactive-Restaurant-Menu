@@ -65,7 +65,9 @@ export default function Home() {
     );
   }, [items, query]);
   const featured = useMemo(
-    () => (commerce.enableFeatured && activeCategory === ALL && !query ? items.filter((item) => item.bestseller && item.available) : []),
+    () => (commerce.enableFeatured && activeCategory === ALL && !query
+      ? items.filter((item) => item.available && (item.salesCount ?? 0) > 0).sort((a, b) => (b.salesCount ?? 0) - (a.salesCount ?? 0))
+      : []),
     [commerce.enableFeatured, activeCategory, query, items],
   );
 

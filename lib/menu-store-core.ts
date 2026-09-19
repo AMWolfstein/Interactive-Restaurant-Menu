@@ -208,10 +208,7 @@ export function moveCategory(id: string, dir: -1 | 1) {
 }
 export function addItem(input: Omit<MenuItem, "id">) {
   const id = `i_${newId()}`;
-  updateMenu((d) => {
-    const max = Math.max(0, ...d.items.filter((x) => x.categoryId === input.categoryId).map((x) => x.order));
-    d.items.push({ ...input, id, order: max + 1 });
-  });
+  updateMenu((d) => d.items.push({ ...input, id }));
   return id;
 }
 export function updateItem(id: string, patch: Partial<MenuItem>) {
@@ -229,19 +226,7 @@ export function duplicateItem(id: string) {
   updateMenu((d) => {
     const row = d.items.find((x) => x.id === id);
     if (!row) return;
-    d.items.push({ ...row, id: `i_${newId()}`, name: `${row.name} (نسخة)`, order: row.order + 0.5 });
-  });
-}
-export function moveItem(id: string, dir: -1 | 1) {
-  updateMenu((d) => {
-    const current = d.items.find((x) => x.id === id);
-    if (!current) return;
-    const rows = d.items.filter((x) => x.categoryId === current.categoryId).sort((a, b) => a.order - b.order);
-    const i = rows.findIndex((x) => x.id === id);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= rows.length) return;
-    [rows[i], rows[j]] = [rows[j], rows[i]];
-    rows.forEach((x, n) => (x.order = n + 1));
+    d.items.push({ ...row, id: `i_${newId()}`, name: `${row.name} (نسخة)`, salesCount: 0 });
   });
 }
 export function setCategoryAvailability(categoryId: string, available: boolean) {

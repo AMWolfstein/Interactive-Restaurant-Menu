@@ -258,6 +258,7 @@ async function createOrderInFile(input: PlaceOrderInput) {
     if (rawQty < 1 || rawQty > 50) throw new StoreError(`الحد الأقصى 50 قطعة للصنف: ${item.name}`, 400);
     const quantity = rawQty;
     orderLines.push({ itemId: item.id, name: item.name, quantity, unitPrice: item.price });
+    item.salesCount = Math.max(0, item.salesCount ?? 0) + quantity;
   }
 
   // احسب الإجمالي على السيرفر - تجاهل total القادم من العميل
