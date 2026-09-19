@@ -55,11 +55,24 @@
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_...
+NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=your-cloud-name
+NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET=restaurant-menu
 LOW_STOCK_WEBHOOK_URL=https://...   # اختياري
 ```
 
 القيم متظبطة في **Vercel → Project Settings → Environment Variables**.
 المشروع بيستخدم مفتاح `anon` العام فقط — **مفيش `service_role` في أي مكان في الكود**.
+
+### إعداد Cloudinary للصور
+
+1. من Cloudinary افتح **Settings → Upload → Upload presets**.
+2. أنشئ preset من نوع **Unsigned** ويفضّل تقييده بملفات الصور وبحد أقصى 5MB.
+3. أضف اسم الـ cloud والـ preset في متغيرات البيئة الموضحة فوق.
+4. أعد نشر المشروع. بعدها رفع اللوجو وصورة الغلاف وصور الأصناف من لوحة التحكم
+   يرفعها مباشرةً إلى Cloudinary ويحفظ رابط `https` فقط بدل تخزين الصورة داخل بيانات القائمة.
+
+> اسم الـ cloud والـ unsigned preset قيم عامة مصممة للاستخدام من المتصفح؛ لا تضف
+> `API Secret` أو `API Key` إلى متغيرات تبدأ بـ `NEXT_PUBLIC_`.
 
 ### شكل رسالة الـ webhook
 
