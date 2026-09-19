@@ -1,10 +1,7 @@
 import { DEFAULT_DATA } from "./defaults";
-import type { MenuData } from "./types";
+import type { MenuData, MenuItem } from "./types";
 
 export const DATA_VERSION = 1;
-
-/** حد التنبيه الافتراضي لنقص المخزون (عدد القطع المتبقية) */
-export const DEFAULT_LOW_STOCK_THRESHOLD = 2;
 
 type Plain = Record<string, unknown>;
 
@@ -102,17 +99,25 @@ export function normalizeData(raw: unknown): MenuData {
   return {
     ...merged,
     items: merged.items
-      .map((item) => ({
-        ...item,
-        // كل صنف عنده كمية ومخزون وحد تنبيه قابل للتعديل من اللوحة
-        trackStock: item.trackStock ?? true,
-        stock: Math.max(0, Math.floor(item.stock ?? (item.available ? 25 : 0))),
-        lowStockThreshold: Math.max(0, Math.floor(item.lowStockThreshold ?? DEFAULT_LOW_STOCK_THRESHOLD)),
-        // الأمان: أي صنف قسمه اتحذف ينزل في أول قسم بدل ما يختفي
-        categoryId: knownCats.has(item.categoryId)
-          ? item.categoryId
-          : (merged.categories[0]?.id ?? ""),
-      }))
+      .map((item) => {
+        // تنظيف حقول المخزون القديمة من البيانات التي حُفظت قبل إلغاء الميزة.
+        const legacy = item as MenuItem & {
+          trackStock?: boolean;
+          stock?: number;
+          lowStockThreshold?: number;
+        };
+        const { trackStock: _trackStock, stock: _stock, lowStockThreshold: _threshold, ...cleanItem } = legacy;
+        void _trackStock;
+        void _stock;
+        void _threshold;
+        return {
+          ...cleanItem,
+          // أي صنف قسمه اتحذف ينزل في أول قسم بدل ما يختفي
+          categoryId: knownCats.has(item.categoryId)
+            ? item.categoryId
+            : (merged.categories[0]?.id ?? ""),
+        };
+      })
       .sort((a, b) => a.order - b.order),
   };
 }

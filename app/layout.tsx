@@ -7,7 +7,7 @@ import { SiteTheme } from "@/components/site-theme";
 export const metadata: Metadata = {
   title: "قائمة المطعم الذكية | اطلب على واتساب",
   description:
-    "قائمة مطعم متكاملة مع مخزون وطلبات ولوحة تحكم آمنة متصلة بباك إند.",
+    "قائمة مطعم متكاملة لعرض المنتجات والأسعار واستقبال الطلبات عبر واتساب.",
   applicationName: "Smart Restaurant Menu",
   manifest: "/manifest.webmanifest",
   appleWebApp: {

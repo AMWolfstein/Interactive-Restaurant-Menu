@@ -33,12 +33,6 @@ export interface MenuItem {
   spicy: 0 | 1 | 2 | 3;
   /** ترتيب يدوي داخل القسم (الأصغر يظهر أولاً) */
   order: number;
-  /** تفعيل متابعة المخزون لهذا الصنف */
-  trackStock?: boolean;
-  /** الكمية المتاحة حالياً */
-  stock?: number;
-  /** إنشاء تنبيه عند الوصول لهذا العدد (الافتراضي 2) */
-  lowStockThreshold?: number;
 }
 
 export interface BrandSettings {
@@ -111,7 +105,7 @@ export interface MenuData {
   items: MenuItem[];
 }
 
-/** طلب مسجّل في الباك إند بعد خصم المخزون */
+/** طلب مسجّل في الباك إند قبل فتح رسالة واتساب */
 export interface SavedOrder {
   id: string;
   createdAt: string;
@@ -121,20 +115,8 @@ export interface SavedOrder {
   total: number;
 }
 
-/** تنبيه نقص مخزون — يظهر في لوحة التحكم ويمكن إرساله للـ webhook */
-export interface StockNotification {
-  id: string;
-  itemId: string;
-  itemName: string;
-  remaining: number;
-  threshold: number;
-  createdAt: string;
-  read: boolean;
-}
-
 export interface AdminOverview {
   orders: SavedOrder[];
-  notifications: StockNotification[];
   storage: { driver: "supabase" | "file"; persistent: boolean };
 }
 

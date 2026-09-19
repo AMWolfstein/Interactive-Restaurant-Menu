@@ -5,13 +5,12 @@ import { createBrowserClient } from "./supabase";
  *
  * أي تغيير في الجداول المفعّلة في publication "supabase_realtime" بيوصل
  * لكل الأجهزة فوراً عن طريق WebSocket — من غير ريفريش ومن غير polling:
- *   - menu_data          → العملاء بيستلموا القائمة الجديدة فوراً (خصم مخزون / تعديل أدمن)
- *   - orders             → لوحة الأدمن بتستلم الطلب الجديد فوراً
- *   - stock_notifications → تنبيه نقص المخزون يظهر فوراً
+ *   - menu_data → العملاء بيستلموا تعديلات القائمة فوراً
+ *   - orders    → لوحة الأدمن بتستلم الطلب الجديد فوراً
  *
  * الصلاحيات بتحكمها RLS حتى على الـ Realtime:
  *   - anon يقدر يستمع على menu_data (قراءة عامة)
- *   - authenticated (الأدمن) بس يقدر يستمع على orders و stock_notifications
+ *   - authenticated (الأدمن) بس يقدر يستمع على orders
  *
  * لازم الجداول تكون مضافة لـ publication في قاعدة البيانات — شوف supabase/schema.sql.
  */

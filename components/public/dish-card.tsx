@@ -62,7 +62,6 @@ export function DishCard({
   const price = formatPrice(item.price, lang, commerce);
   const hasDiscount = !!item.oldPrice && item.oldPrice > item.price;
   const off = hasDiscount ? Math.round(((item.oldPrice! - item.price) / item.oldPrice!) * 100) : 0;
-  const stockReached = !!item.trackStock && quantity >= (item.stock ?? 0);
 
   return (
     <article
@@ -145,7 +144,6 @@ export function DishCard({
                 <button
                   type="button"
                   onClick={onAdd}
-                  disabled={stockReached}
                   aria-label={en ? "Add one" : "زيادة"}
                   className="grid h-7 w-7 place-items-center rounded-lg bg-accent text-accent-contrast transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-35"
                 >
@@ -156,10 +154,9 @@ export function DishCard({
               <button
                 type="button"
                 onClick={onAdd}
-                disabled={stockReached}
-                className="inline-flex items-center gap-1 rounded-xl border border-accent/35 bg-accent/10 px-3 py-1.5 text-xs font-bold text-accent transition hover:bg-accent hover:text-accent-contrast disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-1 rounded-xl border border-accent/35 bg-accent/10 px-3 py-1.5 text-xs font-bold text-accent transition hover:bg-accent hover:text-accent-contrast"
               >
-                <Plus className="h-3.5 w-3.5" /> {stockReached ? (en ? "Sold out" : "خلصت") : en ? "Add" : "إضافة"}
+                <Plus className="h-3.5 w-3.5" /> {en ? "Add" : "إضافة"}
               </button>
             )
           ) : null}

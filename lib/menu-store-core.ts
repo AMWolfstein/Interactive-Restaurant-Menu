@@ -96,7 +96,7 @@ function ensureInit() {
   void refreshMenu();
   window.addEventListener("focus", refreshFromRemote);
 
-  // تحديث لحظي فوري: أي تعديل من الأدمن أو خصم مخزون من طلب جديد يوصل لكل الأجهزة
+  // تحديث لحظي فوري: أي تعديل من الأدمن يوصل لكل الأجهزة
   subscribeRealtime(
     "realtime:menu",
     [{ table: MENU_TABLE, event: "UPDATE", filter: `slug=eq.${PUBLISHED_SLUG}` }],
