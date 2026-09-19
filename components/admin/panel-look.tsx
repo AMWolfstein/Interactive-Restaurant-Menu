@@ -11,18 +11,28 @@ export function LookPanel() {
 
   return (
     <div className="space-y-4">
-      <Panel title="النمط والألوان" description="الفورم ده بيعدّي على الموقع كله: الأزرار، الأسعار، الشريط العلوي" icon={<Palette className="h-4 w-4" />}>
+      <Panel title="النمط والألوان" description="اختار ستايل أسود أو أبيض للموقع كله، وعدّل لون الأزرار والأسعار" icon={<Palette className="h-4 w-4" />}>
         <div className="space-y-4">
-          <Field label="الوضع الليلي / النهاري">
+          <Field label="ستايل الموقع" hint="الاختيار بيتحفظ وبيظهر فوراً لكل الزوار">
             <Segmented
               className="w-full [&>button]:flex-1"
               value={brand.theme}
               onChange={(value) => patchBrand({ theme: value })}
               options={[
-                { value: "dark", label: <span className="inline-flex items-center gap-1.5"><Moon className="h-3.5 w-3.5" /> دارك</span> },
-                { value: "light", label: <span className="inline-flex items-center gap-1.5"><Sun className="h-3.5 w-3.5" /> لايت</span> },
+                { value: "dark", label: <span className="inline-flex items-center gap-1.5"><Moon className="h-3.5 w-3.5" /> أسود</span> },
+                { value: "light", label: <span className="inline-flex items-center gap-1.5"><Sun className="h-3.5 w-3.5" /> أبيض</span> },
               ]}
             />
+            <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] font-bold">
+              <div className="rounded-xl border border-white/10 bg-[#08090b] p-3 text-white">
+                <span className="mb-2 block h-1.5 w-8 rounded-full bg-accent" />
+                خلفية سوداء
+              </div>
+              <div className="rounded-xl border border-black/10 bg-white p-3 text-[#111318]">
+                <span className="mb-2 block h-1.5 w-8 rounded-full bg-accent" />
+                خلفية بيضاء
+              </div>
+            </div>
           </Field>
           <ColorField
             label="لون الأكسنت"
