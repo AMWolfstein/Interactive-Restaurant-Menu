@@ -19,6 +19,7 @@ import { computeTotals, formatPrice, pick } from "@/lib/format";
 import { cx } from "@/lib/cx";
 import { DishCard, DishImage } from "@/components/public/dish-card";
 import { CartSheet } from "@/components/public/cart-sheet";
+import { ThemeToggle } from "@/components/public/theme-toggle";
 
 const ALL = "all";
 
@@ -120,6 +121,7 @@ export default function Home() {
               <span className={cx("h-1.5 w-1.5 rounded-full", contact.isOpen ? "bg-emerald-400" : "bg-red-400")} />
               {contact.isOpen ? (en ? "Open now" : "مفتوح الآن") : en ? "Closed" : "مقفل"}
             </span>
+            <ThemeToggle fallback={brand.theme} language={lang} />
             <a
               href="/admin"
               title={en ? "Admin panel" : "لوحة التحكم"}

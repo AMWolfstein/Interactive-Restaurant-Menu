@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { useMenu } from "@/lib/use-menu";
 import { pick } from "@/lib/format";
+import { visitorTheme } from "@/components/public/theme-toggle";
 
 const HEX = /^#?([0-9a-f]{6})$/i;
 
@@ -34,13 +35,15 @@ export function SiteTheme() {
     root.style.setProperty("--accent", brand.accent);
     root.style.setProperty("--accent-contrast", readableOn(brand.accent));
     root.style.setProperty("--radius", `${brand.radius}px`);
-    root.dataset.theme = brand.theme;
+    // لوحة التحكم تعرض اختيار المطعم، أما صفحة القائمة فتحترم
+    // اختيار كل زائر المحفوظ محلياً على جهازه.
+    const isAdmin = pathname?.startsWith("/admin");
+    root.dataset.theme = isAdmin ? brand.theme : visitorTheme(brand.theme);
     root.dataset.font = brand.font || "cairo";
     root.lang = brand.language;
     root.dir = brand.language === "en" ? "ltr" : "rtl";
 
     const name = pick(brand.language, brand.restaurantName, brand.restaurantNameEn) || "Restaurant Menu";
-    const isAdmin = pathname?.startsWith("/admin");
     document.title = isAdmin
       ? `لوحة التحكم — ${name}`
       : `${name} — ${pick(brand.language, brand.tagline, brand.taglineEn)}`;
