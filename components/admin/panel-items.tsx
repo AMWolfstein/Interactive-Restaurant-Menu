@@ -432,17 +432,22 @@ function ItemEditor({
           <CheckboxPill active={draft.isNew} onClick={() => set({ isNew: !draft.isNew })}>
             جديد 🆕
           </CheckboxPill>
-          <span className="ms-1 text-[11px] font-bold text-muted">درجة الحرافة:</span>
-          {([0, 1, 2, 3] as const).map((level) => (
+          <span className="ms-1 text-[11px] font-bold text-muted">الطعم:</span>
+          {([
+            { value: 0, label: "بارد" },
+            { value: 1, label: "حار" },
+          ] as const).map((option) => (
             <button
-              key={level}
-              onClick={() => set({ spicy: level })}
+              key={option.value}
+              type="button"
+              onClick={() => set({ spicy: option.value })}
               className={cx(
-                "inline-flex items-center gap-0.5 rounded-lg border px-2 py-1 text-xs transition",
-                draft.spicy === level ? "border-accent bg-accent/15 text-accent" : "border-line bg-surface-2 text-muted",
+                "inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs transition",
+                draft.spicy === option.value ? "border-accent bg-accent/15 text-accent" : "border-line bg-surface-2 text-muted",
               )}
             >
-              {level === 0 ? "بدون" : Array.from({ length: level }).map((_, i) => <Flame key={i} className="h-3 w-3" />)}
+              {option.value === 1 ? <Flame className="h-3 w-3" /> : null}
+              {option.label}
             </button>
           ))}
         </div>

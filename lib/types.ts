@@ -38,8 +38,8 @@ export interface MenuItem {
   image?: string;
   available: boolean;
   isNew: boolean;
-  /** 0 = بدون حارة، 1..3 = عدد الشطات */
-  spicy: 0 | 1 | 2 | 3;
+  /** 0 = بارد (الافتراضي)، 1 = حار */
+  spicy: 0 | 1;
 }
 
 export interface BrandSettings {

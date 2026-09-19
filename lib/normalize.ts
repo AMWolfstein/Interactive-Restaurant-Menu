@@ -124,6 +124,8 @@ export function normalizeData(raw: unknown): MenuData {
         const oldOfferDate = _offerEndsAt ? new Date(_offerEndsAt) : null;
         return {
           ...cleanItem,
+          // النظام الحالي له اختياران فقط: بارد افتراضياً أو حار.
+          spicy: cleanItem.spicy > 0 ? 1 : 0,
           salesCount: Math.max(0, Math.floor(cleanItem.salesCount ?? 0)),
           offerEndDay: cleanItem.offerEndDay ?? (oldOfferDate && !Number.isNaN(oldOfferDate.getTime()) ? oldOfferDate.getDate() : null),
           offerEndMonth: cleanItem.offerEndMonth ?? (oldOfferDate && !Number.isNaN(oldOfferDate.getTime()) ? oldOfferDate.getMonth() + 1 : null),
