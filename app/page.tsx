@@ -17,7 +17,7 @@ import { useMenu } from "@/lib/use-menu";
 import { useCart } from "@/lib/use-cart";
 import { computeTotals, formatPrice, pick } from "@/lib/format";
 import { cx } from "@/lib/cx";
-import { DishCard, DishImage } from "@/components/public/dish-card";
+import { ProductCard, ProductImage } from "@/components/public/product-card";
 import { CartSheet } from "@/components/public/cart-sheet";
 import { ThemeToggle } from "@/components/public/theme-toggle";
 import { PwaInstallButton } from "@/components/public/pwa-install-button";
@@ -111,7 +111,7 @@ export default function Home() {
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-3 px-4 py-3">
           <div className="flex min-w-0 items-center gap-2.5">
             {brand.logo ? (
-              <DishImage src={brand.logo} alt="" className="h-11 w-11 rounded-xl border border-line" />
+              <ProductImage src={brand.logo} alt="" className="h-11 w-11 rounded-xl border border-line" />
             ) : (
               <span className="grid h-11 w-11 place-items-center rounded-xl bg-accent text-accent-contrast">
                 <Utensils className="h-5 w-5" />
@@ -171,7 +171,7 @@ export default function Home() {
         {/* الهيرو */}
         {brand.showHero ? (
           <section className="relative mt-5 overflow-hidden rounded-xl2 border border-line">
-            <DishImage src={brand.heroImage} alt="" className="absolute inset-0 h-full w-full" />
+            <ProductImage src={brand.heroImage} alt="" className="absolute inset-0 h-full w-full" />
             <div className="relative bg-[linear-gradient(100deg,rgba(0,0,0,.86),rgba(0,0,0,.35))] p-6 sm:p-8">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/15 px-2.5 py-1 text-[11px] font-black text-accent">
                 <Sparkles className="h-3 w-3" />
@@ -257,7 +257,7 @@ export default function Home() {
                   onClick={() => cart.add(item.id)}
                   className="w-40 shrink-0 snap-start overflow-hidden rounded-card border border-line bg-surface text-start transition hover:border-accent/50"
                 >
-                  <DishImage src={item.image} alt={nameOf(item)} className="h-24 w-full" />
+                  <ProductImage src={item.image} alt={nameOf(item)} className="h-24 w-full" />
                   <div className="p-2.5">
                     <p className="truncate text-xs font-bold">{nameOf(item)}</p>
                     <p className="mt-1 text-[11px] font-black text-accent">
@@ -303,7 +303,7 @@ export default function Home() {
                 commerce.productLayout === "grid" ? "grid-cols-3 gap-2 sm:gap-3" : "grid-cols-1 gap-3 md:grid-cols-2",
               )}>
                 {section.items.map((item) => (
-                  <DishCard
+                  <ProductCard
                     key={item.id}
                     item={item}
                     lang={lang}

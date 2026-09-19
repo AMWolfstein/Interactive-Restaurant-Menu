@@ -20,7 +20,7 @@ import { buildOrderMessage, computeTotals, formatPrice, ORDER_TYPE_LABEL, pick, 
 import type { OrderType } from "@/lib/types";
 import type { DetailedLine } from "@/lib/use-cart";
 import { cx } from "@/lib/cx";
-import { DishImage } from "./dish-card";
+import { ProductImage } from "./product-card";
 import { PREVIOUS_ORDER_KEY } from "./previous-order-button";
 
 const TYPE_ICON: Record<OrderType, typeof Truck> = {
@@ -223,7 +223,7 @@ export function CartSheet({
                   key={line.itemId}
                   className="flex items-center gap-3 rounded-xl border border-line bg-surface p-2.5"
                 >
-                  <DishImage src={item.image} alt="" className="h-11 w-11 rounded-lg" />
+                  <ProductImage src={item.image} alt="" className="h-11 w-11 rounded-lg" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[13px] font-bold">{pick(lang, item.name, item.nameEn)}</p>
                     <p className="text-[11px] text-muted">

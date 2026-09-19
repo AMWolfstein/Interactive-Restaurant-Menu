@@ -12,7 +12,7 @@ import {
   toggleFavorite,
 } from "@/lib/favorites-store";
 
-export function DishImage({
+export function ProductImage({
   src,
   alt,
   className,
@@ -47,7 +47,7 @@ export function DishImage({
   );
 }
 
-export function DishCard({
+export function ProductCard({
   item,
   lang,
   commerce,
@@ -77,7 +77,7 @@ export function DishCard({
 
   if (layout === "grid") {
     return (
-      <GridDishCard
+      <GridProductCard
         item={item}
         lang={lang}
         commerce={commerce}
@@ -112,7 +112,7 @@ export function DishCard({
         <Heart className={cx("h-4 w-4", favorite && "fill-current")} />
       </button>
       <div className="relative">
-        <DishImage src={item.image} alt={pick(lang, item.name, item.nameEn)} className="h-24 w-24 rounded-xl sm:h-28 sm:w-28" />
+        <ProductImage src={item.image} alt={pick(lang, item.name, item.nameEn)} className="h-24 w-24 rounded-xl sm:h-28 sm:w-28" />
         {!item.available ? (
           <span className="absolute inset-0 grid place-items-center rounded-xl bg-black/65 text-[11px] font-black tracking-wide text-white">
             {en ? "SOLD OUT" : "خلصت"}
@@ -137,23 +137,23 @@ export function DishCard({
               </span>
             ) : null}
           </div>
+          {item.supplier ? (
+            <button
+              type="button"
+              onClick={() => onSupplierClick?.(item.supplier!)}
+              className="mt-1 block max-w-full truncate text-start text-[11px] font-bold text-muted underline decoration-dotted underline-offset-2 transition hover:text-accent"
+            >
+              المورد: {item.supplier}
+            </button>
+          ) : null}
           {pick(lang, item.description, item.descriptionEn) ? (
             <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted">
               {pick(lang, item.description, item.descriptionEn)}
             </p>
           ) : null}
-          {item.weight || item.supplier ? (
+          {item.weight ? (
             <p className="mt-1 flex flex-wrap gap-1.5 text-[10px] font-bold text-muted">
-              {item.weight ? <span className="rounded-md bg-surface-2 px-1.5 py-0.5">⚖️ {item.weight}</span> : null}
-              {item.supplier ? (
-                <button
-                  type="button"
-                  onClick={() => onSupplierClick?.(item.supplier!)}
-                  className="rounded-md bg-surface-2 px-1.5 py-0.5 transition hover:text-accent"
-                >
-                  المورد: {item.supplier}
-                </button>
-              ) : null}
+              <span className="rounded-md bg-surface-2 px-1.5 py-0.5">⚖️ {item.weight}</span>
             </p>
           ) : null}
           {hasDiscount && item.offerEndDay && item.offerEndMonth && item.offerEndYear ? (
@@ -220,7 +220,7 @@ export function DishCard({
 }
 
 
-function GridDishCard({
+function GridProductCard({
   item,
   lang,
   commerce,
@@ -248,7 +248,7 @@ function GridDishCard({
   return (
     <article className={cx("relative flex min-w-0 flex-col overflow-hidden rounded-card border border-line bg-surface", !item.available && "opacity-70")}>
       <div className="relative aspect-square w-full overflow-hidden bg-surface-2">
-        <DishImage src={item.image} alt={item.name} className="h-full w-full" />
+        <ProductImage src={item.image} alt={item.name} className="h-full w-full" />
         <button
           type="button"
           onClick={() => toggleFavorite(item.id)}
