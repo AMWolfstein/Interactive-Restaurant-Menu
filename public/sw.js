@@ -1,4 +1,4 @@
-const CACHE_NAME = "store-catalog-v2";
+const CACHE_NAME = "store-catalog-v3";
 // Do not precache the manifest: it is generated from the current brand
 // settings and must be refetched when the owner changes the header logo.
 const OFFLINE_URLS = ["/"];
@@ -40,5 +40,38 @@ self.addEventListener("fetch", (event) => {
         return response;
       }),
     ),
+  );
+});
+
+self.addEventListener("push", (event) => {
+  let payload;
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = { title: "تحديث من المتجر", body: event.data ? event.data.text() : "" };
+  }
+  const title = payload.title || "تحديث من المتجر";
+  const options = {
+    body: payload.body || "",
+    icon: "/favicon.ico",
+    badge: "/favicon.ico",
+    image: payload.image || undefined,
+    data: { url: payload.url || "/" },
+    dir: "rtl",
+    lang: "ar",
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = new URL(event.notification.data?.url || "/", self.location.origin).href;
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      for (const client of windows) {
+        if (client.url === target && "focus" in client) return client.focus();
+      }
+      return clients.openWindow(target);
+    }),
   );
 });

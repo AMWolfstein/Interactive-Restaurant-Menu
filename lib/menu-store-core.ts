@@ -1,5 +1,5 @@
 import { DEFAULT_DATA } from "./defaults";
-import { normalizeData } from "./normalize";
+import { isLegacyMenyuBackup, normalizeData } from "./normalize";
 import { subscribeRealtime } from "./realtime";
 import { CATALOG_TABLE, PUBLISHED_SLUG } from "./supabase";
 import { authenticatedFetch } from "./supabase-auth-core";
@@ -208,7 +208,7 @@ export function moveCategory(id: string, dir: -1 | 1) {
 }
 export function addItem(input: Omit<MenuItem, "id">) {
   const id = `i_${newId()}`;
-  updateMenu((d) => d.items.push({ ...input, id }));
+  updateMenu((d) => d.items.push({ ...input, id, createdAt: input.createdAt ?? new Date().toISOString() }));
   return id;
 }
 export function updateItem(id: string, patch: Partial<MenuItem>) {
@@ -226,7 +226,7 @@ export function duplicateItem(id: string) {
   updateMenu((d) => {
     const row = d.items.find((x) => x.id === id);
     if (!row) return;
-    d.items.push({ ...row, id: `i_${newId()}`, name: `${row.name} (نسخة)`, salesCount: 0 });
+    d.items.push({ ...row, id: `i_${newId()}`, name: `${row.name} (نسخة)`, salesCount: 0, createdAt: new Date().toISOString() });
   });
 }
 export function setCategoryAvailability(categoryId: string, available: boolean) {
@@ -242,17 +242,20 @@ export function exportJson() {
   return JSON.stringify(state.data, null, 2);
 }
 
-/** استيراد نسخة احتياطية — بتتحفظ في الباك إند فوراً مع تحقق شامل */
+/** استيراد نسخة احتياطية — يقبل أيضاً Backup مشروع Menyu القديم ويحوله قبل التحقق والحفظ. */
 export function importJson(text: string) {
   try {
-    if (text.length > 5_000_000) return { ok: false, error: "حجم الملف كبير جداً (الحد 5MB)" };
+    if (text.length > 5_000_000) return { ok: false as const, error: "حجم الملف كبير جداً (الحد 5MB)" };
     const parsed = JSON.parse(text);
-    const validation = validateImportedMenu(parsed);
-    if (!validation.ok) return { ok: false, error: validation.error };
-    commit(normalizeData({ ...DEFAULT_DATA, ...parsed }));
-    return { ok: true };
+    const legacy = isLegacyMenyuBackup(parsed);
+    // نطبع الملف أولاً حتى تتطبق قواعد تحويل Firebase القديمة قبل تحقق الشكل الجديد.
+    const normalized = normalizeData(parsed);
+    const validation = validateImportedMenu(normalized);
+    if (!validation.ok) return { ok: false as const, error: validation.error };
+    commit(normalized);
+    return { ok: true as const, legacy };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "ملف غير صالح" };
+    return { ok: false as const, error: e instanceof Error ? e.message : "ملف غير صالح" };
   }
 }
 

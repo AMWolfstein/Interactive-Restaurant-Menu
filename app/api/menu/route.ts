@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { getMenu, replaceMenu, StoreError } from "@/lib/server-database";
 import { bearerToken, checkAdmin } from "@/lib/server-auth";
 import { rateLimit, getClientIp, LIMITS } from "@/lib/rate-limit";
+import { notifyCatalogChanges } from "@/lib/push-notifications";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,7 +43,11 @@ export async function PUT(request: NextRequest) {
     if (JSON.stringify(body).length > 4_000_000) {
       return NextResponse.json({ error: "البيانات كبيرة جداً (الحد 4MB)" }, { status: 413 });
     }
+    // نقرأ اللقطة السابقة قبل الحفظ لاكتشاف منتج أو عرض جديد للإشعارات.
+    const before = await getMenu(token);
     const menu = await replaceMenu(body, token);
+    // after يبقي العمل ممتداً بعد الرد؛ لا نجعل مزود Push يبطّئ حفظ الأدمن.
+    after(() => notifyCatalogChanges(before, menu));
     return NextResponse.json(menu, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     const status = error instanceof StoreError ? error.status : 400;

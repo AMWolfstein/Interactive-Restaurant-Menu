@@ -3,6 +3,7 @@
 import { Globe, Sparkles, Store } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
 import { ImageField } from "@/components/image-field";
+import { HeroSlidesManager } from "./hero-slides-manager";
 import { Button, ColorField, Field, Panel, TextArea, TextInput, Toggle } from "@/components/ui";
 
 export function BrandPanel() {
@@ -85,7 +86,11 @@ export function BrandPanel() {
           onChange={(checked) => patchBrand({ showHero: checked })}
         />
         <div className="mt-3 space-y-3">
-          <ImageField label="صورة الخلفية" value={brand.heroImage} onChange={(value) => patchBrand({ heroImage: value })} />
+          <ImageField label="صورة خلفية بديلة" value={brand.heroImage} onChange={(value) => patchBrand({ heroImage: value })} hint="تظهر وحدها لو لم تضف صوراً للسلايدر، وتكون احتياطية لو تعذّر تحميل أي صورة" />
+          <HeroSlidesManager
+            images={brand.heroImages ?? []}
+            onChange={(heroImages) => patchBrand({ heroImages })}
+          />
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="العنوان الرئيسي">
               <TextInput value={brand.heroTitle} onChange={(event) => patchBrand({ heroTitle: event.target.value })} />

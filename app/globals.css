@@ -159,3 +159,10 @@ input[type="color"]::-webkit-color-swatch {
   border-radius: 8px;
   border: 1px solid var(--line);
 }
+
+@media print {
+  @page { size: A4; margin: 12mm; }
+  html, body { background: #fff !important; }
+  .print\:hidden { display: none !important; }
+  .break-inside-avoid { break-inside: avoid; page-break-inside: avoid; }
+}

@@ -5,6 +5,7 @@ import { Flame, Heart, Minus, Plus } from "lucide-react";
 import { pick, formatPrice } from "@/lib/format";
 import type { CommerceSettings, MenuItem, SiteLanguage } from "@/lib/types";
 import { cx } from "@/lib/cx";
+import { isDiscountActive, offerPercent } from "@/lib/offers";
 import {
   FAVORITES_SERVER_SNAPSHOT,
   getFavoritesSnapshot,
@@ -76,8 +77,13 @@ export function ProductCard({
   const displayPrice = selectedVariant?.price ?? item.price;
   const displayOldPrice = selectedVariant?.oldPrice ?? item.oldPrice;
   const price = formatPrice(displayPrice, lang, commerce);
-  const hasDiscount = !!displayOldPrice && displayOldPrice > displayPrice;
-  const off = hasDiscount ? Math.round(((displayOldPrice! - displayPrice) / displayOldPrice!) * 100) : 0;
+  const discountEnd = selectedVariant
+    ? { day: selectedVariant.offerEndDay, month: selectedVariant.offerEndMonth, year: selectedVariant.offerEndYear }
+    : { day: item.offerEndDay, month: item.offerEndMonth, year: item.offerEndYear };
+  const hasDiscount = isDiscountActive(displayPrice, displayOldPrice, discountEnd);
+  const off = hasDiscount ? offerPercent(displayPrice, displayOldPrice) : 0;
+  const gridHasDiscount = isDiscountActive(item.price, item.oldPrice, { day: item.offerEndDay, month: item.offerEndMonth, year: item.offerEndYear });
+  const gridOff = gridHasDiscount ? offerPercent(item.price, item.oldPrice) : 0;
 
   if (layout === "grid") {
     return (
@@ -91,8 +97,8 @@ export function ProductCard({
         onSupplierClick={onSupplierClick}
         disabled={disabled}
         favorite={favorite}
-        hasDiscount={hasDiscount}
-        off={off}
+        hasDiscount={gridHasDiscount}
+        off={gridOff}
       />
     );
   }
@@ -169,8 +175,8 @@ export function ProductCard({
               <span className="rounded-md bg-surface-2 px-1.5 py-0.5">⚖️ {item.weight}</span>
             </p>
           ) : null}
-          {hasDiscount && item.offerEndDay && item.offerEndMonth && item.offerEndYear ? (
-            <OfferCountdown day={item.offerEndDay} month={item.offerEndMonth} year={item.offerEndYear} />
+          {hasDiscount && discountEnd.day && discountEnd.month && discountEnd.year ? (
+            <OfferCountdown day={discountEnd.day} month={discountEnd.month} year={discountEnd.year} />
           ) : null}
         </div>
 

@@ -39,6 +39,8 @@ export interface HeroImage {
 export interface MenuItem {
   id: string;
   categoryId: string;
+  /** وقت إنشاء المنتج — يستخدم لترتيب «الأحدث» في واجهة العميل */
+  createdAt?: string;
   name: string;
   nameEn?: string;
   description?: string;
