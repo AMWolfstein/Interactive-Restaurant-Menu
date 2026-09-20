@@ -18,6 +18,7 @@ import {
 import confetti from "canvas-confetti";
 import { useMenu } from "@/lib/use-menu";
 import { buildOrderMessage, computeTotals, formatPrice, ORDER_TYPE_LABEL, pick, toWhatsappNumber } from "@/lib/format";
+import { useStoreOpen } from "@/lib/use-store-open";
 import type { OrderType } from "@/lib/types";
 import type { DetailedLine } from "@/lib/use-cart";
 import { cx } from "@/lib/cx";
@@ -49,6 +50,7 @@ export function CartSheet({
   const { brand, commerce, contact } = data;
   const lang = brand.language;
   const en = lang === "en";
+  const storeOpen = useStoreOpen(contact);
 
   const [pickedType, setOrderType] = useState<OrderType>(commerce.orderTypes[0] ?? "delivery");
   // لو الأدمين قفل نوع الطلب اللي اختاره العميل، نرجع لأول نوع متاح
@@ -59,13 +61,28 @@ export function CartSheet({
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [notes, setNotes] = useState("");
+  const [zoneId, setZoneId] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState(commerce.paymentMethods[0] ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [sending, setSending] = useState(false);
 
-  const totals = useMemo(() => computeTotals(lines, commerce, orderType), [lines, commerce, orderType]);
+  // مناطق التوصيل: شغالة بس لطلب التوصيل لما تكون مفعّلة وفيه مناطق
+  const zonesEnabled = commerce.enableZones && commerce.deliveryZones.length > 0;
+  const zone = useMemo(
+    () => (zonesEnabled ? commerce.deliveryZones.find((candidate) => candidate.id === zoneId) ?? null : null),
+    [zonesEnabled, commerce.deliveryZones, zoneId],
+  );
+
+  const totals = useMemo(
+    () => computeTotals(lines, commerce, orderType, zone),
+    [lines, commerce, orderType, zone],
+  );
   const belowMinimum = commerce.minimumOrder > 0 && totals.subtotal > 0 && totals.subtotal < commerce.minimumOrder;
+  const belowZoneMinimum =
+    orderType === "delivery" && zone && zone.minimumOrder > 0 && totals.subtotal > 0 && totals.subtotal < zone.minimumOrder;
   const needsAddress = orderType === "delivery" && commerce.requireAddress;
   const needsPhone = orderType !== "instore" && commerce.requirePhone;
+  const needsZone = orderType === "delivery" && zonesEnabled;
 
   if (!open) return null;
 
@@ -77,10 +94,16 @@ export function CartSheet({
       next.phone = en ? "Invalid mobile number" : "رقم الموبايل مش كامل";
     if (needsAddress && address.trim().length < 8)
       next.address = en ? "Please write the detailed address" : "اكتب العنوان بالتفصيل (الشارع، رقم العقار، الدور، الشقة)";
+    if (needsZone && !zone)
+      next.zone = en ? "Please pick your area" : "اختار منطقة التوصيل";
     if (belowMinimum)
       next.total = en
         ? `Minimum order is ${formatPrice(commerce.minimumOrder, lang, commerce)}`
         : `أقل طلب ${formatPrice(commerce.minimumOrder, lang, commerce)}`;
+    if (belowZoneMinimum && zone)
+      next.total = en
+        ? `Minimum order for ${zone.name} is ${formatPrice(zone.minimumOrder, lang, commerce)}`
+        : `أقل طلب في ${zone.name} هو ${formatPrice(zone.minimumOrder, lang, commerce)}`;
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -93,7 +116,7 @@ export function CartSheet({
       return;
     }
     const message = buildOrderMessage(
-      { name, phone, address, notes, orderType, lines, totals },
+      { name, phone, address, notes, orderType, lines, totals, zoneName: zone?.name, paymentMethod },
       { lang, brand, contact, commerce },
     );
     const whatsappWindow = window.open("about:blank", "_blank");
@@ -104,6 +127,8 @@ export function CartSheet({
         body: JSON.stringify({
           lines: lines.map(({ line }) => line), orderType, total: totals.total,
           customer: { name, phone, address, notes },
+          ...(zone ? { zoneId: zone.id } : {}),
+          ...(paymentMethod ? { paymentMethod } : {}),
         }),
       });
       const result = await response.json();
@@ -268,6 +293,71 @@ export function CartSheet({
               {needsAddress
                 ? field("address", en ? "Detailed address" : "العنوان بالتفصيل", address, setAddress)
                 : null}
+              {needsZone ? (
+                <div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {commerce.deliveryZones.map((candidate) => {
+                      const active = zoneId === candidate.id;
+                      return (
+                        <button
+                          key={candidate.id}
+                          type="button"
+                          onClick={() => setZoneId(candidate.id)}
+                          className={cx(
+                            "rounded-xl border px-3 py-2 text-[11px] font-bold transition",
+                            active
+                              ? "border-accent bg-accent/12 text-accent"
+                              : "border-line bg-surface-2 text-muted hover:text-ink",
+                          )}
+                        >
+                          {candidate.name || (en ? "Area" : "منطقة")}
+                          <span className="ms-1 opacity-75">
+                            {candidate.fee > 0 ? formatPrice(candidate.fee, lang, commerce) : en ? "FREE" : "مجاني"}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {errors.zone ? (
+                    <p className="mt-1 flex items-center gap-1 text-[11px] font-bold text-red-400">
+                      <CircleX className="h-3 w-3" /> {errors.zone}
+                    </p>
+                  ) : zone && zone.minimumOrder > 0 && totals.subtotal < zone.minimumOrder ? (
+                    <p className="mt-1 text-[11px] text-muted">
+                      {en
+                        ? `Minimum order in ${zone.name}: ${formatPrice(zone.minimumOrder, lang, commerce)}`
+                        : `أقل طلب في ${zone.name}: ${formatPrice(zone.minimumOrder, lang, commerce)}`}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+              {commerce.paymentMethods.length > 0 ? (
+                <div>
+                  <p className="mb-1.5 text-[11px] font-bold text-muted">
+                    {en ? "Payment method" : "طريقة الدفع"}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {commerce.paymentMethods.map((method) => {
+                      const active = paymentMethod === method;
+                      return (
+                        <button
+                          key={method}
+                          type="button"
+                          onClick={() => setPaymentMethod(method)}
+                          className={cx(
+                            "rounded-xl border px-3 py-2 text-[11px] font-bold transition",
+                            active
+                              ? "border-accent bg-accent/12 text-accent"
+                              : "border-line bg-surface-2 text-muted hover:text-ink",
+                          )}
+                        >
+                          {method}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
               {commerce.enableNotes ? (
                 <textarea
                   value={notes}
@@ -349,7 +439,7 @@ export function CartSheet({
         )}
 
         <footer className="space-y-2.5 border-t border-line px-5 py-4">
-          {!contact.isOpen ? (
+          {!storeOpen ? (
             <p className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5 text-[11px] font-bold text-amber-400">
               <Clock className="h-3.5 w-3.5" /> {contact.closedMessage}
             </p>
@@ -365,7 +455,7 @@ export function CartSheet({
           <button
             type="button"
             onClick={send}
-            disabled={sending || lines.length === 0 || !contact.isOpen || !commerce.enableCart}
+            disabled={sending || lines.length === 0 || !storeOpen || !commerce.enableCart}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3.5 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-500 disabled:opacity-40"
           >
             <Send className="h-4 w-4" />

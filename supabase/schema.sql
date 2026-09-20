@@ -60,6 +60,7 @@ grant all on public.catalog_backups to service_role;
 grant all on public.push_subscriptions to service_role;
 
 -- يسجل الطلب فقط. لا يتابع أو يخصم أي مخزون.
+-- يدعم مناطق التوصيل (رسوم لكل منطقة) وطرق الدفع، والطلب بيتسجل بحالة "new".
 create or replace function public.place_order(payload jsonb)
 returns jsonb
 language plpgsql
@@ -91,6 +92,10 @@ declare
   v_free_over numeric;
   v_fee numeric;
   v_pct numeric;
+  v_zone jsonb;
+  v_zone_id text;
+  v_zone_name text := '';
+  v_payment text := '';
 begin
   if jsonb_typeof(v_lines) <> 'array' or jsonb_array_length(v_lines) = 0 then
     raise exception 'السلة فارغة' using errcode = '22023';
@@ -159,12 +164,29 @@ begin
   if v_order_type = 'delivery' then
     v_free_over := greatest(0, coalesce((v_commerce->>'freeDeliveryOver')::numeric, 0));
     v_fee := greatest(0, coalesce((v_commerce->>'deliveryFee')::numeric, 0));
+
+    -- مناطق التوصيل: لو مفعّلة وفيه مناطق، لازم العميل يختار منطقة صالحة
+    -- ورسوم المنطقة بتتحسب بدل الرسوم العامة.
+    if coalesce((v_commerce->>'enableZones')::boolean, false)
+       and jsonb_array_length(coalesce(v_commerce->'deliveryZones', '[]'::jsonb)) > 0 then
+      v_zone_id := btrim(coalesce(payload ->> 'zoneId', ''));
+      select elem into v_zone
+        from jsonb_array_elements(v_commerce->'deliveryZones') as elem
+        where elem ->> 'id' = v_zone_id limit 1;
+      if v_zone is null then
+        raise exception 'اختار منطقة التوصيل' using errcode = '22023';
+      end if;
+      v_fee := greatest(0, coalesce((v_zone->>'fee')::numeric, 0));
+      v_zone_name := left(btrim(coalesce(v_zone->>'name', '')), 60);
+    end if;
+
     if not (v_free_over > 0 and v_subtotal >= v_free_over) then v_delivery := v_fee; end if;
   end if;
   v_pct := greatest(0, coalesce((v_commerce->>'serviceChargePercent')::numeric, 0));
   if v_pct > 0 then v_service := round((v_subtotal + v_delivery) * v_pct / 100); end if;
   v_total := v_subtotal + v_delivery + v_service;
 
+  v_payment := left(btrim(coalesce(payload ->> 'paymentMethod', '')), 40);
   v_now_iso := to_char(v_now at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
   v_order_id := 'ORD-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 10));
   v_order := jsonb_build_object(
@@ -175,7 +197,10 @@ begin
       'address', left(btrim(coalesce(payload #>> '{customer,address}', '')), 500),
       'notes', left(btrim(coalesce(payload #>> '{customer,notes}', '')), 500)
     ),
-    'orderType', v_order_type, 'lines', v_order_lines, 'total', v_total
+    'orderType', v_order_type, 'lines', v_order_lines, 'total', v_total,
+    'status', 'new',
+    'zoneName', v_zone_name,
+    'paymentMethod', v_payment
   );
 
   insert into public.orders (id, created_at, data) values (v_order_id, v_now, v_order);
@@ -188,6 +213,38 @@ $function$;
 
 revoke all on function public.place_order(jsonb) from public;
 grant execute on function public.place_order(jsonb) to anon, authenticated;
+
+-- تحديث حالة الطلب (جديد/مؤكد/تم التسليم/ملغي) — للأدمن فقط (authenticated).
+create or replace function public.update_order_status(p_order_id text, p_status text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $function$
+declare
+  v_order jsonb;
+begin
+  if p_status not in ('new', 'confirmed', 'delivered', 'cancelled') then
+    raise exception 'حالة الطلب غير صالحة' using errcode = '22023';
+  end if;
+
+  select data into v_order from public.orders where id = btrim(coalesce(p_order_id, '')) for update;
+  if v_order is null then
+    raise exception 'الطلب غير موجود' using errcode = '22023';
+  end if;
+
+  v_order := v_order || jsonb_build_object(
+    'status', p_status,
+    'statusUpdatedAt', to_char(now() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+  );
+
+  update public.orders set data = v_order where id = btrim(coalesce(p_order_id, ''));
+  return jsonb_build_object('order', v_order);
+end;
+$function$;
+
+revoke all on function public.update_order_status(text, text) from public, anon;
+grant execute on function public.update_order_status(text, text) to authenticated;
 
 do $$
 begin
