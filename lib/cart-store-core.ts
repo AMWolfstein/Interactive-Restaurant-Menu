@@ -71,8 +71,8 @@ export function getCartSnapshot(): CartLine[] {
   return snapshot;
 }
 
-export function addToCart(itemId: string) {
-  const existing = snapshot.find((line) => line.itemId === itemId);
+export function addToCart(itemId: string, variantId?: string) {
+  const existing = snapshot.find((line) => line.itemId === itemId && line.variantId === variantId);
   if (existing?.quantity === 50) return;
   write(
     existing

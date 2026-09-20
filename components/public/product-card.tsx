@@ -62,18 +62,22 @@ export function ProductCard({
   lang: SiteLanguage;
   commerce: CommerceSettings;
   quantity: number;
-  onAdd: () => void;
-  onRemoveOne: () => void;
+  onAdd: (variantId?: string) => void;
+  onRemoveOne: (variantId?: string) => void;
   onSupplierClick?: (supplier: string) => void;
   layout?: "list" | "grid";
   disabled?: boolean;
 }) {
   const en = lang === "en";
-  const price = formatPrice(item.price, lang, commerce);
-  const hasDiscount = !!item.oldPrice && item.oldPrice > item.price;
-  const off = hasDiscount ? Math.round(((item.oldPrice! - item.price) / item.oldPrice!) * 100) : 0;
   const favorites = useSyncExternalStore(subscribeFavorites, getFavoritesSnapshot, () => FAVORITES_SERVER_SNAPSHOT);
   const favorite = favorites.includes(item.id);
+  const [selectedVariantId, setSelectedVariantId] = useState(item.variants?.[0]?.id);
+  const selectedVariant = item.variants?.find((variant) => variant.id === selectedVariantId);
+  const displayPrice = selectedVariant?.price ?? item.price;
+  const displayOldPrice = selectedVariant?.oldPrice ?? item.oldPrice;
+  const price = formatPrice(displayPrice, lang, commerce);
+  const hasDiscount = !!displayOldPrice && displayOldPrice > displayPrice;
+  const off = hasDiscount ? Math.round(((displayOldPrice! - displayPrice) / displayOldPrice!) * 100) : 0;
 
   if (layout === "grid") {
     return (
@@ -146,6 +150,15 @@ export function ProductCard({
               المورد: {item.supplier}
             </button>
           ) : null}
+          {item.variants && item.variants.length > 1 ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {item.variants.map((variant) => (
+                <button key={variant.id} type="button" onClick={() => setSelectedVariantId(variant.id)} className={cx("rounded-md border px-2 py-1 text-[10px] font-bold", selectedVariantId === variant.id ? "border-accent bg-accent/15 text-accent" : "border-line text-muted")}>
+                  {variant.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
           {pick(lang, item.description, item.descriptionEn) ? (
             <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted">
               {pick(lang, item.description, item.descriptionEn)}
@@ -168,7 +181,7 @@ export function ProductCard({
                 <span className="text-lg font-black text-accent">{price}</span>
                 {hasDiscount ? (
                   <span className="text-[11px] text-muted line-through">
-                    {formatPrice(item.oldPrice!, lang, commerce)}
+{formatPrice(displayOldPrice!, lang, commerce)}
                   </span>
                 ) : null}
                 {hasDiscount ? (
@@ -187,7 +200,7 @@ export function ProductCard({
               <div className="flex items-center gap-1 rounded-xl border border-accent/40 bg-accent/10 p-1">
                 <button
                   type="button"
-                  onClick={onRemoveOne}
+                  onClick={() => onRemoveOne(selectedVariantId)}
                   aria-label={en ? "Remove one" : "تقليل"}
                   className="grid h-7 w-7 place-items-center rounded-lg text-accent transition hover:bg-accent hover:text-accent-contrast"
                 >
@@ -196,7 +209,7 @@ export function ProductCard({
                 <span className="min-w-5 text-center text-sm font-black">{quantity}</span>
                 <button
                   type="button"
-                  onClick={onAdd}
+                  onClick={() => onAdd(selectedVariantId)}
                   aria-label={en ? "Add one" : "زيادة"}
                   className="grid h-7 w-7 place-items-center rounded-lg bg-accent text-accent-contrast transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-35"
                 >
@@ -206,7 +219,7 @@ export function ProductCard({
             ) : (
               <button
                 type="button"
-                onClick={onAdd}
+                onClick={() => onAdd(selectedVariantId)}
                 className="inline-flex items-center gap-1 rounded-xl border border-accent/35 bg-accent/10 px-3 py-1.5 text-xs font-bold text-accent transition hover:bg-accent hover:text-accent-contrast"
               >
                 <Plus className="h-3.5 w-3.5" /> {en ? "Add" : "إضافة"}
@@ -237,8 +250,8 @@ function GridProductCard({
   lang: SiteLanguage;
   commerce: CommerceSettings;
   quantity: number;
-  onAdd: () => void;
-  onRemoveOne: () => void;
+  onAdd: (variantId?: string) => void;
+  onRemoveOne: (variantId?: string) => void;
   onSupplierClick?: (supplier: string) => void;
   disabled?: boolean;
   favorite: boolean;
@@ -294,12 +307,12 @@ function GridProductCard({
           {commerce.enableCart && item.available && !disabled ? (
             quantity > 0 ? (
               <div className="flex items-center justify-between rounded-lg border border-accent/35 bg-accent/10 p-0.5">
-                <button type="button" onClick={onRemoveOne} aria-label="تقليل" className="grid h-6 w-6 place-items-center text-accent"><Minus className="h-3 w-3" /></button>
+                <button type="button" onClick={() => onRemoveOne()} aria-label="تقليل" className="grid h-6 w-6 place-items-center text-accent"><Minus className="h-3 w-3" /></button>
                 <span className="text-[11px] font-black">{quantity}</span>
-                <button type="button" onClick={onAdd} aria-label="زيادة" className="grid h-6 w-6 place-items-center rounded-md bg-accent text-accent-contrast"><Plus className="h-3 w-3" /></button>
+                <button type="button" onClick={() => onAdd()} aria-label="زيادة" className="grid h-6 w-6 place-items-center rounded-md bg-accent text-accent-contrast"><Plus className="h-3 w-3" /></button>
               </div>
             ) : (
-              <button type="button" onClick={onAdd} className="flex w-full items-center justify-center gap-1 rounded-lg bg-accent px-1 py-1.5 text-[10px] font-black text-accent-contrast sm:text-xs">
+              <button type="button" onClick={() => onAdd()} className="flex w-full items-center justify-center gap-1 rounded-lg bg-accent px-1 py-1.5 text-[10px] font-black text-accent-contrast sm:text-xs">
                 <Plus className="h-3 w-3" /> إضافة
               </button>
             )

@@ -21,6 +21,7 @@ export const DEFAULT_DATA: MenuData = {
     language: "ar",
     showHero: true,
     heroImage: "/images/catalog/hero.jpg",
+    heroImages: [],
     heroTitle: "كل اللي محتاجه… في مكان واحد 🛒",
     heroSubtitle: "اختار منتجاتك واطلبها في دقيقتين — وهتوصلك لباب البيت",
     announcementEnabled: true,
@@ -73,6 +74,7 @@ export const DEFAULT_DATA: MenuData = {
     ].join("\n"),
   },
   categories: [],
+  suppliers: [],
   items: [],
 };
 

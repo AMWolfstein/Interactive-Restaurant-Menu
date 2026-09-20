@@ -40,7 +40,6 @@ export function validateImportedMenu(data: unknown): { ok: true } | { ok: false;
   const d = data as Record<string, unknown>;
   if (!Array.isArray(d.items)) return { ok: false, error: "الملف لازم يحتوي على items" };
   if (!Array.isArray(d.categories)) return { ok: false, error: "الملف لازم يحتوي على categories" };
-  if (d.items.length > 200) return { ok: false, error: "عدد المنتجات كبير جداً (الحد 200)" };
   for (const item of d.items as Array<Record<string, unknown>>) {
     if (typeof item.name !== "string" || !item.name.trim()) return { ok: false, error: "كل منتج لازم له اسم" };
     if (typeof item.price !== "number" || item.price < 0 || item.price > 100000)

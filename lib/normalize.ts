@@ -32,8 +32,93 @@ function mergeWithDefaults<T>(base: T, saved: unknown): T {
 }
 
 /** تطبيع أي كتالوج قادم من الباك إند قبل ما يُعرض أو يُحفظ */
+function firestoreDate(value: unknown): { day: number; month: number; year: number } | null {
+  if (!isPlainObject(value) || typeof value.seconds !== "number") return null;
+  const date = new Date(value.seconds * 1000);
+  return Number.isNaN(date.getTime()) ? null : { day: date.getDate(), month: date.getMonth() + 1, year: date.getFullYear() };
+}
+
+/** يحوّل Backup الموقع القديم (Firebase) إلى شكل المنيو الحالي تلقائياً. */
+function migrateLegacyBackup(raw: unknown): unknown {
+  if (!isPlainObject(raw) || !Array.isArray(raw.items)) return raw;
+  const restaurant = isPlainObject(raw.restaurant) ? raw.restaurant : {};
+  const categories = Array.isArray(raw.categories)
+    ? raw.categories.filter(isPlainObject).map((c, index) => ({
+        id: String(c.id ?? `category-${index}`),
+        name: String(c.name ?? c.id ?? "قسم"),
+        emoji: String(c.icon ?? ""),
+        visible: true,
+      }))
+    : [];
+  const suppliers = Array.isArray(raw.suppliers)
+    ? raw.suppliers.filter(isPlainObject).map((s, index) => ({ id: String(s.id ?? `supplier-${index}`), name: String(s.name ?? s.id ?? ""), visible: true }))
+    : [];
+
+  const items = raw.items.filter(isPlainObject).map((item, index) => {
+    const variants = Array.isArray(item.variants)
+      ? item.variants.filter(isPlainObject).map((variant, variantIndex) => {
+          const end = firestoreDate(variant.discountEndsAt);
+          const regular = Number(variant.price ?? item.price ?? 0);
+          const sale = variant.discountPrice == null ? regular : Number(variant.discountPrice);
+          return {
+            id: String(variant.id ?? `${item.id ?? index}-variant-${variantIndex}`),
+            label: String(variant.label ?? ""),
+            price: Number.isFinite(sale) ? sale : 0,
+            oldPrice: sale < regular ? regular : null,
+            ...(end ? { offerEndDay: end.day, offerEndMonth: end.month, offerEndYear: end.year } : {}),
+          };
+        })
+      : [];
+    const end = firestoreDate(item.discountEndsAt);
+    const regular = Number(item.price ?? 0);
+    const sale = item.discountPrice == null ? regular : Number(item.discountPrice);
+    return {
+      id: String(item.id ?? `item-${index}`),
+      categoryId: String(item.categoryId ?? categories[0]?.id ?? ""),
+      name: String(item.name ?? "منتج"),
+      description: String(item.description ?? ""),
+      supplier: item.supplierId ? String(item.supplierId) : "",
+      price: Number.isFinite(sale) ? sale : 0,
+      oldPrice: sale < regular ? regular : null,
+      image: typeof item.imageUrl === "string" ? item.imageUrl : "",
+      available: item.available !== false,
+      isNew: false,
+      spicy: item.badge === "حار" ? 1 : 0,
+      salesCount: Math.max(0, Math.floor(Number(item.orderCount ?? 0))),
+      weight: variants.length === 1 ? variants[0].label : String(item.description ?? ""),
+      ...(variants.length ? { variants } : {}),
+      ...(end ? { offerEndDay: end.day, offerEndMonth: end.month, offerEndYear: end.year } : {}),
+    };
+  });
+
+  const heroImages = Array.isArray(raw.heroImages)
+    ? raw.heroImages.filter(isPlainObject).map((hero, index) => ({ id: String(hero.id ?? `hero-${index}`), image: String(hero.imageUrl ?? ""), order: Number(hero.order ?? index) }))
+    : [];
+  const brand = {
+    storeName: String(restaurant.name ?? DEFAULT_DATA.brand.storeName),
+    storeNameEn: String(restaurant.name ?? DEFAULT_DATA.brand.storeNameEn),
+    tagline: String(restaurant.tagline ?? ""),
+    taglineEn: String(restaurant.tagline ?? ""),
+    logo: String(restaurant.imageUrl ?? ""),
+    accent: String(restaurant.themeColor ?? DEFAULT_DATA.brand.accent),
+    heroImage: String(restaurant.coverImageUrl ?? heroImages[0]?.image ?? DEFAULT_DATA.brand.heroImage),
+    heroImages,
+  };
+  const contact = {
+    ...DEFAULT_DATA.contact,
+    phone: String(restaurant.phone ?? ""),
+    whatsapp: String(restaurant.phone ?? "").replace(/\\D/g, ""),
+    instagram: String(restaurant.instagramUrl ?? ""),
+    facebook: String(restaurant.facebookUrl ?? ""),
+    mapUrl: String(restaurant.googleMapsUrl ?? ""),
+  };
+  const commerce = { ...DEFAULT_DATA.commerce, currency: String(restaurant.currency ?? DEFAULT_DATA.commerce.currency) };
+  return { ...DEFAULT_DATA, brand: { ...DEFAULT_DATA.brand, ...brand }, contact, commerce, categories, suppliers, items };
+}
+
 export function normalizeData(raw: unknown): MenuData {
-  const merged = mergeWithDefaults<MenuData>(DEFAULT_DATA, raw);
+  const migrated = migrateLegacyBackup(raw);
+  const merged = mergeWithDefaults<MenuData>(DEFAULT_DATA, migrated);
   // الموقع عربي فقط حتى لو البيانات اتخزنت بالإنجليزية.
   merged.brand.language = "ar";
   merged.commerce.productLayout = merged.commerce.productLayout === "grid" ? "grid" : "list";
@@ -53,6 +138,13 @@ export function normalizeData(raw: unknown): MenuData {
   const sanitizeUrl = (url: string) => (isSafeHttpUrl(url) ? url.trim() : "");
   merged.brand.heroImage = sanitizeUrl(merged.brand.heroImage) || "/images/catalog/hero.jpg";
   merged.brand.logo = merged.brand.logo ? sanitizeUrl(merged.brand.logo) : "";
+  merged.brand.heroImages = (merged.brand.heroImages ?? [])
+    .filter((hero) => hero && typeof hero.image === "string")
+    .map((hero, index) => ({ ...hero, id: hero.id || `hero-${index}`, image: sanitizeUrl(hero.image), order: Number.isFinite(hero.order) ? hero.order : index }))
+    .filter((hero) => Boolean(hero.image))
+    .sort((a, b) => a.order - b.order);
+  merged.suppliers = (merged.suppliers ?? []).filter((supplier) => supplier?.id && supplier?.name).map((supplier) => ({ ...supplier, visible: supplier.visible !== false }));
+  merged.categories = merged.categories.map((category) => ({ ...category, visible: category.visible !== false }));
   merged.contact.mapUrl = sanitizeUrl(merged.contact.mapUrl);
   merged.contact.instagram = sanitizeUrl(merged.contact.instagram);
   merged.contact.facebook = sanitizeUrl(merged.contact.facebook);

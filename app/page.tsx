@@ -41,7 +41,7 @@ function safeHref(url?: string): string | undefined {
 
 export default function Home() {
   const { data } = useMenu();
-  const { brand, commerce, contact, categories, items } = data;
+  const { brand, commerce, contact, categories, suppliers, items } = data;
   const lang = brand.language;
   const en = lang === "en";
 
@@ -244,6 +244,15 @@ export default function Home() {
                 emoji={category.emoji}
               />
             ))}
+            {suppliers.filter((supplier) => supplier.visible).map((supplier) => (
+              <CategoryChip
+                key={`supplier-${supplier.id}`}
+                active={supplierFilter === supplier.name}
+                onClick={() => { setSupplierFilter(supplier.name); setActiveCategory(ALL); }}
+                label={supplier.name}
+                emoji="🏷️"
+              />
+            ))}
           </div>
         </div>
 
@@ -310,8 +319,8 @@ export default function Home() {
                     lang={lang}
                     commerce={commerce}
                     quantity={cart.quantityOf(item.id)}
-                    onAdd={() => cart.add(item.id)}
-                    onRemoveOne={() => cart.setQuantity(item.id, cart.quantityOf(item.id) - 1)}
+                    onAdd={(variantId) => cart.add(item.id, variantId)}
+                    onRemoveOne={(variantId) => cart.setQuantity(item.id, cart.quantityOf(item.id, variantId) - 1, variantId)}
                     onSupplierClick={(supplier) => { setSupplierFilter(supplier.trim()); setActiveCategory(ALL); }}
                     layout={commerce.productLayout}
                     disabled={!contact.isOpen || !commerce.enableCart}

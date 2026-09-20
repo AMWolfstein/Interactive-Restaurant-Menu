@@ -46,6 +46,7 @@ declare
   v_lines jsonb := coalesce(payload -> 'lines', '[]'::jsonb);
   v_line jsonb;
   v_item jsonb;
+  v_variant jsonb;
   v_items jsonb;
   v_item_id text;
   v_item_name text;
@@ -94,7 +95,15 @@ begin
     end if;
 
     v_item_name := coalesce(v_item ->> 'name', '');
-    v_item_price := greatest(0, coalesce((v_item ->> 'price')::numeric, 0));
+    v_variant := null;
+    if nullif(btrim(coalesce(v_line ->> 'variantId', '')), '') is not null then
+      select elem into v_variant from jsonb_array_elements(coalesce(v_item -> 'variants', '[]'::jsonb)) as elem
+        where elem ->> 'id' = v_line ->> 'variantId' limit 1;
+      if v_variant is null then
+        raise exception 'اختيار المنتج غير صالح' using errcode = '22023';
+      end if;
+    end if;
+    v_item_price := greatest(0, coalesce((coalesce(v_variant, v_item) ->> 'price')::numeric, 0));
     v_order_lines := v_order_lines || jsonb_build_object(
       'itemId', v_item_id, 'name', v_item_name,
       'quantity', v_quantity, 'unitPrice', v_item_price
