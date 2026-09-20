@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  // اللوحة مخصوصة لأصحاب المطعم — متتفهرستش في جوجل
+  // اللوحة مخصوصة لأصحاب المحل — متتفهرستش في جوجل
   robots: { index: false, follow: false },
 };
 

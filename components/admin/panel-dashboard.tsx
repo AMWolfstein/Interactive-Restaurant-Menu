@@ -6,10 +6,10 @@ import {
   CircleCheck,
   Database,
   FolderTree,
+  Package,
   Plus,
   Receipt,
   TriangleAlert,
-  UtensilsCrossed,
   Wallet,
 } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
@@ -32,8 +32,8 @@ const EMPTY_OVERVIEW: OverviewState = {
 
 const ORDER_TYPE_LABEL: Record<string, string> = {
   delivery: "دليفري",
-  takeaway: "تيك أواي",
-  dinein: "محلي",
+  pickup: "استلام",
+  instore: "من المحل",
 };
 
 export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: string) => void }) {
@@ -96,13 +96,13 @@ export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: str
       tab: "ordering",
     },
     {
-      ok: !!brand.restaurantName.trim(),
-      label: "اسم المطعم",
-      fix: "اسم المطعم فاضي",
+      ok: !!brand.storeName.trim(),
+      label: "اسم المحل",
+      fix: "اسم المحل فاضي",
       tab: "brand",
     },
-    { ok: stats.noImage === 0, label: "صور الأصناف", fix: `${stats.noImage} صنف بدون صورة`, tab: "items" },
-    { ok: items.length > 0, label: "الأصناف", fix: "أضف أول صنف للقائمة", tab: "items" },
+    { ok: stats.noImage === 0, label: "صور المنتجات", fix: `${stats.noImage} منتج بدون صورة`, tab: "items" },
+    { ok: items.length > 0, label: "المنتجات", fix: "أضف أول منتج للكتالوج", tab: "items" },
     {
       ok: categories.some((category) => category.visible),
       label: "الأقسام الظاهرة",
@@ -111,14 +111,14 @@ export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: str
     },
     {
       ok: items.every((item) => categories.some((category) => category.id === item.categoryId)),
-      label: "تصنيف الأصناف",
-      fix: "في أصناف قسمها اتحذف",
+      label: "تصنيف المنتجات",
+      fix: "في منتجات قسمها اتحذف",
       tab: "items",
     },
     {
       ok: contact.isOpen,
-      label: "حالة المطعم",
-      fix: contact.closedMessage || "المطعم مقفل حالياً",
+      label: "حالة المحل",
+      fix: contact.closedMessage || "المحل مقفل حالياً",
       tab: "ordering",
     },
     {
@@ -138,10 +138,10 @@ export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: str
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat icon={<UtensilsCrossed className="h-4 w-4" />} label="الأصناف" value={String(items.length)} hint={`${stats.soldOut} خلصت`} />
+        <Stat icon={<Package className="h-4 w-4" />} label="المنتجات" value={String(items.length)} hint={`${stats.soldOut} خلصت`} />
         <Stat icon={<FolderTree className="h-4 w-4" />} label="الأقسام" value={String(categories.length)} hint={`${categories.filter((c) => c.visible).length} ظاهر`} />
         <Stat icon={<Receipt className="h-4 w-4" />} label="طلبات مسجّلة" value={String(overview.orders.length)} hint="محفوظة في الباك إند" />
-        <Stat icon={<Wallet className="h-4 w-4" />} label="متوسط السعر" value={`${stats.avg} ${commerce.currency}`} hint="لكل صنف" />
+        <Stat icon={<Wallet className="h-4 w-4" />} label="متوسط السعر" value={`${stats.avg} ${commerce.currency}`} hint="لكل منتج" />
       </div>
 
       {!overview.storage.persistent ? (
@@ -150,7 +150,7 @@ export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: str
           <p className="mt-1">
             البيانات بتتحفظ في ملف مؤقت على السيرفر وهتضيع مع كل إعادة تشغيل. عشان الحفظ يبقى دائم على Vercel
             نفّذ محتوى <span dir="ltr" className="font-mono">supabase/schema.sql</span> مرة واحدة في Supabase → SQL Editor،
-            وبعدها القائمة والطلبات هيتحفظوا في Postgres.
+            وبعدها الكتالوج والطلبات هيتحفظوا في Postgres.
           </p>
         </div>
       ) : null}
@@ -162,7 +162,7 @@ export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: str
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Panel title="صحة القائمة" description="كل النقاط دي لازم تبقى خضراء قبل ما تفتح للعملاء" icon={<CircleCheck className="h-4 w-4" />}>
+        <Panel title="صحة المتجر" description="كل النقاط دي لازم تبقى خضراء قبل ما تفتح للعملاء" icon={<CircleCheck className="h-4 w-4" />}>
           <ul className="space-y-2">
             {checks.map((check) => (
               <li
@@ -227,7 +227,7 @@ export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: str
           <Panel title="حفظ سحابي" description="أي تعديل بيتخزن أوتوماتيك في الباك إند" icon={<Database className="h-4 w-4" />}>
             <div className="space-y-3 text-xs">
               <div className="flex items-center justify-between rounded-xl border border-line bg-surface-2/50 px-3 py-2.5">
-                <span className="text-muted">حجم بيانات القائمة</span>
+                <span className="text-muted">حجم بيانات الكتالوج</span>
                 <span className="font-black">{storageKb} KB</span>
               </div>
               <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
@@ -259,8 +259,8 @@ export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: str
 
           <Panel title="إجراءات سريعة" icon={<Plus className="h-4 w-4" />}>
             <div className="grid grid-cols-2 gap-2">
-              <QuickAction label="صنف جديد" hint="أضف أكلة للقائمة" onClick={() => onJump("items", "new")} />
-              <QuickAction label="قسم جديد" hint="صنّف أكلك أحسن" onClick={() => onJump("categories", "new")} />
+              <QuickAction label="منتج جديد" hint="أضف منتج للكتالوج" onClick={() => onJump("items", "new")} />
+              <QuickAction label="قسم جديد" hint="صنّف منتجاتك أحسن" onClick={() => onJump("categories", "new")} />
               <QuickAction label="غيّر اللون" hint="لون الموقع كله" onClick={() => onJump("look")} />
               <QuickAction label="إعلان علوي" hint="عرض أو خصم" onClick={() => onJump("brand")} />
             </div>

@@ -6,11 +6,11 @@ import { useMenu } from "@/lib/use-menu";
 import { Button, EmptyState, Field, IconButton, Panel, TextInput, Toast, useToast } from "@/components/ui";
 import { cx } from "@/lib/cx";
 
-const EMOJIS = ["🍔", "🍕", "🍢", "🍟", "🥤", "🍮", "🥗", "🌯", "🍗", "🍜", "🍣", "🍰", "☕", "🥙", "🍝", "🧃"];
+const EMOJIS = ["🧺", "🛒", "🥫", "🧃", "🍬", "🧻", "🧴", "🧽", "🍞", "🧀", "🍼", "🥜", "🫘", "🍯", "🧊", "☕"];
 
 export function CategoriesPanel({ intent, nonce }: { intent?: string; nonce: number }) {
   const { data, addCategory, updateCategory, deleteCategory, moveCategory } = useMenu();
-  const [draft, setDraft] = useState({ name: "", emoji: "🍽️" });
+  const [draft, setDraft] = useState({ name: "", emoji: "🧺" });
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const addRef = useRef<HTMLInputElement>(null);
   const { toast, show } = useToast();
@@ -28,19 +28,19 @@ export function CategoriesPanel({ intent, nonce }: { intent?: string; nonce: num
       return;
     }
     addCategory({ name: draft.name.trim(), emoji: draft.emoji, visible: true });
-    setDraft({ name: "", emoji: "🍽️" });
+    setDraft({ name: "", emoji: "🧺" });
     show("تمت إضافة القسم ✅");
   };
 
   return (
     <div className="space-y-4">
       <Panel
-        title="أقسام القائمة"
+        title="أقسام المتجر"
         description="الترتيب هنا هو ترتيب الأقسام في الموقع، والأسهم تنقل القسم فوق وتحت"
         icon={<FolderTree className="h-4 w-4" />}
       >
         {data.categories.length === 0 ? (
-          <EmptyState title="مفيش أقسام" description="أضف قسم على الأقل عشان الأصناف تظهر للعملاء" />
+          <EmptyState title="مفيش أقسام" description="أضف قسم على الأقل عشان المنتجات تظهر للعملاء" />
         ) : (
           <ul className="space-y-2.5">
             {data.categories.map((category, index) => {
@@ -62,7 +62,7 @@ export function CategoriesPanel({ intent, nonce }: { intent?: string; nonce: num
                       className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-line bg-surface text-lg"
                       title="الإيموجي"
                     >
-                      {category.emoji || "🍽️"}
+                      {category.emoji || "🧺"}
                     </button>
                     <TextInput
                       value={category.name}
@@ -70,7 +70,7 @@ export function CategoriesPanel({ intent, nonce }: { intent?: string; nonce: num
                       className="h-9 min-w-32 flex-1 py-1.5"
                     />
                     <span className="shrink-0 rounded-lg bg-surface px-2 py-1 text-[11px] font-bold text-muted">
-                      {count} صنف
+                      {count} منتج
                     </span>
 
                     <div className="flex shrink-0 items-center gap-1">
@@ -96,7 +96,7 @@ export function CategoriesPanel({ intent, nonce }: { intent?: string; nonce: num
                           onClick={() => {
                             deleteCategory(category.id);
                             setConfirmId(null);
-                            show(`اتحذف «${category.name}» وأصنافه اتنقلت للقسم اللي بعده`);
+                            show(`اتحذف «${category.name}» ومنتجاته اتنقلت للقسم اللي بعده`);
                           }}
                           className="shrink-0 rounded-lg bg-red-500/15 px-2 py-1 text-[11px] font-black text-red-400"
                         >
@@ -146,7 +146,7 @@ export function CategoriesPanel({ intent, nonce }: { intent?: string; nonce: num
       <Panel title="قسم جديد" icon={<Plus className="h-4 w-4" />}>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="اسم القسم">
-            <TextInput ref={addRef} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="فطور" />
+            <TextInput ref={addRef} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="بقالة" />
           </Field>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-1.5">

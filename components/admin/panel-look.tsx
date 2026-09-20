@@ -87,8 +87,8 @@ export function LookPanel() {
             onChange={(checked) => patchCommerce({ enableSearch: checked })}
           />
           <Toggle
-            label="قسم الأكثر طلباً"
-            description="كاروسيفي أفقي للأصناف المتعلمة «الأكثر طلباً»"
+            label="قسم الأكثر مبيعاً"
+            description="كاروسيفي أفقي للمنتجات الأعلى مبيعاً"
             checked={commerce.enableFeatured}
             onChange={(checked) => patchCommerce({ enableFeatured: checked })}
           />
@@ -104,11 +104,11 @@ export function LookPanel() {
             checked={commerce.enableCart}
             onChange={(checked) => patchCommerce({ enableCart: checked })}
           />
-          <Field label="عنوان قسم الأكثر طلباً">
+          <Field label="عنوان قسم الأكثر مبيعاً">
             <TextInput
               value={commerce.featuredLabel}
               onChange={(event) => patchCommerce({ featuredLabel: event.target.value })}
-              placeholder="الأكثر طلباً ⭐"
+              placeholder="الأكثر مبيعاً ⭐"
             />
           </Field>
         </div>

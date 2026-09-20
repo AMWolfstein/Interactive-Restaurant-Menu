@@ -7,10 +7,10 @@ export const dynamic = "force-dynamic";
 
 /**
  * تسجيل الطلب في الباك إند قبل فتح رسالة واتساب.
- * محمي بـ Rate Limiting (5 طلبات / دقيقة لكل IP) للـ portfolio demo
+ * محمي بـ Rate Limiting (5 طلبات / دقيقة لكل IP)
  */
 export async function POST(request: NextRequest) {
-  // Rate limiting - demo portfolio protection
+  // Rate limiting لحماية تسجيل الطلبات
   const ip = getClientIp(request);
   const rl = rateLimit(`orders:${ip}`, LIMITS.orders);
   if (!rl.success) {

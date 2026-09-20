@@ -12,33 +12,33 @@ export function BrandPanel() {
   return (
     <div className="space-y-4">
       <Panel
-        title="هوية المكان"
+        title="هوية المحل"
         description="اللي العميل بيشوفه في الهيدر والفوتر وبعنوان الصفحة"
         icon={<Store className="h-4 w-4" />}
       >
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="اسم المتجر">
             <TextInput
-              value={brand.restaurantName}
-              onChange={(event) => patchBrand({ restaurantName: event.target.value })}
-              placeholder="مطعم البرجر الملكي"
+              value={brand.storeName}
+              onChange={(event) => patchBrand({ storeName: event.target.value })}
+              placeholder="محل البركة"
             />
           </Field>
           <Field label="الشعار النصي">
             <TextInput
               value={brand.tagline}
               onChange={(event) => patchBrand({ tagline: event.target.value })}
-              placeholder="أسرع ديليفري وأعلى جودة"
+              placeholder="أفضل المنتجات بأحسن سعر"
             />
           </Field>
         </div>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <ImageField
-            label="لوجو المطعم"
+            label="لوجو المحل"
             value={brand.logo}
             onChange={(value) => patchBrand({ logo: value })}
-            hint="لو فاضي هيظهر أيقونة Utensils بلون الأكسنت"
+            hint="لو فاضي هيظهر أيقونة متجر بلون الأكسنت"
             aspect="aspect-square"
           />
           <div className="space-y-3">
@@ -76,7 +76,7 @@ export function BrandPanel() {
 
       <Panel
         title="قسم الترحيب (Hero)"
-        description="البانر الكبير فوق القائمة — تقدر تقفله خالص"
+        description="البانر الكبير فوق الكتالوج — تقدر تقفله خالص"
         icon={<Globe className="h-4 w-4" />}
       >
         <Toggle

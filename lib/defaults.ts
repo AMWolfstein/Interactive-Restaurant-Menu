@@ -9,10 +9,10 @@ export const DEFAULT_DATA: MenuData = {
   version: 1,
   updatedAt: new Date(0).toISOString(),
   brand: {
-    restaurantName: "مطعم البرجر الملكي",
-    restaurantNameEn: "Royal Burger",
-    tagline: "أسرع ديليفري وأعلى جودة",
-    taglineEn: "Fastest delivery, best taste",
+    storeName: "محل البركة",
+    storeNameEn: "El Baraka Store",
+    tagline: "أفضل المنتجات بأحسن سعر",
+    taglineEn: "Best products at the best price",
     logo: "",
     accent: "#f59e0b",
     theme: "dark",
@@ -20,11 +20,11 @@ export const DEFAULT_DATA: MenuData = {
     font: "cairo",
     language: "ar",
     showHero: true,
-    heroImage: "/images/menu/hero.jpg",
-    heroTitle: "طعم يخلّيك ترجع تاني 🔥",
-    heroSubtitle: "اطلب بدقيقتين والطلب هيوصلك على باب البيت",
+    heroImage: "/images/catalog/hero.jpg",
+    heroTitle: "كل اللي محتاجه… في مكان واحد 🛒",
+    heroSubtitle: "اختار منتجاتك واطلبها في دقيقتين — وهتوصلك لباب البيت",
     announcementEnabled: true,
-    announcementText: "🚚 توصيل مجاني للطلبات فوق ٣٠٠ ج.م — الكود: ROYAL",
+    announcementText: "🚚 توصيل مجاني للطلبات فوق ٣٠٠ ج.م — الكود: BARAKA",
   },
   contact: {
     whatsapp: "201000000000",
@@ -33,10 +33,10 @@ export const DEFAULT_DATA: MenuData = {
     mapUrl: "https://maps.google.com/?q=Tasheen+St+Cairo",
     instagram: "https://instagram.com/",
     facebook: "",
-    openingHours: "يومياً من ١٢ ظهراً حتى ٢ بعد منتصف الليل",
+    openingHours: "يومياً من ١٠ صباحاً حتى ١٢ منتصف الليل",
     isOpen: true,
-    closedMessage: "المطعم مقفل حالياً.. اطلب بكرة الصبح 🌙",
-    footerNote: "جميع الأصناف طازجة وتُحضّر عند الطلب — بالهنا والشفا 🍔",
+    closedMessage: "المحل مقفل حالياً.. اطلب بكرة الصبح 🌙",
+    footerNote: "كل منتجاتنا مختارة بعناية وجودتها مضمونة — نورتنا 🛍️",
   },
   commerce: {
     currency: "ج.م",
@@ -45,7 +45,7 @@ export const DEFAULT_DATA: MenuData = {
     freeDeliveryOver: 300,
     minimumOrder: 80,
     serviceChargePercent: 0,
-    orderTypes: ["delivery", "takeaway", "dinein"],
+    orderTypes: ["delivery", "pickup", "instore"],
     requireName: true,
     requirePhone: true,
     requireAddress: true,
@@ -53,12 +53,12 @@ export const DEFAULT_DATA: MenuData = {
     enableSearch: true,
     productLayout: "list",
     enableFeatured: true,
-    featuredLabel: "الأكثر طلباً ⭐",
+    featuredLabel: "الأكثر مبيعاً ⭐",
     enableConfetti: true,
     showPrices: true,
     enableCart: true,
     orderTemplate: [
-      "*طلب جديد — {restaurantName}* 🍔",
+      "*طلب جديد — {storeName}* 🛍️",
       "",
       "👤 *العميل:* {name}",
       "📞 *الموبايل:* {phone}",
@@ -77,4 +77,4 @@ export const DEFAULT_DATA: MenuData = {
 };
 
 /** مفتاح سلة العميل في متصفح الزائر — السلة بتتحول لطلب مسجّل في الباك إند */
-export const CART_KEY = "royal-menu:cart:v1";
+export const CART_KEY = "store-catalog:cart:v1";

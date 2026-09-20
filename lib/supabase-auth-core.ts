@@ -1,7 +1,7 @@
 import { createBrowserClient, isSupabaseConfigured } from "./supabase";
 
 /**
- * حالة دخول صاحب المطعم عن طريق Supabase Auth (إيميل + باسورد).
+ * حالة دخول صاحب المحل عن طريق Supabase Auth (إيميل + باسورد).
  * دي الطريقة الوحيدة للدخول للوحة التحكم — مفيش أي دخول محلي أو رقم سري.
  * كل طلب بيتبعت للـ API المحمي بيتحمل معاه access token والسيرفر بيتحقق منه.
  */

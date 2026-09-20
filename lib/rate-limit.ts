@@ -1,6 +1,6 @@
 /**
- * Rate limiting بسيط في الذاكرة للـ demo/portfolio
- * للإنتاج الحقيقي يُفضل Upstash Redis
+ * Rate limiting بسيط في الذاكرة.
+ * لو السيرفر بيعمل أكتر من انستانس في الإنتاج يُفضل مخزن مشترك زي Redis.
  */
 
 type Bucket = { count: number; resetAt: number };
@@ -55,12 +55,12 @@ export function getClientIp(request: Request): string {
   return "unknown";
 }
 
-// إعدادات جاهزة للـ demo
+// إعدادات جاهزة
 export const LIMITS = {
   /** 5 طلبات / دقيقة لكل IP */
   orders: { limit: 5, windowMs: 60_000 },
   /** 10 محاولات دخول / 15 دقيقة */
   auth: { limit: 10, windowMs: 15 * 60_000 },
-  /** 20 تعديل قائمة / دقيقة للأدمن */
+  /** 20 تعديل كتالوج / دقيقة للأدمن */
   menuSave: { limit: 20, windowMs: 60_000 },
 } as const;

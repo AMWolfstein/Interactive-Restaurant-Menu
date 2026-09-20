@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 import type { SiteLanguage, ThemeMode } from "@/lib/types";
 
-export const VISITOR_THEME_KEY = "restaurant-menu:visitor-theme";
+export const VISITOR_THEME_KEY = "store-catalog:visitor-theme";
 
 function isTheme(value: string | null): value is ThemeMode {
   return value === "dark" || value === "light";
@@ -19,7 +19,7 @@ export function visitorTheme(fallback: ThemeMode): ThemeMode {
   }
 }
 
-/** اختيار شخصي للزائر، محفوظ على جهازه فقط ولا يغيّر إعداد المطعم. */
+/** اختيار شخصي للزائر، محفوظ على جهازه فقط ولا يغيّر إعداد المحل. */
 export function ThemeToggle({ fallback, language }: { fallback: ThemeMode; language: SiteLanguage }) {
   const [theme, setTheme] = useState<ThemeMode>(fallback);
   const en = language === "en";

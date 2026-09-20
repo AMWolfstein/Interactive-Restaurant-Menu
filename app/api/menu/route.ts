@@ -6,7 +6,7 @@ import { rateLimit, getClientIp, LIMITS } from "@/lib/rate-limit";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** قراءة القائمة — عامة لكل العملاء (ولو معاك توكن أدمن صالح بتتزامن بيانات البداية) */
+/** قراءة الكتالوج — عامة لكل العملاء (ولو معاك توكن أدمن صالح بتتزامن بيانات البداية) */
 export async function GET(request: NextRequest) {
   const token = bearerToken(request);
   const check = await checkAdmin(token);
@@ -16,12 +16,12 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     const status = error instanceof StoreError ? error.status : 500;
-    const message = status >= 500 ? "تعذّر قراءة القائمة" : error instanceof Error ? error.message : "تعذّر قراءة القائمة";
+    const message = status >= 500 ? "تعذّر قراءة الكتالوج" : error instanceof Error ? error.message : "تعذّر قراءة الكتالوج";
     return NextResponse.json({ error: message }, { status });
   }
 }
 
-/** تعديل القائمة — للأدمن فقط بعد التحقق من Supabase access token على السيرفر */
+/** تعديل الكتالوج — للأدمن فقط بعد التحقق من Supabase access token على السيرفر */
 export async function PUT(request: NextRequest) {
   const token = bearerToken(request);
   const check = await checkAdmin(token);
@@ -46,7 +46,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json(menu, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     const status = error instanceof StoreError ? error.status : 400;
-    const message = status >= 500 ? "خطأ في الخادم" : error instanceof Error ? error.message : "بيانات القائمة غير صالحة";
+    const message = status >= 500 ? "خطأ في الخادم" : error instanceof Error ? error.message : "بيانات الكتالوج غير صالحة";
     return NextResponse.json({ error: message }, { status });
   }
 }

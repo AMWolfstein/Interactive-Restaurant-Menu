@@ -1,5 +1,5 @@
 import { DEFAULT_DATA } from "./defaults";
-import type { MenuData, MenuItem } from "./types";
+import type { MenuData } from "./types";
 
 type Plain = Record<string, unknown>;
 
@@ -8,7 +8,7 @@ const isPlainObject = (value: unknown): value is Plain =>
 
 /**
  * دمج البيانات القادمة من قاعدة البيانات مع بيانات البداية:
- * أي حقل جديد بيتضاف في الكود بيتعوّض تلقائياً، والمصفوفات (الأصناف والأقسام)
+ * أي حقل جديد بيتضاف في الكود بيتعوّض تلقائياً، والمصفوفات (المنتجات والأقسام)
  * بتاخد قيمتها المخزّنة كما هي عشان الحذف والتعديل يفضلوا محفوظين.
  */
 function mergeWithDefaults<T>(base: T, saved: unknown): T {
@@ -31,41 +31,14 @@ function mergeWithDefaults<T>(base: T, saved: unknown): T {
   return out as T;
 }
 
-/** خريطة الصور الجديدة المحلية — لضمان تحديث أي بيانات قديمة محفوظة (Supabase / ملف محلي) */
-const LOCAL_IMAGE_MAP: Record<string, string> = {
-  i1: "/images/menu/i1.jpg",
-  i2: "/images/menu/i2.jpg",
-  i3: "/images/menu/i3.jpg",
-  i4: "/images/menu/i4.jpg",
-  i5: "/images/menu/i5.jpg",
-  i6: "/images/menu/i6.jpg",
-  i7: "/images/menu/i7.jpg",
-  i8: "/images/menu/i8.jpg",
-  i9: "/images/menu/i9.jpg",
-  i10: "/images/menu/i10.jpg",
-  i11: "/images/menu/i11.jpg",
-  i12: "/images/menu/i12.jpg",
-  i13: "/images/menu/i13.jpg",
-  i14: "/images/menu/i14.jpg",
-};
-
-/** تطبيع أي قائمة قادمة من الباك إند قبل ما تُعرض أو تُحفظ */
+/** تطبيع أي كتالوج قادم من الباك إند قبل ما يُعرض أو يُحفظ */
 export function normalizeData(raw: unknown): MenuData {
   const merged = mergeWithDefaults<MenuData>(DEFAULT_DATA, raw);
-  // الموقع عربي فقط حتى لو البيانات القديمة كانت محفوظة بالإنجليزية.
+  // الموقع عربي فقط حتى لو البيانات اتخزنت بالإنجليزية.
   merged.brand.language = "ar";
   merged.commerce.productLayout = merged.commerce.productLayout === "grid" ? "grid" : "list";
-  // ترقية الصور القديمة (unsplash) للصور الجديدة المحلية — بدون ما نغير أي شيء تاني
-  if (merged.brand.heroImage?.includes("unsplash.com")) {
-    merged.brand.heroImage = "/images/menu/hero.jpg";
-  }
-  for (const item of merged.items) {
-    if (item.image?.includes("unsplash.com") && LOCAL_IMAGE_MAP[item.id]) {
-      item.image = LOCAL_IMAGE_MAP[item.id];
-    }
-  }
 
-  // تعقيم الروابط الخارجية (مكافحة javascript: و open redirect) - للبورتفوليو demo
+  // تعقيم الروابط الخارجية (مكافحة javascript: و open redirect)
   const isSafeHttpUrl = (url: string) => {
     if (!url || typeof url !== "string") return false;
     const trimmed = url.trim();
@@ -78,7 +51,7 @@ export function normalizeData(raw: unknown): MenuData {
     } catch { return false; }
   };
   const sanitizeUrl = (url: string) => (isSafeHttpUrl(url) ? url.trim() : "");
-  merged.brand.heroImage = sanitizeUrl(merged.brand.heroImage) || "/images/menu/hero.jpg";
+  merged.brand.heroImage = sanitizeUrl(merged.brand.heroImage) || "/images/catalog/hero.jpg";
   merged.brand.logo = merged.brand.logo ? sanitizeUrl(merged.brand.logo) : "";
   merged.contact.mapUrl = sanitizeUrl(merged.contact.mapUrl);
   merged.contact.instagram = sanitizeUrl(merged.contact.instagram);
@@ -99,41 +72,18 @@ export function normalizeData(raw: unknown): MenuData {
   const knownCats = new Set(merged.categories.map((c) => c.id));
   return {
     ...merged,
-    items: merged.items
-      .map((item) => {
-        // تنظيف حقول المخزون القديمة من البيانات التي حُفظت قبل إلغاء الميزة.
-        const legacy = item as MenuItem & {
-          trackStock?: boolean;
-          stock?: number;
-          lowStockThreshold?: number;
-          bestseller?: boolean;
-          order?: number;
-          offerEndsAt?: string | null;
-        };
-        const {
-          trackStock: _trackStock,
-          stock: _stock,
-          lowStockThreshold: _threshold,
-          bestseller: _bestseller,
-          order: _order,
-          offerEndsAt: _offerEndsAt,
-          ...cleanItem
-        } = legacy;
-        void [_trackStock, _stock, _threshold, _bestseller, _order];
-        const oldOfferDate = _offerEndsAt ? new Date(_offerEndsAt) : null;
-        return {
-          ...cleanItem,
-          // النظام الحالي له اختياران فقط: بارد افتراضياً أو حار.
-          spicy: cleanItem.spicy > 0 ? 1 : 0,
-          salesCount: Math.max(0, Math.floor(cleanItem.salesCount ?? 0)),
-          offerEndDay: cleanItem.offerEndDay ?? (oldOfferDate && !Number.isNaN(oldOfferDate.getTime()) ? oldOfferDate.getDate() : null),
-          offerEndMonth: cleanItem.offerEndMonth ?? (oldOfferDate && !Number.isNaN(oldOfferDate.getTime()) ? oldOfferDate.getMonth() + 1 : null),
-          offerEndYear: cleanItem.offerEndYear ?? (oldOfferDate && !Number.isNaN(oldOfferDate.getTime()) ? oldOfferDate.getFullYear() : null),
-          // أي صنف قسمه اتحذف ينزل في أول قسم بدل ما يختفي
-          categoryId: knownCats.has(item.categoryId)
-            ? item.categoryId
-            : (merged.categories[0]?.id ?? ""),
-        };
-      }),
+    items: merged.items.map((item) => ({
+      ...item,
+      // النظام الحالي له اختياران فقط: عادي افتراضياً أو حار.
+      spicy: item.spicy > 0 ? 1 : 0,
+      salesCount: Math.max(0, Math.floor(item.salesCount ?? 0)),
+      offerEndDay: item.offerEndDay ?? null,
+      offerEndMonth: item.offerEndMonth ?? null,
+      offerEndYear: item.offerEndYear ?? null,
+      // أي منتج قسمه اتحذف ينزل في أول قسم بدل ما يختفي
+      categoryId: knownCats.has(item.categoryId)
+        ? item.categoryId
+        : (merged.categories[0]?.id ?? ""),
+    })),
   };
 }

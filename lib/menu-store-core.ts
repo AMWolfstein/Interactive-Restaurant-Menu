@@ -1,7 +1,7 @@
 import { DEFAULT_DATA } from "./defaults";
 import { normalizeData } from "./normalize";
 import { subscribeRealtime } from "./realtime";
-import { MENU_TABLE, PUBLISHED_SLUG } from "./supabase";
+import { CATALOG_TABLE, PUBLISHED_SLUG } from "./supabase";
 import { authenticatedFetch } from "./supabase-auth-core";
 import { validateImportedMenu } from "./validation";
 import type { Category, MenuData, MenuItem } from "./types";
@@ -55,11 +55,11 @@ async function errorMessage(response: Response): Promise<string | null> {
   }
 }
 
-/** قراءة القائمة من الباك إند */
+/** قراءة الكتالوج من الباك إند */
 export async function refreshMenu() {
   try {
     const response = await authenticatedFetch("/api/menu", { cache: "no-store" });
-    if (!response.ok) throw new Error((await errorMessage(response)) ?? "تعذّر قراءة القائمة من الباك إند");
+    if (!response.ok) throw new Error((await errorMessage(response)) ?? "تعذّر قراءة الكتالوج من الباك إند");
     const data = normalizeData(await response.json());
     // A refresh can finish after the admin has started editing. Never replace
     // unsaved local changes with a stale response that was already in flight.
@@ -99,7 +99,7 @@ function ensureInit() {
   // تحديث لحظي فوري: أي تعديل من الأدمن يوصل لكل الأجهزة
   subscribeRealtime(
     "realtime:menu",
-    [{ table: MENU_TABLE, event: "UPDATE", filter: `slug=eq.${PUBLISHED_SLUG}` }],
+    [{ table: CATALOG_TABLE, event: "UPDATE", filter: `slug=eq.${PUBLISHED_SLUG}` }],
     () => {
       if (Date.now() - lastLocalWriteAt < SELF_ECHO_GUARD_MS) return;
       refreshFromRemote();

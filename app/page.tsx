@@ -3,7 +3,6 @@
 import { useMemo, useState, useSyncExternalStore } from "react";
 import {
   Clock,
-  Utensils,
   Search,
   Settings2,
   ShoppingBag,
@@ -116,12 +115,12 @@ export default function Home() {
               <ProductImage src={brand.logo} alt="" className="h-11 w-11 rounded-xl border border-line" />
             ) : (
               <span className="grid h-11 w-11 place-items-center rounded-xl bg-accent text-accent-contrast">
-                <Utensils className="h-5 w-5" />
+                <Store className="h-5 w-5" />
               </span>
             )}
             <div className="min-w-0">
               <h1 className="truncate text-base font-black leading-tight">
-                {pick(lang, brand.restaurantName, brand.restaurantNameEn)}
+                {pick(lang, brand.storeName, brand.storeNameEn)}
               </h1>
               <p className="truncate text-[11px] text-muted">{pick(lang, brand.tagline, brand.taglineEn)}</p>
             </div>
@@ -188,7 +187,7 @@ export default function Home() {
                   href="#menu"
                   className="rounded-xl bg-accent px-4 py-2.5 text-xs font-black text-accent-contrast transition hover:brightness-110"
                 >
-                  {en ? "Browse the menu" : "تفرّج على الأكل 👀"}
+                  {en ? "Browse the products" : "اتفرّج على المنتجات 👀"}
                 </a>
                 <span className="inline-flex items-center gap-1.5 rounded-xl border border-white/20 px-3 py-2.5 text-[11px] font-bold text-white/80">
                   <Clock className="h-3.5 w-3.5" /> {contact.openingHours}
@@ -212,7 +211,7 @@ export default function Home() {
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder={en ? "Search for a dish…" : "دوّر على أي صنف… بيتزا، برجر، عصير"}
+                placeholder={en ? "Search for a product…" : "دوّر على أي منتج… أرز، شاي، مناديل"}
                 className="w-full bg-transparent text-sm outline-none placeholder:text-muted/70"
               />
               {query ? (
@@ -228,7 +227,7 @@ export default function Home() {
               active={activeCategory === ALL}
               onClick={() => { setActiveCategory(ALL); setSupplierFilter(null); }}
               label={en ? "All" : "الكل"}
-              emoji="🍽️"
+              emoji="🛍️"
             />
             <CategoryChip
               active={activeCategory === FAVORITES}
@@ -248,7 +247,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* الأكثر طلباً */}
+        {/* الأكثر مبيعاً */}
         {featured.length > 0 ? (
           <section className="mt-3">
             <h3 className="mb-2 text-sm font-black text-accent">{commerce.featuredLabel}</h3>
@@ -272,7 +271,7 @@ export default function Home() {
           </section>
         ) : null}
 
-        {/* شبكة الأصناف */}
+        {/* شبكة المنتجات */}
         <div className="mt-5 space-y-7">
           {sections.map((section) => (
             <section key={section.category?.id ?? "none"}>
@@ -285,7 +284,7 @@ export default function Home() {
                       ? nameOf(section.category)
                       : activeCategory === FAVORITES
                         ? "المفضلة"
-                        : "القائمة"}
+                        : "الكتالوج"}
                   <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-bold text-muted">
                     {section.items.length}
                   </span>
@@ -336,7 +335,7 @@ export default function Home() {
         <footer className="mt-10 rounded-xl2 border border-line bg-surface p-5">
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <h4 className="text-sm font-black">{pick(lang, brand.restaurantName, brand.restaurantNameEn)}</h4>
+              <h4 className="text-sm font-black">{pick(lang, brand.storeName, brand.storeNameEn)}</h4>
               <p className="mt-1.5 text-xs leading-relaxed text-muted">{contact.footerNote}</p>
             </div>
             <div className="space-y-1.5 text-xs text-muted">
@@ -371,7 +370,7 @@ export default function Home() {
           </div>
           <div className="mt-4 flex items-center justify-between border-t border-line pt-3 text-[11px] text-muted">
             <span>
-              © {new Date().getFullYear()} — {pick(lang, brand.restaurantName, brand.restaurantNameEn)}
+              © {new Date().getFullYear()} — {pick(lang, brand.storeName, brand.storeNameEn)}
             </span>
             <a href="/admin" className="inline-flex items-center gap-1 font-bold transition hover:text-accent">
               <Settings2 className="h-3 w-3" /> {en ? "Admin" : "لوحة التحكم"}
@@ -389,7 +388,7 @@ export default function Home() {
         >
           <span className="flex items-center gap-2 text-xs font-black">
             <ShoppingBag className="h-4 w-4" />
-            {totals.itemCount} {en ? "items" : "صنف"}
+            {totals.itemCount} {en ? "items" : "منتج"}
           </span>
           <span className="text-sm font-black">
             {formatPrice(totals.subtotal, lang, commerce)} {en ? "→ Review order" : "— راجع الطلب ←"}

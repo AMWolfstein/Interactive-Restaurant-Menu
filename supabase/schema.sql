@@ -1,7 +1,7 @@
--- Interactive Restaurant Menu — قائمة ومنتجات وطلبات واتساب فقط
+-- Interactive Store Catalog — كتالوج منتجات وطلبات واتساب فقط
 -- نفّذ الملف في Supabase Dashboard → SQL Editor.
 
-create table if not exists public.menu_data (
+create table if not exists public.catalog_data (
   slug text primary key,
   data jsonb not null,
   updated_at timestamptz not null default now()
@@ -15,17 +15,14 @@ create table if not exists public.orders (
 
 create index if not exists orders_created_at_idx on public.orders (created_at desc);
 
--- إزالة جدول التنبيهات القديم إن كان المشروع قد استخدم نسخة المخزون السابقة.
-drop table if exists public.stock_notifications;
-
-alter table public.menu_data enable row level security;
+alter table public.catalog_data enable row level security;
 alter table public.orders enable row level security;
 
-drop policy if exists "menu_public_read" on public.menu_data;
-create policy "menu_public_read" on public.menu_data for select using (true);
+drop policy if exists "catalog_public_read" on public.catalog_data;
+create policy "catalog_public_read" on public.catalog_data for select using (true);
 
-drop policy if exists "menu_owner_write" on public.menu_data;
-create policy "menu_owner_write" on public.menu_data
+drop policy if exists "catalog_owner_write" on public.catalog_data;
+create policy "catalog_owner_write" on public.catalog_data
   for all to authenticated using (true) with check (true);
 
 drop policy if exists "orders_owner_read" on public.orders;
@@ -33,8 +30,8 @@ create policy "orders_owner_read" on public.orders
   for select to authenticated using (true);
 
 grant usage on schema public to anon, authenticated;
-grant select on public.menu_data to anon, authenticated;
-grant insert, update, delete on public.menu_data to authenticated;
+grant select on public.catalog_data to anon, authenticated;
+grant insert, update, delete on public.catalog_data to authenticated;
 grant select on public.orders to authenticated;
 
 -- يسجل الطلب فقط. لا يتابع أو يخصم أي مخزون.
@@ -73,12 +70,12 @@ begin
     raise exception 'السلة فارغة' using errcode = '22023';
   end if;
   if jsonb_array_length(v_lines) > 50 then
-    raise exception 'عدد الأصناف كبير جداً (الحد 50)' using errcode = '22023';
+    raise exception 'عدد المنتجات كبير جداً (الحد 50)' using errcode = '22023';
   end if;
 
-  select data into v_menu from public.menu_data where slug = 'main' for update;
+  select data into v_menu from public.catalog_data where slug = 'main' for update;
   if v_menu is null then
-    raise exception 'قائمة المطعم لسه مش محفوظة' using errcode = '22023';
+    raise exception 'كتالوج المتجر لسه مش محفوظ' using errcode = '22023';
   end if;
 
   for v_line in select * from jsonb_array_elements(v_lines)
@@ -86,14 +83,14 @@ begin
     v_item_id := btrim(coalesce(v_line ->> 'itemId', ''));
     v_quantity := floor(coalesce((v_line ->> 'quantity')::numeric, 0))::integer;
     if v_item_id = '' or v_quantity < 1 or v_quantity > 50 then
-      raise exception 'بيانات الصنف أو الكمية غير صالحة' using errcode = '22023';
+      raise exception 'بيانات المنتج أو الكمية غير صالحة' using errcode = '22023';
     end if;
 
     select elem into v_item
       from jsonb_array_elements(v_menu -> 'items') as elem
       where elem ->> 'id' = v_item_id limit 1;
     if v_item is null or coalesce((v_item ->> 'available')::boolean, false) = false then
-      raise exception 'أحد الأصناف لم يعد متاحاً' using errcode = '22023';
+      raise exception 'أحد المنتجات لم يعد متاحاً' using errcode = '22023';
     end if;
 
     v_item_name := coalesce(v_item ->> 'name', '');
@@ -103,7 +100,7 @@ begin
       'quantity', v_quantity, 'unitPrice', v_item_price
     );
 
-    -- الأكثر طلباً يُحسب تلقائياً من الكميات الموجودة في الطلبات المكتملة.
+    -- الأكثر مبيعاً يُحسب تلقائياً من الكميات الموجودة في الطلبات المكتملة.
     select jsonb_agg(
       case when elem ->> 'id' = v_item_id
         then elem || jsonb_build_object(
@@ -118,7 +115,7 @@ begin
 
   v_commerce := v_menu -> 'commerce';
   v_order_type := coalesce(payload ->> 'orderType', 'delivery');
-  if v_order_type not in ('delivery', 'takeaway', 'dinein') then
+  if v_order_type not in ('delivery', 'pickup', 'instore') then
     raise exception 'نوع الطلب غير صالح' using errcode = '22023';
   end if;
 
@@ -142,14 +139,13 @@ begin
       'name', left(btrim(coalesce(payload #>> '{customer,name}', '')), 100),
       'phone', left(btrim(coalesce(payload #>> '{customer,phone}', '')), 30),
       'address', left(btrim(coalesce(payload #>> '{customer,address}', '')), 500),
-      'table', left(btrim(coalesce(payload #>> '{customer,table}', '')), 20),
       'notes', left(btrim(coalesce(payload #>> '{customer,notes}', '')), 500)
     ),
     'orderType', v_order_type, 'lines', v_order_lines, 'total', v_total
   );
 
   insert into public.orders (id, created_at, data) values (v_order_id, v_now, v_order);
-  update public.menu_data
+  update public.catalog_data
     set data = jsonb_set(v_menu, '{updatedAt}', to_jsonb(v_now_iso)), updated_at = v_now
     where slug = 'main';
   return jsonb_build_object('order', v_order);
@@ -164,13 +160,13 @@ begin
   if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
     create publication supabase_realtime;
   end if;
-  if not exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='menu_data') then
-    alter publication supabase_realtime add table public.menu_data;
+  if not exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='catalog_data') then
+    alter publication supabase_realtime add table public.catalog_data;
   end if;
   if not exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='orders') then
     alter publication supabase_realtime add table public.orders;
   end if;
 end $$;
 
-alter table public.menu_data replica identity full;
+alter table public.catalog_data replica identity full;
 alter table public.orders replica identity full;

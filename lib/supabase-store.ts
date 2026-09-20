@@ -1,7 +1,7 @@
 import "server-only";
 
 import {
-  MENU_TABLE,
+  CATALOG_TABLE,
   ORDERS_TABLE,
   PLACE_ORDER_FUNCTION,
   PUBLISHED_SLUG,
@@ -13,8 +13,8 @@ import type { AdminOverview, CartLine, MenuData, OrderType, SavedOrder } from ".
  * مخزن البيانات السحابي — Supabase (Postgres) عن طريق REST API.
  *
  * بيستخدم مفتاح anon العام فقط:
- *   - قراءة القائمة: مسموحة للجميع (العملاء).
- *   - تعديل القائمة وقراءة الطلبات: بتوكن الأدمن (RLS لدور authenticated).
+ *   - قراءة الكتالوج: مسموحة للجميع (العملاء).
+ *   - تعديل الكتالوج وقراءة الطلبات: بتوكن الأدمن (RLS لدور authenticated).
  *   - تسجيل الطلب: عن طريق دالة place_order في قاعدة البيانات.
  */
 
@@ -115,23 +115,23 @@ interface MenuRow {
 }
 
 export async function fetchPublishedMenu(): Promise<RestResult<MenuData>> {
-  const result = await rest<MenuRow[]>(`${MENU_TABLE}?slug=eq.${PUBLISHED_SLUG}&select=slug,data,updated_at&limit=1`);
+  const result = await rest<MenuRow[]>(`${CATALOG_TABLE}?slug=eq.${PUBLISHED_SLUG}&select=slug,data,updated_at&limit=1`);
   if (!result.ok) return { ok: false, status: result.status, data: null, message: result.message, code: result.code };
   const row = result.data?.[0];
-  if (!row?.data) return { ok: false, status: 404, data: null, message: "القائمة غير محفوظة بعد", code: "EMPTY" };
+  if (!row?.data) return { ok: false, status: 404, data: null, message: "الكتالوج غير محفوظ بعد", code: "EMPTY" };
   return { ok: true, status: 200, data: normalizeData(row.data), message: "", code: "" };
 }
 
 /** فحص سريع: هل جداول قاعدة البيانات جاهزة؟ */
 export async function probeSupabaseStore(): Promise<boolean> {
   if (!isSupabaseStoreConfigured()) return false;
-  const result = await rest<Array<{ slug: string }>>(`${MENU_TABLE}?slug=eq.${PUBLISHED_SLUG}&select=slug&limit=1`);
+  const result = await rest<Array<{ slug: string }>>(`${CATALOG_TABLE}?slug=eq.${PUBLISHED_SLUG}&select=slug&limit=1`);
   return result.ok || !NOT_READY_CODES.has(result.code);
 }
 
 export async function savePublishedMenu(menu: MenuData, token: string): Promise<RestResult<MenuData>> {
   const payload = { slug: PUBLISHED_SLUG, data: menu, updated_at: menu.updatedAt };
-  const result = await rest<MenuRow[]>(MENU_TABLE, {
+  const result = await rest<MenuRow[]>(CATALOG_TABLE, {
     method: "POST",
     body: payload,
     token,
@@ -143,7 +143,7 @@ export async function savePublishedMenu(menu: MenuData, token: string): Promise<
 
 export interface PlaceOrderInput {
   lines: CartLine[];
-  customer: { name?: string; phone?: string; address?: string; table?: string; notes?: string };
+  customer: { name?: string; phone?: string; address?: string; notes?: string };
   orderType: OrderType;
   total: number;
 }

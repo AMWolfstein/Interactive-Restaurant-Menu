@@ -1,10 +1,10 @@
 /**
- * نماذج بيانات المطعم المشتركة بين الواجهة والباك إند.
+ * نماذج بيانات المتجر المشتركة بين الواجهة والباك إند.
  */
 
 export type SiteLanguage = "ar" | "en";
 export type ThemeMode = "dark" | "light";
-export type OrderType = "delivery" | "takeaway" | "dinein";
+export type OrderType = "delivery" | "pickup" | "instore";
 
 export interface Category {
   id: string;
@@ -38,13 +38,13 @@ export interface MenuItem {
   image?: string;
   available: boolean;
   isNew: boolean;
-  /** 0 = بارد (الافتراضي)، 1 = حار */
+  /** 0 = عادي (الافتراضي)، 1 = حار */
   spicy: 0 | 1;
 }
 
 export interface BrandSettings {
-  restaurantName: string;
-  restaurantNameEn: string;
+  storeName: string;
+  storeNameEn: string;
   tagline: string;
   taglineEn: string;
   logo: string;
@@ -71,7 +71,7 @@ export interface ContactSettings {
   instagram: string;
   facebook: string;
   openingHours: string;
-  /** فتح/قفل المطعم يدوياً من الأدمين */
+  /** فتح/قفل المحل يدوياً من الأدمين */
   isOpen: boolean;
   closedMessage: string;
   footerNote: string;
@@ -118,7 +118,7 @@ export interface MenuData {
 export interface SavedOrder {
   id: string;
   createdAt: string;
-  customer: { name: string; phone: string; address: string; table: string; notes: string };
+  customer: { name: string; phone: string; address: string; notes: string };
   orderType: OrderType;
   lines: Array<{ itemId: string; name: string; quantity: number; unitPrice: number }>;
   total: number;

@@ -35,7 +35,7 @@ export function SiteTheme() {
     root.style.setProperty("--accent", brand.accent);
     root.style.setProperty("--accent-contrast", readableOn(brand.accent));
     root.style.setProperty("--radius", `${brand.radius}px`);
-    // لوحة التحكم تعرض اختيار المطعم، أما صفحة القائمة فتحترم
+    // لوحة التحكم تعرض اختيار المحل، أما صفحة الكتالوج فتحترم
     // اختيار كل زائر المحفوظ محلياً على جهازه.
     const isAdmin = pathname?.startsWith("/admin");
     root.dataset.theme = isAdmin ? brand.theme : visitorTheme(brand.theme);
@@ -43,7 +43,7 @@ export function SiteTheme() {
     root.lang = brand.language;
     root.dir = brand.language === "en" ? "ltr" : "rtl";
 
-    const name = pick(brand.language, brand.restaurantName, brand.restaurantNameEn) || "Restaurant Menu";
+    const name = pick(brand.language, brand.storeName, brand.storeNameEn) || "Store Catalog";
     document.title = isAdmin
       ? `لوحة التحكم — ${name}`
       : `${name} — ${pick(brand.language, brand.tagline, brand.taglineEn)}`;

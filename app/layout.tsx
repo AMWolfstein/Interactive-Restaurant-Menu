@@ -5,19 +5,19 @@ import { GOOGLE_FONTS_HREF } from "@/lib/fonts";
 import { SiteTheme } from "@/components/site-theme";
 
 export const metadata: Metadata = {
-  title: "قائمة المطعم الذكية | اطلب على واتساب",
+  title: "كتالوج المتجر الذكي | اطلب على واتساب",
   description:
-    "قائمة مطعم متكاملة لعرض المنتجات والأسعار واستقبال الطلبات عبر واتساب.",
-  applicationName: "Smart Restaurant Menu",
+    "كتالوج متجر متكامل لعرض المنتجات والأسعار واستقبال الطلبات عبر واتساب.",
+  applicationName: "Smart Store Catalog",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "قائمة المطعم",
+    title: "كتالوج المتجر",
   },
   openGraph: {
-    title: "قائمة المطعم الذكية",
-    description: "اطلب بدقيقتين والطلب يوصلك على باب البيت 🍔",
+    title: "كتالوج المتجر الذكي",
+    description: "اطلب بدقيقتين والطلب يوصلك على باب البيت 🛍️",
     type: "website",
     locale: "ar_EG",
   },

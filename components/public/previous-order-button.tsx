@@ -3,7 +3,7 @@
 import { History } from "lucide-react";
 import type { CartLine, SiteLanguage } from "@/lib/types";
 
-export const PREVIOUS_ORDER_KEY = "restaurant-menu:previous-order:v1";
+export const PREVIOUS_ORDER_KEY = "store-catalog:previous-order:v1";
 
 export function PreviousOrderButton({
   language,
