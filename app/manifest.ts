@@ -8,8 +8,11 @@ export const revalidate = 0;
 
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
   let logo = "";
+  let storeName = "كتالوج المتجر";
   try {
-    logo = (await getMenu()).brand.logo.trim();
+    const menu = await getMenu();
+    logo = menu.brand.logo.trim();
+    storeName = menu.brand.storeName.trim() || storeName;
   } catch {
     // A storage outage must not make the PWA manifest unavailable.
   }
@@ -23,8 +26,8 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     : undefined;
 
   return {
-    name: "كتالوج المتجر الذكي",
-    short_name: "كتالوج المتجر",
+    name: storeName,
+    short_name: storeName.slice(0, 24),
     description: "كتالوج منتجات تفاعلي للطلب السريع عبر واتساب",
     start_url: "/",
     scope: "/",

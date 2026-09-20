@@ -32,6 +32,7 @@ import {
   useToast,
 } from "@/components/ui";
 import { cx } from "@/lib/cx";
+import { isItemOnOffer } from "@/lib/offers";
 
 type Draft = Omit<MenuItem, "id">;
 
@@ -77,7 +78,7 @@ export function ItemsPanel({ intent, nonce }: { intent?: string; nonce: number }
       .filter((item) => (categoryFilter === "all" ? true : item.categoryId === categoryFilter))
       .filter((item) => {
         if (only === "soldOut") return !item.available;
-        if (only === "offers") return !!item.oldPrice && item.oldPrice > item.price;
+        if (only === "offers") return isItemOnOffer(item);
         if (only === "noImage") return !item.image?.trim();
         return true;
       })

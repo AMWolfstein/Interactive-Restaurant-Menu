@@ -38,9 +38,18 @@ function firestoreDate(value: unknown): { day: number; month: number; year: numb
   return Number.isNaN(date.getTime()) ? null : { day: date.getDate(), month: date.getMonth() + 1, year: date.getFullYear() };
 }
 
+/** هل الملف صادر من مشروع Menyu القديم (Firebase)؟ */
+export function isLegacyMenyuBackup(raw: unknown): raw is Plain {
+  if (!isPlainObject(raw) || !Array.isArray(raw.items) || !Array.isArray(raw.categories)) return false;
+  // وجود restaurant أو حقول Firestore القديمة يميّز النسخة عن تصدير الكتالوج الحالي.
+  return isPlainObject(raw.restaurant) || raw.items.some((item) =>
+    isPlainObject(item) && ("imageUrl" in item || "supplierId" in item || "orderCount" in item),
+  );
+}
+
 /** يحوّل Backup الموقع القديم (Firebase) إلى شكل المنيو الحالي تلقائياً. */
 function migrateLegacyBackup(raw: unknown): unknown {
-  if (!isPlainObject(raw) || !Array.isArray(raw.items)) return raw;
+  if (!isLegacyMenyuBackup(raw)) return raw;
   const restaurant = isPlainObject(raw.restaurant) ? raw.restaurant : {};
   const categories = Array.isArray(raw.categories)
     ? raw.categories.filter(isPlainObject).map((c, index) => ({
@@ -51,10 +60,17 @@ function migrateLegacyBackup(raw: unknown): unknown {
       }))
     : [];
   const suppliers = Array.isArray(raw.suppliers)
-    ? raw.suppliers.filter(isPlainObject).map((s, index) => ({ id: String(s.id ?? `supplier-${index}`), name: String(s.name ?? s.id ?? ""), visible: true }))
+    ? raw.suppliers
+      .filter(isPlainObject)
+      .map((s, index) => ({ id: String(s.id ?? `supplier-${index}`), name: String(s.name ?? s.id ?? ""), visible: true }))
+      .filter((supplier) => Boolean(supplier.name.trim()))
     : [];
+  // الموقع القديم كان يخزّن supplierId داخل المنتج، بينما الواجهة الجديدة تعرض الاسم.
+  // نحوله هنا كي تظهر أسماء الموردين ويعمل فلتر المورد فور الاستيراد.
+  const supplierNameById = new Map(suppliers.map((supplier) => [supplier.id, supplier.name]));
 
-  const items = raw.items.filter(isPlainObject).map((item, index) => {
+  const legacyItems = Array.isArray(raw.items) ? raw.items : [];
+  const items = legacyItems.filter(isPlainObject).map((item, index) => {
     const variants = Array.isArray(item.variants)
       ? item.variants.filter(isPlainObject).map((variant, variantIndex) => {
           const end = firestoreDate(variant.discountEndsAt);
@@ -70,14 +86,17 @@ function migrateLegacyBackup(raw: unknown): unknown {
         })
       : [];
     const end = firestoreDate(item.discountEndsAt);
+    const created = firestoreDate(item.createdAt);
     const regular = Number(item.price ?? 0);
     const sale = item.discountPrice == null ? regular : Number(item.discountPrice);
+    const legacySupplierId = String(item.supplierId ?? "");
     return {
       id: String(item.id ?? `item-${index}`),
       categoryId: String(item.categoryId ?? categories[0]?.id ?? ""),
       name: String(item.name ?? "منتج"),
       description: String(item.description ?? ""),
-      supplier: item.supplierId ? String(item.supplierId) : "",
+      supplier: supplierNameById.get(legacySupplierId) ?? legacySupplierId,
+      ...(typeof item.createdAt === "string" ? { createdAt: item.createdAt } : created ? { createdAt: new Date(created.year, created.month - 1, created.day).toISOString() } : {}),
       price: Number.isFinite(sale) ? sale : 0,
       oldPrice: sale < regular ? regular : null,
       image: typeof item.imageUrl === "string" ? item.imageUrl : "",
@@ -169,6 +188,7 @@ export function normalizeData(raw: unknown): MenuData {
       // النظام الحالي له اختياران فقط: عادي افتراضياً أو حار.
       spicy: item.spicy > 0 ? 1 : 0,
       salesCount: Math.max(0, Math.floor(item.salesCount ?? 0)),
+      createdAt: typeof item.createdAt === "string" && !Number.isNaN(new Date(item.createdAt).getTime()) ? item.createdAt : undefined,
       offerEndDay: item.offerEndDay ?? null,
       offerEndMonth: item.offerEndMonth ?? null,
       offerEndYear: item.offerEndYear ?? null,

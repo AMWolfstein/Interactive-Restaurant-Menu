@@ -15,8 +15,29 @@ create table if not exists public.orders (
 
 create index if not exists orders_created_at_idx on public.orders (created_at desc);
 
+-- نسخ كاملة من الكتالوج: ينشئها الـ Cron أو الأدمن من خلال API آمن.
+-- لا توجد سياسة قراءة عامة: service_role فقط يقرأها ويعيدها بعد التحقق من جلسة الأدمن.
+create table if not exists public.catalog_backups (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  reason text not null check (reason in ('scheduled', 'manual')),
+  data jsonb not null
+);
+create index if not exists catalog_backups_created_at_idx on public.catalog_backups (created_at desc);
+
+-- اشتراكات Web Push لا تُقرأ أو تُعدّل مباشرةً من المتصفح.
+create table if not exists public.push_subscriptions (
+  endpoint text primary key check (length(endpoint) between 20 and 2000),
+  p256dh text not null check (length(p256dh) between 20 and 400),
+  auth text not null check (length(auth) between 8 and 200),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 alter table public.catalog_data enable row level security;
 alter table public.orders enable row level security;
+alter table public.catalog_backups enable row level security;
+alter table public.push_subscriptions enable row level security;
 
 drop policy if exists "catalog_public_read" on public.catalog_data;
 create policy "catalog_public_read" on public.catalog_data for select using (true);
@@ -33,6 +54,10 @@ grant usage on schema public to anon, authenticated;
 grant select on public.catalog_data to anon, authenticated;
 grant insert, update, delete on public.catalog_data to authenticated;
 grant select on public.orders to authenticated;
+-- هذان الجدولان مقفولان بـ RLS بدون policy عامة. API السيرفر فقط يستخدم service_role
+-- (المفتاح لا يصل إطلاقاً للمتصفح) لإنشاء النسخ وإرسال الإشعارات.
+grant all on public.catalog_backups to service_role;
+grant all on public.push_subscriptions to service_role;
 
 -- يسجل الطلب فقط. لا يتابع أو يخصم أي مخزون.
 create or replace function public.place_order(payload jsonb)

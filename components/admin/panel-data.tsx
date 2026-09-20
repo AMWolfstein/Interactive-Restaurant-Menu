@@ -16,6 +16,7 @@ import {
 import { useMenu } from "@/lib/use-menu";
 import { useAdminSession } from "@/lib/use-admin-session";
 import { Button, Panel, TextInput, Toast, useToast } from "@/components/ui";
+import { BackupPanel } from "./backup-panel";
 
 export function DataPanel() {
   const { data, exportJson, importJson, resetToDefaults, storageKb, isCustomized, saveError } = useMenu();
@@ -28,7 +29,6 @@ export function DataPanel() {
   const json = exportJson();
   const siteUrl = typeof window !== "undefined" ? window.location.origin : "";
   const menuUrl = `${siteUrl}/`;
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=16&data=${encodeURIComponent(menuUrl)}`;
 
   const copy = async (text: string, message: string) => {
     try {
@@ -54,7 +54,14 @@ export function DataPanel() {
     if (!file) return;
     const text = await file.text();
     const result = importJson(text);
-    show(result.ok ? "تم الاستيراد وحُفظ في الباك إند ✅" : result.error ?? "حصلت مشكلة", result.ok ? "success" : "error");
+    show(
+      result.ok
+        ? result.legacy
+          ? "تم تحويل Backup الموقع القديم واستيراده بنجاح ✅"
+          : "تم الاستيراد وحُفظ في الباك إند ✅"
+        : result.error ?? "حصلت مشكلة",
+      result.ok ? "success" : "error",
+    );
     if (fileRef.current) fileRef.current.value = "";
   };
 
@@ -87,10 +94,12 @@ export function DataPanel() {
         )}
       </Panel>
 
+      <BackupPanel />
+
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title="استيراد نسخة احتياطية" icon={<Upload className="h-4 w-4" />}>
           <p className="mb-3 text-[11px] leading-relaxed text-muted">
-            اختار ملف JSON صدرته قبل كده وهيحلّ محل بيانات الموقع في الباك إند فوراً.
+            اختار JSON صادر من الموقع الحالي أو Backup مشروع Menyu القديم؛ النسخة القديمة تتحوّل تلقائياً قبل الحفظ. الاستيراد يحلّ محل بيانات الموقع فوراً.
           </p>
           <input
             ref={fileRef}
@@ -116,7 +125,10 @@ export function DataPanel() {
                 size="sm"
                 onClick={() => {
                   const result = importJson(paste);
-                  show(result.ok ? "تم الاستيراد ✅" : result.error ?? "خطأ", result.ok ? "success" : "error");
+                  show(
+                    result.ok ? (result.legacy ? "تم تحويل نسخة الموقع القديم واستيرادها ✅" : "تم الاستيراد ✅") : result.error ?? "خطأ",
+                    result.ok ? "success" : "error",
+                  );
                   if (result.ok) setPaste("");
                 }}
               >
@@ -167,20 +179,29 @@ export function DataPanel() {
                 <Copy className="h-3.5 w-3.5" /> نسخ اللينك
               </Button>
               <a
-                href={qrUrl}
+                href="/qr"
                 target="_blank"
                 rel="noopener"
                 className="inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink transition hover:border-accent/60 hover:text-accent"
               >
-                <QrCode className="h-3.5 w-3.5" /> تكبير الكود للطباعة
+                <QrCode className="h-3.5 w-3.5" /> فتح وتحميل كود QR
+              </a>
+              <a
+                href="/menu"
+                target="_blank"
+                rel="noopener"
+                className="inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink transition hover:border-accent/60 hover:text-accent"
+              >
+                <Download className="h-3.5 w-3.5" /> كتالوج للطباعة
               </a>
             </div>
             <p className="text-[11px] leading-relaxed text-muted">
-              الكود بيتولّد من خدمة صورة عامة (qrserver.com) وقت العرض، وبيقرأ دومين الموقع الحالي تلقائياً.
+              الكود يتولّد داخل المتصفح من الدومين الحالي مباشرةً، ويمكن تنزيله PNG أو طباعته بدون أي خدمة QR خارجية.
             </p>
           </div>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={qrUrl} alt="QR code للمتجر" className="h-28 w-28 rounded-xl border border-line bg-white p-1.5" />
+          <a href="/qr" target="_blank" rel="noopener" className="grid h-28 w-28 place-items-center rounded-xl border border-line bg-surface-2 text-center text-[11px] font-bold text-accent transition hover:border-accent">
+            <QrCode className="mb-1 h-8 w-8" /> فتح QR
+          </a>
         </div>
       </Panel>
 
