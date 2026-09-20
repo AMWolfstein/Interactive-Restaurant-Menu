@@ -62,7 +62,7 @@ export function DataPanel() {
     <div className="space-y-4">
       <Panel
         title="نسخة احتياطية من بيانات الباك إند"
-        description="كل الإعدادات والأصناف المحفوظة في قاعدة البيانات"
+        description="كل الإعدادات والمنتجات المحفوظة في قاعدة البيانات"
         icon={<Database className="h-4 w-4" />}
       >
         <div className="flex flex-wrap items-center gap-2">
@@ -147,7 +147,7 @@ export function DataPanel() {
               الدخول للوحة يتم بالإيميل والباسورد من حساب الأدمن في Supabase (Authentication → Users) فقط.
             </p>
             <p className="text-muted">
-              كل طلبات الأدمن (حفظ القائمة وقراءة الطلبات) بتتحقق من access token على السيرفر،
+              كل طلبات الأدمن (حفظ الكتالوج وقراءة الطلبات) بتتحقق من access token على السيرفر،
               وأي طلب من غير توكن صالح بيرجع 401. إدارة الحسابات (إضافة أو إيقاف مستخدم) من لوحة Supabase.
             </p>
           </div>
@@ -155,15 +155,15 @@ export function DataPanel() {
       </div>
 
       <Panel
-        title="رابط القائمة وكود QR"
-        description="اطبعه وحطه على الطرابيزات أو على استيكر الدليفري"
+        title="رابط المتجر وكود QR"
+        description="اطبعه وحطه على الكاشير أو على شنط التغليف"
         icon={<QrCode className="h-4 w-4" />}
       >
         <div className="flex flex-wrap items-start gap-4">
           <div className="min-w-56 flex-1 space-y-2">
             <TextInput readOnly value={menuUrl} className="font-mono text-xs" />
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={() => copy(menuUrl, "لينك القائمة اتنسخ")}>
+              <Button size="sm" variant="outline" onClick={() => copy(menuUrl, "لينك المتجر اتنسخ")}>
                 <Copy className="h-3.5 w-3.5" /> نسخ اللينك
               </Button>
               <a
@@ -180,7 +180,7 @@ export function DataPanel() {
             </p>
           </div>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={qrUrl} alt="QR code للقائمة" className="h-28 w-28 rounded-xl border border-line bg-white p-1.5" />
+          <img src={qrUrl} alt="QR code للمتجر" className="h-28 w-28 rounded-xl border border-line bg-white p-1.5" />
         </div>
       </Panel>
 

@@ -20,7 +20,7 @@
 # production
 /build
 
-# local backend database (use Upstash Redis in production)
+# ملف التطوير المحلي (في الإنتاج البيانات في Supabase Postgres)
 /data/*.json
 /data/*.tmp
 

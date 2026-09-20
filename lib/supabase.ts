@@ -1,10 +1,10 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 /**
- * عميل Supabase للمتصفح — مسؤوليته الوحيدة هي مصادقة صاحب المطعم
+ * عميل Supabase للمتصفح — مسؤوليته الوحيدة هي مصادقة صاحب المحل
  * (إيميل + باسورد من Authentication → Users) والحصول على access token.
  *
- * القراءة والكتابة على بيانات المطعم (القائمة / الطلبات) بتتم عن طريق
+ * القراءة والكتابة على بيانات المتجر (الكتالوج / الطلبات) بتتم عن طريق
  * API routes في الباك إند — شوف lib/server-database.ts.
  *
  * المفاتيح المستخدمة هنا هي المفاتيح العامة بس (NEXT_PUBLIC_):
@@ -16,8 +16,8 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 export const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim();
 export const SUPABASE_ANON_KEY = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "").trim();
 
-/** الجدول اللي فيه صف القائمة */
-export const MENU_TABLE = "menu_data";
+/** الجدول اللي فيه صف الكتالوج */
+export const CATALOG_TABLE = "catalog_data";
 /** الصف المنشور اللي بيقراه العملاء */
 export const PUBLISHED_SLUG = "main";
 /** جدول الطلبات */
@@ -25,7 +25,7 @@ export const ORDERS_TABLE = "orders";
 /** دالة تسجيل الطلب في قاعدة البيانات */
 export const PLACE_ORDER_FUNCTION = "place_order";
 /** مفتاح تخزين جلسة الدخول في المتصفح */
-export const AUTH_STORAGE_KEY = "royal-menu:sb-auth:v1";
+export const AUTH_STORAGE_KEY = "store-catalog:sb-auth:v1";
 
 /** true لو متغيرات بيئة Supabase موجودة */
 export function isSupabaseConfigured(): boolean {
@@ -47,7 +47,7 @@ export function createBrowserClient(): SupabaseClient | null {
       detectSessionInUrl: false,
       storageKey: AUTH_STORAGE_KEY,
     },
-    global: { headers: { "x-client-info": "royal-menu" } },
+    global: { headers: { "x-client-info": "store-catalog" } },
   });
 
   return browserClient;

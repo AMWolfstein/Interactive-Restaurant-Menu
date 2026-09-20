@@ -23,9 +23,9 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     : undefined;
 
   return {
-    name: "قائمة المطعم الذكية",
-    short_name: "قائمة المطعم",
-    description: "قائمة مطعم تفاعلية للطلب السريع عبر واتساب",
+    name: "كتالوج المتجر الذكي",
+    short_name: "كتالوج المتجر",
+    description: "كتالوج منتجات تفاعلي للطلب السريع عبر واتساب",
     start_url: "/",
     scope: "/",
     display: "standalone",

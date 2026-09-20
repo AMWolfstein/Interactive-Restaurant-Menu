@@ -11,6 +11,7 @@ import {
   Receipt,
   Send,
   ShoppingBag,
+  Store,
   Trash2,
   Truck,
 } from "lucide-react";
@@ -25,8 +26,8 @@ import { PREVIOUS_ORDER_KEY } from "./previous-order-button";
 
 const TYPE_ICON: Record<OrderType, typeof Truck> = {
   delivery: Truck,
-  takeaway: Receipt,
-  dinein: MapPin,
+  pickup: Receipt,
+  instore: Store,
 };
 
 export function CartSheet({
@@ -57,7 +58,6 @@ export function CartSheet({
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
-  const [table, setTable] = useState("");
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [sending, setSending] = useState(false);
@@ -65,7 +65,7 @@ export function CartSheet({
   const totals = useMemo(() => computeTotals(lines, commerce, orderType), [lines, commerce, orderType]);
   const belowMinimum = commerce.minimumOrder > 0 && totals.subtotal > 0 && totals.subtotal < commerce.minimumOrder;
   const needsAddress = orderType === "delivery" && commerce.requireAddress;
-  const needsPhone = orderType !== "dinein" && commerce.requirePhone;
+  const needsPhone = orderType !== "instore" && commerce.requirePhone;
 
   if (!open) return null;
 
@@ -77,8 +77,6 @@ export function CartSheet({
       next.phone = en ? "Invalid mobile number" : "رقم الموبايل مش كامل";
     if (needsAddress && address.trim().length < 8)
       next.address = en ? "Please write the detailed address" : "اكتب العنوان بالتفصيل (الشارع، رقم العقار، الدور، الشقة)";
-    if (orderType === "dinein" && !table.trim())
-      next.table = en ? "Table number is required" : "اكتب رقم الترابيزة";
     if (belowMinimum)
       next.total = en
         ? `Minimum order is ${formatPrice(commerce.minimumOrder, lang, commerce)}`
@@ -91,11 +89,11 @@ export function CartSheet({
     if (!validate() || sending) return;
     const number = toWhatsappNumber(contact.whatsapp);
     if (!number) {
-      setErrors({ total: en ? "The shop did not set a WhatsApp number" : "صاحب المطعم لسه ما حددش رقم واتساب" });
+      setErrors({ total: en ? "The shop did not set a WhatsApp number" : "صاحب المحل لسه ما حددش رقم واتساب" });
       return;
     }
     const message = buildOrderMessage(
-      { name, phone, address, table, notes, orderType, lines, totals },
+      { name, phone, address, notes, orderType, lines, totals },
       { lang, brand, contact, commerce },
     );
     const whatsappWindow = window.open("about:blank", "_blank");
@@ -105,7 +103,7 @@ export function CartSheet({
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({
           lines: lines.map(({ line }) => line), orderType, total: totals.total,
-          customer: { name, phone, address, table, notes },
+          customer: { name, phone, address, notes },
         }),
       });
       const result = await response.json();
@@ -192,7 +190,7 @@ export function CartSheet({
           <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
             {/* نوع الطلب */}
             <div className="grid grid-cols-3 gap-2">
-              {(["delivery", "takeaway", "dinein"] as OrderType[])
+              {(["delivery", "pickup", "instore"] as OrderType[])
                 .filter((type) => commerce.orderTypes.includes(type))
                 .map((type) => {
                   const Icon = TYPE_ICON[type];
@@ -216,7 +214,7 @@ export function CartSheet({
                 })}
             </div>
 
-            {/* الأصناف */}
+            {/* المنتجات */}
             <ul className="space-y-2.5">
               {lines.map(({ line, item }) => (
                 <li
@@ -270,21 +268,18 @@ export function CartSheet({
               {needsAddress
                 ? field("address", en ? "Detailed address" : "العنوان بالتفصيل", address, setAddress)
                 : null}
-              {orderType === "dinein"
-                ? field("table", en ? "Table number" : "رقم الترابيزة", table, setTable)
-                : null}
               {commerce.enableNotes ? (
                 <textarea
                   value={notes}
                   onChange={(event) => setNotes(event.target.value)}
                   rows={2}
-                  placeholder={en ? "Notes for the kitchen (optional)" : "ملاحظات للمطبخ (اختياري)"}
+                  placeholder={en ? "Notes for the seller (optional)" : "ملاحظات للبائع (اختياري)"}
                   className="w-full resize-none rounded-xl border border-line bg-surface-2 px-3.5 py-3 text-sm outline-none focus:border-accent"
                 />
               ) : null}
             </div>
 
-            {orderType === "takeaway" && contact.address ? (
+            {orderType === "pickup" && contact.address ? (
               <p className="flex items-start gap-2 rounded-xl border border-line bg-surface-2/60 p-3 text-[11px] leading-relaxed text-muted">
                 <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
                 {en ? "Pickup address: " : "استلام من: "}
@@ -364,7 +359,7 @@ export function CartSheet({
               href={`tel:${contact.phone.replace(/\s/g, "")}`}
               className="flex items-center justify-center gap-2 rounded-xl border border-line py-2.5 text-xs font-bold text-muted transition hover:text-ink"
             >
-              <Phone className="h-3.5 w-3.5" /> {en ? "Call the branch" : "الاتصال بالفرع"}
+              <Phone className="h-3.5 w-3.5" /> {en ? "Call the store" : "الاتصال بالمحل"}
             </a>
           ) : null}
           <button

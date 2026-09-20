@@ -1,4 +1,4 @@
-const CACHE_NAME = "restaurant-menu-v2";
+const CACHE_NAME = "store-catalog-v2";
 // Do not precache the manifest: it is generated from the current brand
 // settings and must be refetched when the owner changes the header logo.
 const OFFLINE_URLS = ["/"];

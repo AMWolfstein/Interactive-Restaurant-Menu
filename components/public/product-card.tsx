@@ -31,7 +31,7 @@ export function ProductImage({
         )}
         aria-hidden
       >
-        🍽️
+        📦
       </div>
     );
   }
@@ -130,7 +130,7 @@ export function ProductCard({
               </span>
             ) : null}
             {item.spicy > 0 ? (
-              <span className="inline-flex items-center gap-0.5 text-red-500" title={en ? "Spicy" : "حار"}>
+              <span className="inline-flex items-center gap-0.5 text-red-500" title={en ? "Hot" : "حار"}>
                 {Array.from({ length: item.spicy }).map((_, index) => (
                   <Flame key={index} className="h-3 w-3 fill-red-500/25" />
                 ))}

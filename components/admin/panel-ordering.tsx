@@ -21,8 +21,8 @@ import {
 
 const TYPE_LABELS: Record<OrderType, string> = {
   delivery: "🛵 توصيل",
-  takeaway: "🥡 استلام من الفرع",
-  dinein: "🍽️ أكل في المطعم",
+  pickup: "🛍️ استلام من المحل",
+  instore: "🏪 من داخل المحل",
 };
 
 export function OrderingPanel() {
@@ -42,8 +42,8 @@ export function OrderingPanel() {
   });
 
   const demoLines: DetailedLine[] = [
-    { line: { itemId: "demo1", quantity: 2 }, item: demoItem("demo1", data.items[0]?.name ?? "برجر دبل تشيز", data.items[0]?.price ?? 180) },
-    { line: { itemId: "demo2", quantity: 1 }, item: demoItem("demo2", "بطاطس كريسبي بالجبنة", 65) },
+    { line: { itemId: "demo1", quantity: 2 }, item: demoItem("demo1", data.items[0]?.name ?? "أرز مصري فاخر — 1 كجم", data.items[0]?.price ?? 55) },
+    { line: { itemId: "demo2", quantity: 1 }, item: demoItem("demo2", "شاي العروسة — 250 جم", 60) },
   ];
   const demoTotals = computeTotals(demoLines, commerce, "delivery");
 
@@ -52,8 +52,7 @@ export function OrderingPanel() {
       name: "أحمد محمود",
       phone: "0101 234 5678",
       address: "التجمع الخامس، شارع التسعين، كمبوند النخيل، عمارة ٤ شقة ١٢",
-      table: "",
-      notes: "من غير مخلل + استعجال",
+      notes: "التسليم بعد المغرب لو سمحت",
       orderType: "delivery",
       lines: demoLines,
       totals: demoTotals,
@@ -65,7 +64,7 @@ export function OrderingPanel() {
     <div className="space-y-4">
       <Panel title="بيانات التواصل والاستلام" description="الرقم ده اللي الطلبات هتروحه على واتساب" icon={<MessageCircle className="h-4 w-4" />}>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="رقم واتساب المطعم" hint="بصيغة دولية من غير + أو صفر في الأول (مثال: 2010xxxxxxxx)">
+          <Field label="رقم واتساب المحل" hint="بصيغة دولية من غير + أو صفر في الأول (مثال: 2010xxxxxxxx)">
             <TextInput
               value={contact.whatsapp}
               onChange={(event) => patchContact({ whatsapp: event.target.value })}
@@ -85,15 +84,15 @@ export function OrderingPanel() {
           <Field label="مواعيد العمل">
             <TextInput value={contact.openingHours} onChange={(event) => patchContact({ openingHours: event.target.value })} />
           </Field>
-          <Field label="رسالة القفل" hint="بتظهر فوق القائمة وفي السلة لما المطعم مقفول">
+          <Field label="رسالة القفل" hint="بتظهر فوق الكتالوج وفي السلة لما المحل مقفول">
             <TextInput value={contact.closedMessage} onChange={(event) => patchContact({ closedMessage: event.target.value })} />
           </Field>
         </div>
 
         <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
           <Toggle
-            label="المطعم مفتوح الآن"
-            description="لما تقفله الموقع يفضل يعرض الأكل بس يقفل زر الإرسال"
+            label="المحل مفتوح الآن"
+            description="لما تقفله الموقع يفضل يعرض المنتجات بس يقفل زر الإرسال"
             checked={contact.isOpen}
             onChange={(checked) => patchContact({ isOpen: checked })}
           />

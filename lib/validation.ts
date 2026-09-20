@@ -1,5 +1,5 @@
 /**
- * دوال تحقق مشتركة للأمان - للـ demo/portfolio
+ * دوال تحقق مشتركة للأمان
  */
 
 export function isSafeHttpUrl(url: string): boolean {
@@ -31,7 +31,7 @@ export function sanitizeText(input: string, maxLen = 500): string {
 }
 
 export function isValidOrderType(value: string): boolean {
-  return ["delivery", "takeaway", "dinein"].includes(value);
+  return ["delivery", "pickup", "instore"].includes(value);
 }
 
 // تحقق من ملف JSON المستورد للأدمن
@@ -40,15 +40,15 @@ export function validateImportedMenu(data: unknown): { ok: true } | { ok: false;
   const d = data as Record<string, unknown>;
   if (!Array.isArray(d.items)) return { ok: false, error: "الملف لازم يحتوي على items" };
   if (!Array.isArray(d.categories)) return { ok: false, error: "الملف لازم يحتوي على categories" };
-  if (d.items.length > 200) return { ok: false, error: "عدد الأصناف كبير جداً (الحد 200)" };
+  if (d.items.length > 200) return { ok: false, error: "عدد المنتجات كبير جداً (الحد 200)" };
   for (const item of d.items as Array<Record<string, unknown>>) {
-    if (typeof item.name !== "string" || !item.name.trim()) return { ok: false, error: "كل صنف لازم له اسم" };
+    if (typeof item.name !== "string" || !item.name.trim()) return { ok: false, error: "كل منتج لازم له اسم" };
     if (typeof item.price !== "number" || item.price < 0 || item.price > 100000)
-      return { ok: false, error: `سعر غير صالح للصنف: ${item.name}` };
+      return { ok: false, error: `سعر غير صالح للمنتج: ${item.name}` };
     if (item.image && typeof item.image === "string" && item.image.length > 500_000)
-      return { ok: false, error: `صورة كبيرة جداً للصنف: ${item.name}` };
+      return { ok: false, error: `صورة كبيرة جداً للمنتج: ${item.name}` };
     if (item.image && typeof item.image === "string" && item.image.trim() && !isSafeHttpUrl(item.image))
-      return { ok: false, error: `رابط صورة غير آمن للصنف: ${item.name}` };
+      return { ok: false, error: `رابط صورة غير آمن للمنتج: ${item.name}` };
   }
   const jsonSize = JSON.stringify(data).length;
   if (jsonSize > 4_000_000) return { ok: false, error: "حجم الملف كبير جداً (الحد 4MB)" };

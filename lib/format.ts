@@ -9,8 +9,8 @@ import type {
 
 export const ORDER_TYPE_LABEL: Record<OrderType, { ar: string; en: string }> = {
   delivery: { ar: "توصيل", en: "Delivery" },
-  takeaway: { ar: "استلام من الفرع", en: "Takeaway" },
-  dinein: { ar: "أكل داخل المطعم", en: "Dine-in" },
+  pickup: { ar: "استلام من المحل", en: "Pickup" },
+  instore: { ar: "من داخل المحل", en: "In-store" },
 };
 
 /** يرجّع النص المناسب للغة الحالية مع رجوع للغة التانية لو فاضية */
@@ -84,7 +84,6 @@ export interface OrderPayload {
   name: string;
   phone: string;
   address: string;
-  table: string;
   notes: string;
   orderType: OrderType;
   lines: { line: CartLine; item: MenuItem }[];
@@ -93,21 +92,21 @@ export interface OrderPayload {
 
 /**
  * يبني رسالة واتساب من القالب اللي الأدمين كاتبه — يدعم البلايسهولدرز دي:
- * {restaurantName} {name} {phone} {orderType} {addressLine} {items}
+ * {storeName} {name} {phone} {orderType} {addressLine} {items}
  * {notes} {total} {subtotal} {delivery} {service} {currency} {count} {date}
  */
 export function buildOrderMessage(
   payload: OrderPayload,
   opts: {
     lang: SiteLanguage;
-    brand: { restaurantName: string; restaurantNameEn: string };
+    brand: { storeName: string; storeNameEn: string };
     contact: ContactSettings;
     commerce: CommerceSettings;
   },
 ): string {
   const { lang, commerce } = opts;
   const en = lang === "en";
-  const restaurantName = en ? opts.brand.restaurantNameEn || opts.brand.restaurantName : opts.brand.restaurantName;
+  const storeName = en ? opts.brand.storeNameEn || opts.brand.storeName : opts.brand.storeName;
   const typeLabel = ORDER_TYPE_LABEL[payload.orderType][en ? "en" : "ar"];
   const unit = en ? commerce.currencyEn : commerce.currency;
 
@@ -130,17 +129,13 @@ export function buildOrderMessage(
       ? en
         ? `📍 *Address:* ${payload.address}`
         : `📍 *العنوان:* ${payload.address}`
-      : payload.orderType === "dinein" && payload.table
-        ? en
-          ? `🪑 *Table:* ${payload.table}`
-          : `🪑 *الترابيزة:* ${payload.table}`
-        : "";
+      : "";
 
   const notesValue = payload.notes.trim();
   const fallbackNotes = en ? "None" : "لا يوجد";
 
   const map: Record<string, string> = {
-    restaurantName,
+    storeName,
     name: payload.name || (en ? "Guest" : "عميل"),
     phone: payload.phone || (en ? "-" : "—"),
     orderType: typeLabel,
@@ -177,12 +172,12 @@ export function buildOrderMessage(
 
 function defaultMessage(lang: SiteLanguage): string {
   return lang === "en"
-    ? `*New order — {restaurantName}*\n\n👤 *Customer:* {name}\n📞 *Phone:* {phone}\n🧾 *Type:* {orderType}\n{addressLine}\n\n*Order:*\n{items}\n\n📝 *Notes:* {notes}\n💰 *Total:* {total}`
-    : `*طلب جديد — {restaurantName}*\n\n👤 *العميل:* {name}\n📞 *الموبايل:* {phone}\n🧾 *نوع الطلب:* {orderType}\n{addressLine}\n\n*تفاصيل الطلب:*\n{items}\n\n📝 *ملاحظات:* {notes}\n💰 *الإجمالي:* {total}`;
+    ? `*New order — {storeName}*\n\n👤 *Customer:* {name}\n📞 *Phone:* {phone}\n🧾 *Type:* {orderType}\n{addressLine}\n\n*Order:*\n{items}\n\n📝 *Notes:* {notes}\n💰 *Total:* {total}`
+    : `*طلب جديد — {storeName}*\n\n👤 *العميل:* {name}\n📞 *الموبايل:* {phone}\n🧾 *نوع الطلب:* {orderType}\n{addressLine}\n\n*تفاصيل الطلب:*\n{items}\n\n📝 *ملاحظات:* {notes}\n💰 *الإجمالي:* {total}`;
 }
 
 export const TEMPLATE_TOKENS = [
-  "{restaurantName}",
+  "{storeName}",
   "{name}",
   "{phone}",
   "{orderType}",

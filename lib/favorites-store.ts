@@ -1,4 +1,4 @@
-const KEY = "restaurant-menu:favorites:v1";
+const KEY = "store-catalog:favorites:v1";
 const listeners = new Set<() => void>();
 let snapshot: string[] = [];
 let initialized = false;

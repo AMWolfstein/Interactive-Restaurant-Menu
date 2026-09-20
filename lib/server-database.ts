@@ -17,7 +17,7 @@ import { isValidOrderType, sanitizeText } from "./validation";
 import type { AdminOverview, MenuData, SavedOrder } from "./types";
 
 /**
- * طبقة الباك إند لحفظ بيانات المطعم والقائمة والطلبات.
+ * طبقة الباك إند لحفظ بيانات المتجر والكتالوج والطلبات.
  *
  * السائق الأساسي هو Supabase (Postgres) — هو اللي بيشتغل على Vercel وبيحفظ
  * البيانات بشكل دائم. ولو Supabase غير مُعدّ (تطوير محلي من غير مفاتيح) بيتم
@@ -41,7 +41,7 @@ export interface StorageStatus {
   needsSchema: boolean;
 }
 
-const DATABASE_PATH = process.env.DATABASE_FILE || path.join(process.cwd(), "data", "restaurant.json");
+const DATABASE_PATH = process.env.DATABASE_FILE || path.join(process.cwd(), "data", "store.json");
 const DRIVER_TTL = 60_000;
 let driverCache: { status: StorageStatus; at: number } | null = null;
 
@@ -55,7 +55,7 @@ async function storageStatus(force = false): Promise<StorageStatus> {
       : { driver: "file", persistent: false, needsSchema: true };
     if (status.needsSchema) {
       console.error(
-        "[restaurant] جداول Supabase غير جاهزة — نفّذ supabase/schema.sql في SQL Editor عشان الحفظ يبقى دائم.",
+        "[store] جداول Supabase غير جاهزة — نفّذ supabase/schema.sql في SQL Editor عشان الحفظ يبقى دائم.",
       );
     }
   }
@@ -154,7 +154,7 @@ export async function getMenu(token: string | null = null): Promise<MenuData> {
       }
       return seed;
     }
-    throw new StoreError("تعذّر قراءة القائمة", result.status === 404 ? 404 : 502);
+    throw new StoreError("تعذّر قراءة الكتالوج", result.status === 404 ? 404 : 502);
   }
   return (await readFileDatabase()).menu;
 }
@@ -169,7 +169,7 @@ export async function replaceMenu(menu: MenuData, token: string | null): Promise
   if (status.driver === "supabase") {
     if (!token) throw new StoreError("غير مصرّح", 401);
     const result = await savePublishedMenu(normalized, token);
-    if (!result.ok) throw new StoreError("تعذّر حفظ القائمة", result.status || 502);
+    if (!result.ok) throw new StoreError("تعذّر حفظ الكتالوج", result.status || 502);
     return result.data ?? normalized;
   }
 
@@ -185,7 +185,7 @@ export async function createOrder(input: PlaceOrderInput): Promise<{ order: Save
   // تحقق أساسي من نوع الطلب
   if (!isValidOrderType(input.orderType)) throw new StoreError("نوع الطلب غير صالح", 400);
   if (!Array.isArray(input.lines) || input.lines.length === 0) throw new StoreError("السلة فارغة", 400);
-  if (input.lines.length > 50) throw new StoreError("عدد الأصناف كبير جداً (الحد 50)", 400);
+  if (input.lines.length > 50) throw new StoreError("عدد المنتجات كبير جداً (الحد 50)", 400);
 
   // تعقيم بيانات العميل
   const sanitizedInput: PlaceOrderInput = {
@@ -194,7 +194,6 @@ export async function createOrder(input: PlaceOrderInput): Promise<{ order: Save
       name: sanitizeText(input.customer?.name ?? "", 100),
       phone: sanitizeText(input.customer?.phone ?? "", 30),
       address: sanitizeText(input.customer?.address ?? "", 500),
-      table: sanitizeText(input.customer?.table ?? "", 20),
       notes: sanitizeText(input.customer?.notes ?? "", 500),
     },
     orderType: input.orderType,
@@ -242,16 +241,16 @@ export async function createOrder(input: PlaceOrderInput): Promise<{ order: Save
 async function createOrderInFile(input: PlaceOrderInput) {
   const database = await readFileDatabase();
   if (!Array.isArray(input.lines) || input.lines.length === 0) throw new StoreError("السلة فارغة", 400);
-  if (input.lines.length > 50) throw new StoreError("عدد الأصناف كبير جداً", 400);
+  if (input.lines.length > 50) throw new StoreError("عدد المنتجات كبير جداً", 400);
 
   const orderLines: SavedOrder["lines"] = [];
 
   for (const line of input.lines) {
     const item = database.menu.items.find((candidate) => candidate.id === line.itemId);
-    if (!item || !item.available) throw new StoreError("أحد الأصناف لم يعد متاحاً", 409);
+    if (!item || !item.available) throw new StoreError("أحد المنتجات لم يعد متاحاً", 409);
 
     const rawQty = Math.floor(Number(line.quantity) || 0);
-    if (rawQty < 1 || rawQty > 50) throw new StoreError(`الحد الأقصى 50 قطعة للصنف: ${item.name}`, 400);
+    if (rawQty < 1 || rawQty > 50) throw new StoreError(`الحد الأقصى 50 قطعة للمنتج: ${item.name}`, 400);
     const quantity = rawQty;
     orderLines.push({ itemId: item.id, name: item.name, quantity, unitPrice: item.price });
     item.salesCount = Math.max(0, item.salesCount ?? 0) + quantity;
@@ -271,7 +270,6 @@ async function createOrderInFile(input: PlaceOrderInput) {
       name: sanitizeText(input.customer?.name ?? "", 100),
       phone: sanitizeText(input.customer?.phone ?? "", 30),
       address: sanitizeText(input.customer?.address ?? "", 500),
-      table: sanitizeText(input.customer?.table ?? "", 20),
       notes: sanitizeText(input.customer?.notes ?? "", 500),
     },
     orderType: input.orderType,

@@ -5,11 +5,11 @@ import {
   Copy,
   Flame,
   ListFilter,
+  Package,
   Pencil,
   Plus,
   Search,
   Trash2,
-  UtensilsCrossed,
 } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
 import { formatPrice, pick } from "@/lib/format";
@@ -113,11 +113,11 @@ export function ItemsPanel({ intent, nonce }: { intent?: string; nonce: number }
       oldPrice: editing.draft.oldPrice && editing.draft.oldPrice > 0 ? editing.draft.oldPrice : null,
     };
     if (!draft.name) {
-      show("اسم الصنف مطلوب", "error");
+      show("اسم المنتج مطلوب", "error");
       return;
     }
     if (!draft.categoryId || !categories.some((category) => category.id === draft.categoryId)) {
-      show("أضف قسماً أولاً ثم اختاره للصنف", "error");
+      show("أضف قسماً أولاً ثم اختاره للمنتج", "error");
       return;
     }
     const offerParts = [draft.offerEndDay, draft.offerEndMonth, draft.offerEndYear];
@@ -134,10 +134,10 @@ export function ItemsPanel({ intent, nonce }: { intent?: string; nonce: number }
     }
     if (editing.id) {
       updateItem(editing.id, draft);
-      show("تم تحديث الصنف ✅");
+      show("تم تحديث المنتج ✅");
     } else {
       addItem(draft);
-      show("تمت إضافة الصنف ✅");
+      show("تمت إضافة المنتج ✅");
     }
     setEditing(null);
   };
@@ -145,12 +145,12 @@ export function ItemsPanel({ intent, nonce }: { intent?: string; nonce: number }
   return (
     <div className="space-y-4">
       <Panel
-        title="أصناف القائمة"
-        description={`${items.length} صنف داخل ${categories.length} قسم — كل التعديلات بتتحفظ أوتوماتيك`}
-        icon={<UtensilsCrossed className="h-4 w-4" />}
+        title="منتجات المتجر"
+        description={`${items.length} منتج داخل ${categories.length} قسم — كل التعديلات بتتحفظ أوتوماتيك`}
+        icon={<Package className="h-4 w-4" />}
         actions={
           <Button size="sm" onClick={openNew}>
-            <Plus className="h-4 w-4" /> صنف جديد
+            <Plus className="h-4 w-4" /> منتج جديد
           </Button>
         }
       >
@@ -195,12 +195,12 @@ export function ItemsPanel({ intent, nonce }: { intent?: string; nonce: number }
 
         {groups.length === 0 ? (
           <EmptyState
-            icon={<UtensilsCrossed className="h-5 w-5" />}
-            title="مفيش أصناف مطابقة"
-            description="غيّر الفلتر أو اعمل صنف جديد"
+            icon={<Package className="h-5 w-5" />}
+            title="مفيش منتجات مطابقة"
+            description="غيّر الفلتر أو اعمل منتج جديد"
             action={
               <Button size="sm" onClick={openNew}>
-                <Plus className="h-3.5 w-3.5" /> صنف جديد
+                <Plus className="h-3.5 w-3.5" /> منتج جديد
               </Button>
             }
           />
@@ -217,7 +217,7 @@ export function ItemsPanel({ intent, nonce }: { intent?: string; nonce: number }
                     onClick={() => {
                       const allSoldOut = rows.every((item) => !item.available);
                       setCategoryAvailability(category.id, allSoldOut);
-                      show(allSoldOut ? `رجّعنا كل أصناف «${category.name}» متاح` : `قفلنا أصناف «${category.name}»`);
+                      show(allSoldOut ? `رجّعنا كل منتجات «${category.name}» متاح` : `قفلنا منتجات «${category.name}»`);
                     }}
                     className="rounded-lg border border-line px-2 py-0.5 text-[10px] font-bold text-muted transition hover:border-accent/50 hover:text-accent"
                   >
@@ -237,7 +237,7 @@ export function ItemsPanel({ intent, nonce }: { intent?: string; nonce: number }
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={item.image} alt="" className="h-11 w-11 shrink-0 rounded-lg object-cover" />
                       ) : (
-                        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-surface text-xs">🍽️</span>
+                        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-surface text-xs">📦</span>
                       )}
 
                       <div className="min-w-36 flex-1">
@@ -275,7 +275,7 @@ export function ItemsPanel({ intent, nonce }: { intent?: string; nonce: number }
                           label="تكرار"
                           onClick={() => {
                             duplicateItem(item.id);
-                            show("اتعملت نسخة من الصنف");
+                            show("اتعملت نسخة من المنتج");
                           }}
                         >
                           <Copy className="h-3.5 w-3.5" />
@@ -285,7 +285,7 @@ export function ItemsPanel({ intent, nonce }: { intent?: string; nonce: number }
                             onClick={() => {
                               deleteItem(item.id);
                               setConfirmId(null);
-                              show("اتحذف الصنف");
+                              show("اتحذف المنتج");
                             }}
                             className="rounded-lg bg-red-500/15 px-2 py-1 text-[11px] font-black text-red-400"
                           >
@@ -349,7 +349,7 @@ function ItemEditor({
       open
       onClose={onClose}
       size="lg"
-      title={editing.id ? "تعديل الصنف" : "صنف جديد"}
+      title={editing.id ? "تعديل المنتج" : "منتج جديد"}
       footer={
         <div className="flex items-center justify-between gap-3">
           <span className="text-[11px] text-muted">
@@ -367,10 +367,10 @@ function ItemEditor({
     >
       <div className="space-y-3.5">
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="اسم الصنف">
-            <TextInput value={draft.name} onChange={(event) => set({ name: event.target.value })} placeholder="صدور دجاج مجمدة" />
+          <Field label="اسم المنتج">
+            <TextInput value={draft.name} onChange={(event) => set({ name: event.target.value })} placeholder="أرز مصري فاخر" />
           </Field>
-          <Field label="وصف الصنف">
+          <Field label="وصف المنتج">
             <TextArea value={draft.description ?? ""} onChange={(event) => set({ description: event.target.value })} rows={2} />
           </Field>
           <Field label="الوزن / حجم العبوة" hint="مثال: 1 كجم أو 500 جم">
@@ -419,22 +419,22 @@ function ItemEditor({
         </div>
 
         <ImageField
-          label="صورة الصنف"
+          label="صورة المنتج"
           value={draft.image ?? ""}
           onChange={(value) => set({ image: value })}
-          hint="صورة حلوة = طلبات أكتر. ارفع من الموبايل أو حط رابط"
+          hint="صورة حلوة = مبيعات أكتر. ارفع من الموبايل أو حط رابط"
         />
 
         <div className="flex flex-wrap items-center gap-2">
           <CheckboxPill active={draft.available} onClick={() => set({ available: !draft.available })}>
-            متاح للطلب
+            متاح للبيع
           </CheckboxPill>
           <CheckboxPill active={draft.isNew} onClick={() => set({ isNew: !draft.isNew })}>
             جديد 🆕
           </CheckboxPill>
-          <span className="ms-1 text-[11px] font-bold text-muted">الطعم:</span>
+          <span className="ms-1 text-[11px] font-bold text-muted">الشطة 🌶️:</span>
           {([
-            { value: 0, label: "بارد" },
+            { value: 0, label: "عادي" },
             { value: 1, label: "حار" },
           ] as const).map((option) => (
             <button

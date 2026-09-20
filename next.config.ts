@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const isDev = process.env.NODE_ENV !== "production";
 
 const nextConfig: NextConfig = {
-  // يسمح لبروكسي المعاينة فقط في التطوير (للـ demo/portfolio)
+  // يسمح لبروكسي المعاينة فقط في التطوير 
   ...(isDev
     ? { allowedDevOrigins: ["*.e2b.app", "*.trycloudflare.com", "*.ngrok-free.app"] }
     : {}),
@@ -17,7 +17,7 @@ const nextConfig: NextConfig = {
           { key: "X-XSS-Protection", value: "1; mode=block" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
-          // CSP خفيف للـ demo - يسمح بالصور المحلية والـ data: والخطوط من Google
+          // CSP خفيف — يسمح بالصور المحلية والـ data: والخطوط من Google
           {
             key: "Content-Security-Policy",
             value: [

@@ -13,6 +13,7 @@ import {
   Mail,
   LogOut,
   Monitor,
+  Package,
   Palette,
   QrCode,
   Receipt,
@@ -21,7 +22,6 @@ import {
   Smartphone,
   Tablet,
   TriangleAlert,
-  UtensilsCrossed,
 } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
 import { useAdminSession } from "@/lib/use-admin-session";
@@ -44,7 +44,7 @@ const TABS: { key: TabKey; label: string; icon: typeof LayoutDashboard }[] = [
   { key: "brand", label: "الهوية", icon: Store },
   { key: "look", label: "المظهر", icon: Palette },
   { key: "categories", label: "الأقسام", icon: FolderTree },
-  { key: "items", label: "الأصناف", icon: UtensilsCrossed },
+  { key: "items", label: "المنتجات", icon: Package },
   { key: "ordering", label: "الطلب والأسعار", icon: Receipt },
   { key: "preview", label: "معاينة", icon: QrCode },
   { key: "data", label: "البيانات", icon: Database },
@@ -66,7 +66,7 @@ export function AdminApp() {
   };
 
   const siteTitle = useMemo(
-    () => pick(data.brand.language, data.brand.restaurantName, data.brand.restaurantNameEn),
+    () => pick(data.brand.language, data.brand.storeName, data.brand.storeNameEn),
     [data.brand],
   );
 
@@ -101,7 +101,7 @@ export function AdminApp() {
               <img src={data.brand.logo} alt="" className="h-9 w-9 rounded-xl border border-line object-cover" />
             ) : (
               <span className="grid h-9 w-9 place-items-center rounded-xl bg-accent text-accent-contrast">
-                <UtensilsCrossed className="h-4 w-4" />
+                <Package className="h-4 w-4" />
               </span>
             )}
             <div className="min-w-0">
@@ -253,7 +253,7 @@ function AdminLogin({
             <div className="relative">
               <Mail className="pointer-events-none absolute inset-y-0 start-3 my-auto h-3.5 w-3.5 text-muted" />
               <TextInput autoFocus type="email" autoComplete="email" dir="ltr" value={email}
-                onChange={(event) => setEmail(event.target.value)} placeholder="owner@restaurant.com"
+                onChange={(event) => setEmail(event.target.value)} placeholder="owner@store.com"
                 className="ps-9 text-start" required />
             </div>
           </Field>
@@ -275,7 +275,7 @@ function AdminLogin({
         </Button>
 
         <p className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/8 p-2.5 text-[11px] leading-relaxed text-emerald-300">
-          كل طلب تعديل للقائمة أو قراءة لبيانات اللوحة بيتحقق من Supabase access token على السيرفر —
+          كل طلب تعديل للكتالوج أو قراءة لبيانات اللوحة بيتحقق من Supabase access token على السيرفر —
           أي طلب من غير توكن صالح بيرجع 401.
         </p>
 
