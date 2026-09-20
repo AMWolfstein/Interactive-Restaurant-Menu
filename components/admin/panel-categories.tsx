@@ -9,7 +9,7 @@ import { cx } from "@/lib/cx";
 const EMOJIS = ["🧺", "🛒", "🥫", "🧃", "🍬", "🧻", "🧴", "🧽", "🍞", "🧀", "🍼", "🥜", "🫘", "🍯", "🧊", "☕"];
 
 export function CategoriesPanel({ intent, nonce }: { intent?: string; nonce: number }) {
-  const { data, addCategory, updateCategory, deleteCategory, moveCategory } = useMenu();
+  const { data, addCategory, updateCategory, deleteCategory, moveCategory, update } = useMenu();
   const [draft, setDraft] = useState({ name: "", emoji: "🧺" });
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const addRef = useRef<HTMLInputElement>(null);
@@ -164,6 +164,22 @@ export function CategoriesPanel({ intent, nonce }: { intent?: string; nonce: num
           ))}
           <Button className="ms-auto" onClick={submit}>
             <Plus className="h-4 w-4" /> إضافة القسم
+          </Button>
+        </div>
+      </Panel>
+
+      <Panel title="الموردين" description="قائمة مستقلة للموردين؛ الضغط على مورد في الموقع يعرض منتجاته" icon={<FolderTree className="h-4 w-4" />}>
+        <div className="flex flex-wrap gap-2">
+          {data.suppliers.map((supplier) => (
+            <div key={supplier.id} className="flex items-center gap-1.5 rounded-lg border border-line bg-surface-2 px-2 py-1.5">
+              <TextInput value={supplier.name} onChange={(event) => update((draft) => { const row = draft.suppliers.find((item) => item.id === supplier.id); if (row) row.name = event.target.value; })} className="h-7 w-32 py-1 text-xs" />
+              <IconButton label={supplier.visible ? "إخفاء المورد" : "إظهار المورد"} onClick={() => update((draft) => { const row = draft.suppliers.find((item) => item.id === supplier.id); if (row) row.visible = !row.visible; })}>
+                {supplier.visible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+              </IconButton>
+            </div>
+          ))}
+          <Button variant="outline" size="sm" onClick={() => update((draft) => draft.suppliers.push({ id: `supplier-${Date.now()}`, name: "مورد جديد", visible: true }))}>
+            <Plus className="h-3.5 w-3.5" /> مورد جديد
           </Button>
         </div>
       </Panel>

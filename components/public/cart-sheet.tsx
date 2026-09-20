@@ -41,8 +41,8 @@ export function CartSheet({
   open: boolean;
   onClose: () => void;
   lines: DetailedLine[];
-  setQuantity: (id: string, quantity: number) => void;
-  remove: (id: string) => void;
+  setQuantity: (id: string, quantity: number, variantId?: string) => void;
+  remove: (id: string, variantId?: string) => void;
   clear: () => void;
 }) {
   const { data } = useMenu();
@@ -218,7 +218,7 @@ export function CartSheet({
             <ul className="space-y-2.5">
               {lines.map(({ line, item }) => (
                 <li
-                  key={line.itemId}
+                  key={`${line.itemId}-${line.variantId ?? "default"}`}
                   className="flex items-center gap-3 rounded-xl border border-line bg-surface p-2.5"
                 >
                   <ProductImage src={item.image} alt="" className="h-11 w-11 rounded-lg" />
@@ -230,7 +230,7 @@ export function CartSheet({
                   </div>
                   <div className="flex items-center gap-1 rounded-lg border border-line bg-surface-2 p-0.5">
                     <button
-                      onClick={() => setQuantity(item.id, line.quantity - 1)}
+                      onClick={() => setQuantity(item.id, line.quantity - 1, line.variantId)}
                       className="grid h-6 w-6 place-items-center rounded text-muted transition hover:text-red-400"
                       aria-label="minus"
                     >
@@ -238,7 +238,7 @@ export function CartSheet({
                     </button>
                     <span className="min-w-4 text-center text-xs font-black">{line.quantity}</span>
                     <button
-                      onClick={() => setQuantity(item.id, line.quantity + 1)}
+                      onClick={() => setQuantity(item.id, line.quantity + 1, line.variantId)}
                       className="grid h-6 w-6 place-items-center rounded text-muted transition hover:text-accent"
                       aria-label="plus"
                     >
@@ -246,7 +246,7 @@ export function CartSheet({
                     </button>
                   </div>
                   <button
-                    onClick={() => remove(item.id)}
+                    onClick={() => remove(item.id, line.variantId)}
                     aria-label={en ? "Remove" : "حذف"}
                     className="text-muted transition hover:text-red-400"
                   >

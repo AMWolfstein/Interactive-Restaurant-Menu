@@ -14,6 +14,28 @@ export interface Category {
   visible: boolean;
 }
 
+export interface MenuVariant {
+  id: string;
+  label: string;
+  price: number;
+  oldPrice?: number | null;
+  offerEndDay?: number | null;
+  offerEndMonth?: number | null;
+  offerEndYear?: number | null;
+}
+
+export interface Supplier {
+  id: string;
+  name: string;
+  visible: boolean;
+}
+
+export interface HeroImage {
+  id: string;
+  image: string;
+  order: number;
+}
+
 export interface MenuItem {
   id: string;
   categoryId: string;
@@ -36,6 +58,7 @@ export interface MenuItem {
   salesCount?: number;
   /** رابط صورة أو dataURL مرفوعة من الجهاز */
   image?: string;
+  variants?: MenuVariant[];
   available: boolean;
   isNew: boolean;
   /** 0 = عادي (الافتراضي)، 1 = حار */
@@ -57,6 +80,7 @@ export interface BrandSettings {
   language: SiteLanguage;
   showHero: boolean;
   heroImage: string;
+  heroImages?: HeroImage[];
   heroTitle: string;
   heroSubtitle: string;
   announcementEnabled: boolean;
@@ -111,6 +135,7 @@ export interface MenuData {
   contact: ContactSettings;
   commerce: CommerceSettings;
   categories: Category[];
+  suppliers: Supplier[];
   items: MenuItem[];
 }
 
@@ -132,5 +157,6 @@ export interface AdminOverview {
 /** السلة بتخزّن المعرّف والكمية فقط، وكل حاجة تانية بتتاشتق من البيانات الحالية */
 export interface CartLine {
   itemId: string;
+  variantId?: string;
   quantity: number;
 }
