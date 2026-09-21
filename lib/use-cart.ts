@@ -38,9 +38,9 @@ export function useCart(menuItems: MenuItem[]) {
 
   const add = useCallback((id: string, variantId?: string) => addToCart(id, variantId), []);
   const setQuantity = useCallback((id: string, quantity: number, variantId?: string) => {
-    setCartQuantity(variantId ? `${id}::${variantId}` : id, quantity);
+    setCartQuantity(id, quantity, variantId);
   }, []);
-  const remove = useCallback((id: string, variantId?: string) => removeFromCart(variantId ? `${id}::${variantId}` : id), []);
+  const remove = useCallback((id: string, variantId?: string) => removeFromCart(id, variantId), []);
   const clear = useCallback(() => clearCart(), []);
   const restore = useCallback((previous: CartLine[]) => replaceCart(previous), []);
   const quantityOf = useCallback(

@@ -52,7 +52,7 @@ export function ProductCard({
   item,
   lang,
   commerce,
-  quantity,
+  getQuantity,
   onAdd,
   onRemoveOne,
   onSupplierClick,
@@ -62,7 +62,8 @@ export function ProductCard({
   item: MenuItem;
   lang: SiteLanguage;
   commerce: CommerceSettings;
-  quantity: number;
+  /** كمية العنصر (أو الاختيار المحدد لو فيه variants) في السلة حالياً */
+  getQuantity: (variantId?: string) => number;
   onAdd: (variantId?: string) => void;
   onRemoveOne: (variantId?: string) => void;
   onSupplierClick?: (supplier: string) => void;
@@ -74,6 +75,7 @@ export function ProductCard({
   const favorite = favorites.includes(item.id);
   const [selectedVariantId, setSelectedVariantId] = useState(item.variants?.[0]?.id);
   const selectedVariant = item.variants?.find((variant) => variant.id === selectedVariantId);
+  const quantity = getQuantity(selectedVariantId);
   const displayPrice = selectedVariant?.price ?? item.price;
   const displayOldPrice = selectedVariant?.oldPrice ?? item.oldPrice;
   const price = formatPrice(displayPrice, lang, commerce);
