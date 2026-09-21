@@ -31,10 +31,11 @@ import { Badge, Button, Panel, Segmented, TextInput, Toast, useToast } from "@/c
  * وتصدير CSV — التحديث لحظي عن طريق Realtime مع فحص دوري احتياطي.
  */
 
-const ORDER_TYPE_LABEL: Record<OrderType, string> = {
+const ORDER_TYPE_LABEL: Record<string, string> = {
   delivery: "🛵 توصيل",
   pickup: "🛍️ استلام",
-  instore: "🏪 من المحل",
+  // طلبات قديمة اتسجلت بنوع «من داخل المحل» قبل ما النوع ده يتشال (المحل مفيهوش طاولات)
+  instore: "🏪 من المحل (قديم)",
 };
 
 const STATUS_STYLE: Record<OrderStatus, string> = {
@@ -247,7 +248,6 @@ export function OrdersPanel() {
                 { value: "all", label: "كل الأنواع" },
                 { value: "delivery", label: "🛵 توصيل" },
                 { value: "pickup", label: "🛍️ استلام" },
-                { value: "instore", label: "🏪 من المحل" },
               ]}
             />
             <div className="relative min-w-52 flex-1">

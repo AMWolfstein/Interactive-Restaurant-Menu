@@ -36,7 +36,6 @@ import {
 const TYPE_LABELS: Record<OrderType, string> = {
   delivery: "🛵 توصيل",
   pickup: "🛍️ استلام من المحل",
-  instore: "🏪 من داخل المحل",
 };
 
 export function OrderingPanel() {

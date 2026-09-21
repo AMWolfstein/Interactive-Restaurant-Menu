@@ -153,8 +153,9 @@ begin
   end loop;
 
   v_commerce := v_menu -> 'commerce';
-  v_order_type := coalesce(payload ->> 'orderType', 'delivery');
-  if v_order_type not in ('delivery', 'pickup', 'instore') then
+  -- المحل تيك-أواي (مفيش طاولات): استلام من المحل أو توصيل بس
+  v_order_type := coalesce(payload ->> 'orderType', 'pickup');
+  if v_order_type not in ('delivery', 'pickup') then
     raise exception 'نوع الطلب غير صالح' using errcode = '22023';
   end if;
 

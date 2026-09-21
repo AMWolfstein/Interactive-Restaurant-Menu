@@ -12,7 +12,6 @@ import type {
 export const ORDER_TYPE_LABEL: Record<OrderType, { ar: string; en: string }> = {
   delivery: { ar: "توصيل", en: "Delivery" },
   pickup: { ar: "استلام من المحل", en: "Pickup" },
-  instore: { ar: "من داخل المحل", en: "In-store" },
 };
 
 export const ORDER_STATUS_LABEL: Record<OrderStatus, { ar: string; en: string }> = {

@@ -1,5 +1,5 @@
 import { DEFAULT_DATA } from "./defaults";
-import type { MenuData } from "./types";
+import type { MenuData, OrderType } from "./types";
 
 type Plain = Record<string, unknown>;
 
@@ -166,6 +166,13 @@ export function normalizeData(raw: unknown): MenuData {
   // الموقع عربي فقط حتى لو البيانات اتخزنت بالإنجليزية.
   merged.brand.language = "ar";
   merged.commerce.productLayout = merged.commerce.productLayout === "grid" ? "grid" : "list";
+
+  // أنواع الطلب: استلام من المحل أو توصيل بس — المحل مفيهوش طاولات، فنوع «من داخل المحل»
+  // (القعدة جوه) اتشال نهائياً وبيتنضف من أي بيانات محفوظة قديمة، مع ضمان نوع واحد على الأقل
+  merged.commerce.orderTypes = (merged.commerce.orderTypes ?? [])
+    .filter((type): type is OrderType => type === "delivery" || type === "pickup")
+    .filter((type, index, list) => list.indexOf(type) === index);
+  if (!merged.commerce.orderTypes.length) merged.commerce.orderTypes = [...DEFAULT_DATA.commerce.orderTypes];
 
   // تعقيم الروابط الخارجية (مكافحة javascript: و open redirect)
   const isSafeHttpUrl = (url: string) => {

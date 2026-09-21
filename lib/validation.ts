@@ -31,7 +31,8 @@ export function sanitizeText(input: string, maxLen = 500): string {
 }
 
 export function isValidOrderType(value: string): boolean {
-  return ["delivery", "pickup", "instore"].includes(value);
+  // المحل تيك-أواي: استلام من المحل أو توصيل بس — مفيش طلبات «من داخل المحل»
+  return ["delivery", "pickup"].includes(value);
 }
 
 // تحقق من ملف JSON المستورد للأدمن

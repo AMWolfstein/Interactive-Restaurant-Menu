@@ -23,7 +23,7 @@ export const DEFAULT_DATA: MenuData = {
     heroImage: "/images/catalog/hero.jpg",
     heroImages: [],
     heroTitle: "كل اللي محتاجه… في مكان واحد 🛒",
-    heroSubtitle: "اختار منتجاتك واطلبها في دقيقتين — وهتوصلك لباب البيت",
+    heroSubtitle: "اختار منتجاتك واطلبها في دقيقتين — تستلم من المحل وتمشي، أو نوصّلها لباب البيت",
     announcementEnabled: true,
     announcementText: "🚚 توصيل مجاني للطلبات فوق ٣٠٠ ج.م — الكود: BARAKA",
   },
@@ -56,7 +56,8 @@ export const DEFAULT_DATA: MenuData = {
     freeDeliveryOver: 300,
     minimumOrder: 80,
     serviceChargePercent: 0,
-    orderTypes: ["delivery", "pickup", "instore"],
+    // الاستلام من المحل هو الافتراضي — المحل تيك-أواي: تشتري وتمشي (والتوصيل متاح كخيار)
+    orderTypes: ["pickup", "delivery"],
     enableZones: false,
     deliveryZones: [],
     paymentMethods: [],
