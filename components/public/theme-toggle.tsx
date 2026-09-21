@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 import type { SiteLanguage, ThemeMode } from "@/lib/types";
+import { VISITOR_THEME_KEY } from "@/lib/theme";
 
-export const VISITOR_THEME_KEY = "store-catalog:visitor-theme";
+export { VISITOR_THEME_KEY };
 
 function isTheme(value: string | null): value is ThemeMode {
   return value === "dark" || value === "light";

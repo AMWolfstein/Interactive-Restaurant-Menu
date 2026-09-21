@@ -10,6 +10,10 @@ import type { MenuData } from "@/lib/types";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+/**
+ * نفس لقطة الكتالوج المستخدمة في الـ layout (getMenu متجمّعة بـ React cache)،
+ * فالـ SEO والواجهة والهوية كلهم متسقين في نفس الطلب.
+ */
 async function menuForSeo(): Promise<MenuData> {
   try {
     return await getMenu();

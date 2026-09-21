@@ -1,5 +1,7 @@
 import type { MetadataRoute } from "next";
 import { getMenu } from "@/lib/server-database";
+import { DEFAULT_DATA } from "@/lib/defaults";
+import { safeAccent } from "@/lib/color";
 
 // The manifest depends on settings saved by the owner, so it must not be
 // frozen at build time or served with an old logo after the brand is updated.
@@ -9,10 +11,18 @@ export const revalidate = 0;
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
   let logo = "";
   let storeName = "كتالوج المتجر";
+  // الشاشة الافتتاحية للتطبيق لازم تطلع بلون المحل وستايله، مش باللون
+  // الافتراضي — وإلا التطبيق المثبّت يفتح بشكل مختلف عن الموقع.
+  let accent = safeAccent(DEFAULT_DATA.brand.accent);
+  let background = "#08090b";
+  let language = DEFAULT_DATA.brand.language;
   try {
     const menu = await getMenu();
     logo = menu.brand.logo.trim();
     storeName = menu.brand.storeName.trim() || storeName;
+    accent = safeAccent(menu.brand.accent);
+    background = menu.brand.theme === "light" ? "#ffffff" : "#08090b";
+    language = menu.brand.language;
   } catch {
     // A storage outage must not make the PWA manifest unavailable.
   }
@@ -33,10 +43,10 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     scope: "/",
     display: "standalone",
     orientation: "portrait-primary",
-    background_color: "#08090b",
-    theme_color: "#f59e0b",
-    lang: "ar",
-    dir: "rtl",
+    background_color: background,
+    theme_color: accent,
+    lang: language,
+    dir: language === "en" ? "ltr" : "rtl",
     icons,
   };
 }
