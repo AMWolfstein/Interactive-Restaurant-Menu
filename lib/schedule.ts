@@ -21,16 +21,6 @@ export function parseClock(value: string): number | null {
   return Number(match[1]) * 60 + Number(match[2]);
 }
 
-/** تنسيق آمن لمدخل وقت الإدخال "HH:MM" */
-export function normalizeClock(value: string, fallback: string): string {
-  return parseClock(value) === null ? fallback : value.trim();
-}
-
-/** جدول افتراضي: كل الأيام من 10 صباحاً لـ 12 منتصف الليل */
-export function defaultWeeklySchedule(): WeekDaySchedule[] {
-  return Array.from({ length: 7 }, (_, day) => ({ day, enabled: true, open: "10:00", close: "00:00" }));
-}
-
 interface ZonedNow {
   /** 0 = الأحد … 6 = السبت */
   day: number;

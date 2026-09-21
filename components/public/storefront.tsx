@@ -371,7 +371,7 @@ export function Storefront() {
                     item={item}
                     lang={lang}
                     commerce={commerce}
-                    quantity={cart.quantityOf(item.id)}
+                    getQuantity={(variantId) => cart.quantityOf(item.id, variantId)}
                     onAdd={(variantId) => cart.add(item.id, variantId)}
                     onRemoveOne={(variantId) => cart.setQuantity(item.id, cart.quantityOf(item.id, variantId) - 1, variantId)}
                     onSupplierClick={(supplier) => { setSupplierFilter(supplier.trim()); setActiveCategory(ALL); }}
