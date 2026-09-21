@@ -5,20 +5,7 @@ import { usePathname } from "next/navigation";
 import { useMenu } from "@/lib/use-menu";
 import { pick } from "@/lib/format";
 import { visitorTheme } from "@/components/public/theme-toggle";
-
-const HEX = /^#?([0-9a-f]{6})$/i;
-
-function readableOn(hex: string): "#0b0b0d" | "#ffffff" {
-  const match = HEX.exec(hex.trim());
-  if (!match) return "#0b0b0d";
-  const int = parseInt(match[1], 16);
-  const [r, g, b] = [(int >> 16) & 255, (int >> 8) & 255, int & 255].map((channel) => {
-    const value = channel / 255;
-    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-  });
-  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  return luminance > 0.45 ? "#0b0b0d" : "#ffffff";
-}
+import { readableOn, safeAccent } from "@/lib/color";
 
 /**
  * يترجم إعدادات الأدمين لـ CSS variables على مستوى الصفحة —
@@ -32,8 +19,9 @@ export function SiteTheme() {
   useEffect(() => {
     if (!ready) return;
     const root = document.documentElement;
-    root.style.setProperty("--accent", brand.accent);
-    root.style.setProperty("--accent-contrast", readableOn(brand.accent));
+    const accent = safeAccent(brand.accent);
+    root.style.setProperty("--accent", accent);
+    root.style.setProperty("--accent-contrast", readableOn(accent));
     root.style.setProperty("--radius", `${brand.radius}px`);
     // لوحة التحكم تعرض اختيار المحل، أما صفحة الكتالوج فتحترم
     // اختيار كل زائر المحفوظ محلياً على جهازه.
@@ -54,7 +42,7 @@ export function SiteTheme() {
       meta.setAttribute("name", "theme-color");
       document.head.appendChild(meta);
     }
-    meta.setAttribute("content", brand.accent);
+    meta.setAttribute("content", accent);
 
     // Browsers use these links for the tab and iOS home-screen icon. Create
     // them only when the owner has uploaded a logo; there is no default icon.

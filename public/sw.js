@@ -1,6 +1,6 @@
-const CACHE_NAME = "store-catalog-v3";
-// Do not precache the manifest: it is generated from the current brand
-// settings and must be refetched when the owner changes the header logo.
+// غيّر الرقم ده لو عدّلت استراتيجية الكاش — بيمسح كل النسخ القديمة.
+const CACHE_NAME = "store-catalog-v4";
+// صفحة احتياطية للعرض وقت انقطاع النت فقط.
 const OFFLINE_URLS = ["/"];
 
 self.addEventListener("install", (event) => {
@@ -17,6 +17,17 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+/**
+ * الأصول الثابتة بس هي اللي بتتخزن (ملفات /_next/static وصور public):
+ * أسماءها فيها بصمة بتتغير مع كل نشر، فمفيش خطر إنها ترجع نسخة قديمة.
+ * أي حاجة فيها بيانات المحل (HTML أو RSC أو manifest) بتتجاب من الشبكة
+ * دايماً — عشان الزائر ما يشوفش شكل أو إعدادات قديمة بعد تعديل الأدمن.
+ */
+function isCacheableAsset(url) {
+  if (url.pathname.startsWith("/_next/static/")) return true;
+  return /\.(?:css|js|woff2?|png|jpe?g|gif|svg|webp|avif|ico)$/i.test(url.pathname);
+}
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;
@@ -24,11 +35,25 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin || url.pathname.startsWith("/api/") || url.pathname.startsWith("/admin")) return;
 
-  // Keep menu data fresh online, but provide the cached shell when offline.
+  // الصفحات: الشبكة أولاً عشان بيانات المحل تبقى دايماً أحدث نسخة،
+  // والكاش بيشتغل بس لو النت مقطوع.
   if (request.mode === "navigate") {
-    event.respondWith(fetch(request).catch(() => caches.match("/")));
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put("/", copy));
+          }
+          return response;
+        })
+        .catch(() => caches.match("/")),
+    );
     return;
   }
+
+  // حمولة RSC والـ manifest وأي طلب مش أصل ثابت: من الشبكة دايماً.
+  if (!isCacheableAsset(url) || url.searchParams.has("_rsc")) return;
 
   event.respondWith(
     caches.match(request).then((cached) =>

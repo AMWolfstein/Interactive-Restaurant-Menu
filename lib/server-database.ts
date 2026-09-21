@@ -2,6 +2,7 @@ import "server-only";
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { cache } from "react";
 import { DEFAULT_DATA } from "./defaults";
 import { normalizeData } from "./normalize";
 import {
@@ -150,7 +151,7 @@ function isValidStatus(value: string): value is OrderStatus {
 /* الواجهة الموحّدة                                                    */
 /* ------------------------------------------------------------------ */
 
-export async function getMenu(token: string | null = null): Promise<MenuData> {
+async function readMenu(token: string | null = null): Promise<MenuData> {
   const status = await storageStatus();
   if (status.driver === "supabase") {
     const result = await fetchPublishedMenu();
@@ -168,6 +169,13 @@ export async function getMenu(token: string | null = null): Promise<MenuData> {
   }
   return (await readFileDatabase()).menu;
 }
+
+/**
+ * قراءة الكتالوج مع تجميع نداءات نفس الطلب في نداء واحد (React cache):
+ * الـ layout والصفحة والـ metadata كلهم بيقروا نفس اللقطة — فمفيش اختلاف
+ * بين الهيدر والمحتوى، ولا ضغط زيادة على قاعدة البيانات.
+ */
+export const getMenu = cache(readMenu);
 
 export async function replaceMenu(menu: MenuData, token: string | null): Promise<MenuData> {
   const status = await storageStatus();
