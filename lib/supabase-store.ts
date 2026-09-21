@@ -5,6 +5,7 @@ import {
   ORDERS_TABLE,
   PLACE_ORDER_FUNCTION,
   PUBLISHED_SLUG,
+  UPDATE_ORDER_STATUS_FUNCTION,
 } from "./supabase";
 import { normalizeData } from "./normalize";
 import type { AdminOverview, CartLine, MenuData, OrderType, SavedOrder } from "./types";
@@ -146,6 +147,10 @@ export interface PlaceOrderInput {
   customer: { name?: string; phone?: string; address?: string; notes?: string };
   orderType: OrderType;
   total: number;
+  /** معرّف منطقة التوصيل المختارة (لو مناطق التوصيل مفعّلة) */
+  zoneId?: string;
+  /** طريقة الدفع المختارة (لو مفعّلة) */
+  paymentMethod?: string;
 }
 
 interface PlaceOrderResult {
@@ -167,7 +172,7 @@ interface OrderRow {
 
 export async function fetchAdminOverview(token: string): Promise<RestResult<AdminOverview>> {
   const orders = await rest<OrderRow[]>(
-    `${ORDERS_TABLE}?select=id,created_at,data&order=created_at.desc&limit=30`,
+    `${ORDERS_TABLE}?select=id,created_at,data&order=created_at.desc&limit=500`,
     { token },
   );
   if (!orders.ok) return { ok: false, status: orders.status, data: null, message: orders.message, code: orders.code };
@@ -182,4 +187,17 @@ export async function fetchAdminOverview(token: string): Promise<RestResult<Admi
       storage: { driver: "supabase", persistent: true },
     },
   };
+}
+
+/** تحديث حالة طلب — دالة update_order_status في قاعدة البيانات (أدمن فقط) */
+export async function updateOrderStatus(
+  orderId: string,
+  status: string,
+  token: string,
+): Promise<RestResult<{ order: SavedOrder }>> {
+  return rest<{ order: SavedOrder }>(`rpc/${UPDATE_ORDER_STATUS_FUNCTION}`, {
+    method: "POST",
+    body: { p_order_id: orderId, p_status: status },
+    token,
+  });
 }

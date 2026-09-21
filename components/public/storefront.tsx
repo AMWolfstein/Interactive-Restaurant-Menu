@@ -15,6 +15,8 @@ import {
 import { useMenu } from "@/lib/use-menu";
 import { useCart } from "@/lib/use-cart";
 import { computeTotals, formatPrice, pick } from "@/lib/format";
+import { useStoreOpen } from "@/lib/use-store-open";
+import { describeNextOpening } from "@/lib/schedule";
 import { cx } from "@/lib/cx";
 import { ProductCard, ProductImage } from "@/components/public/product-card";
 import { CartSheet } from "@/components/public/cart-sheet";
@@ -51,6 +53,8 @@ export function Storefront() {
   const { brand, commerce, contact, categories, suppliers, items } = data;
   const lang = brand.language;
   const en = lang === "en";
+  const storeOpen = useStoreOpen(contact);
+  const closedHint = contact.autoSchedule ? describeNextOpening(contact.weeklySchedule ?? []) : "";
 
   const [activeCategory, setActiveCategory] = useState<string>(ALL);
   const [query, setQuery] = useState("");
@@ -155,11 +159,11 @@ export function Storefront() {
             <span
               className={cx(
                 "hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold sm:inline-flex",
-                contact.isOpen ? "bg-emerald-500/12 text-emerald-400" : "bg-red-500/12 text-red-400",
+                storeOpen ? "bg-emerald-500/12 text-emerald-400" : "bg-red-500/12 text-red-400",
               )}
             >
-              <span className={cx("h-1.5 w-1.5 rounded-full", contact.isOpen ? "bg-emerald-400" : "bg-red-400")} />
-              {contact.isOpen ? (en ? "Open now" : "مفتوح الآن") : en ? "Closed" : "مقفل"}
+              <span className={cx("h-1.5 w-1.5 rounded-full", storeOpen ? "bg-emerald-400" : "bg-red-400")} />
+              {storeOpen ? (en ? "Open now" : "مفتوح الآن") : en ? "Closed" : "مقفل"}
             </span>
             <PreviousOrderButton
               language={lang}
@@ -223,9 +227,10 @@ export function Storefront() {
           </section>
         ) : null}
 
-        {!contact.isOpen ? (
-          <div className="mt-4 flex items-center gap-2 rounded-card border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs font-bold text-amber-400">
+        {!storeOpen ? (
+          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-card border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs font-bold text-amber-400">
             <Store className="h-4 w-4" /> {contact.closedMessage}
+            {closedHint ? <span className="text-[11px] font-medium text-amber-400/80">· {closedHint}</span> : null}
           </div>
         ) : null}
 
@@ -371,7 +376,7 @@ export function Storefront() {
                     onRemoveOne={(variantId) => cart.setQuantity(item.id, cart.quantityOf(item.id, variantId) - 1, variantId)}
                     onSupplierClick={(supplier) => { setSupplierFilter(supplier.trim()); setActiveCategory(ALL); }}
                     layout={commerce.productLayout}
-                    disabled={!contact.isOpen || !commerce.enableCart}
+                    disabled={!storeOpen || !commerce.enableCart}
                   />
                 ))}
               </div>
@@ -422,6 +427,18 @@ export function Storefront() {
                     </a>
                   ) : null}
                 </p>
+              ) : null}
+              {commerce.paymentMethods.filter(Boolean).length > 0 ? (
+                <div className="pt-1">
+                  <p className="mb-1 text-[11px] font-bold text-muted">{en ? "Payment methods" : "طرق الدفع 💳"}</p>
+                  <p className="flex flex-wrap gap-1.5">
+                    {commerce.paymentMethods.filter(Boolean).map((method) => (
+                      <span key={method} className="rounded-lg border border-line bg-surface-2 px-2.5 py-1 text-[11px] font-bold">
+                        {method}
+                      </span>
+                    ))}
+                  </p>
+                </div>
               ) : null}
             </div>
           </div>

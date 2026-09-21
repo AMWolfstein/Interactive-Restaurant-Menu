@@ -6,6 +6,9 @@ export type SiteLanguage = "ar" | "en";
 export type ThemeMode = "dark" | "light";
 export type OrderType = "delivery" | "pickup" | "instore";
 
+/** حالة الطلب — بتتحدث من لوحة التحكم */
+export type OrderStatus = "new" | "confirmed" | "delivered" | "cancelled";
+
 export interface Category {
   id: string;
   name: string;
@@ -99,8 +102,30 @@ export interface ContactSettings {
   openingHours: string;
   /** فتح/قفل المحل يدوياً من الأدمين */
   isOpen: boolean;
+  /** لما يكون مفعّل، حالة المحل بتتحسب أوتوماتيك من weeklySchedule */
+  autoSchedule: boolean;
+  /** جدول مواعيد العمل الأسبوعي — 7 أيام (0 = الأحد … 6 = السبت) */
+  weeklySchedule: WeekDaySchedule[];
   closedMessage: string;
   footerNote: string;
+}
+
+/** مواعيد يوم واحد في جدول المحل — وقت "HH:MM" بصيغة 24 ساعة */
+export interface WeekDaySchedule {
+  /** 0 = الأحد … 6 = السبت (نفس ترتيب Date.getDay) */
+  day: number;
+  enabled: boolean;
+  open: string;
+  close: string;
+}
+
+/** منطقة توصيل برسوم وحد أدنى خاصين بيها */
+export interface DeliveryZone {
+  id: string;
+  name: string;
+  fee: number;
+  /** حد أدنى للطلب في المنطقة دي — 0 = من غير حد */
+  minimumOrder: number;
 }
 
 export interface CommerceSettings {
@@ -118,6 +143,11 @@ export interface CommerceSettings {
   requireAddress: boolean;
   enableNotes: boolean;
   enableSearch: boolean;
+  /** مناطق توصيل برسوم مختلفة — لما تكون مفعّلة العميل يختار منطقته في السلة */
+  enableZones: boolean;
+  deliveryZones: DeliveryZone[];
+  /** طرق الدفع المتاحة — فاضية = الخاصية مقفولة */
+  paymentMethods: string[];
   /** شكل عرض المنتجات: قائمة تفصيلية أو شبكة من 3 أعمدة */
   productLayout: "list" | "grid";
   enableFeatured: boolean;
@@ -149,6 +179,13 @@ export interface SavedOrder {
   orderType: OrderType;
   lines: Array<{ itemId: string; name: string; quantity: number; unitPrice: number }>;
   total: number;
+  /** حالة الطلب — الطلبات القديمة (قبل الميزة) بتتعامل كـ "new" */
+  status?: OrderStatus;
+  statusUpdatedAt?: string;
+  /** اسم منطقة التوصيل المختارة (لو الطلب توصيل بمناطق مفعّلة) */
+  zoneName?: string;
+  /** طريقة الدفع اللي اختارها العميل */
+  paymentMethod?: string;
 }
 
 export interface AdminOverview {

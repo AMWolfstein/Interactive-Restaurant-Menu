@@ -11,10 +11,12 @@ import {
   placeOrder,
   probeSupabaseStore,
   savePublishedMenu,
+  updateOrderStatus,
   type PlaceOrderInput,
 } from "./supabase-store";
+import { isStoreOpenBySchedule } from "./schedule";
 import { isValidOrderType, sanitizeText } from "./validation";
-import type { AdminOverview, MenuData, SavedOrder } from "./types";
+import type { AdminOverview, MenuData, OrderStatus, SavedOrder } from "./types";
 
 /**
  * طبقة الباك إند لحفظ بيانات المتجر والكتالوج والطلبات.
@@ -123,17 +125,25 @@ function computeServerTotal(
   lines: { price: number; quantity: number }[],
   commerce: MenuData["commerce"],
   orderType: string,
+  zoneFee?: number | null,
 ): number {
   const subtotal = lines.reduce((s, l) => s + l.price * l.quantity, 0);
   const isDelivery = orderType === "delivery";
   const qualifiesFree =
     isDelivery && commerce.freeDeliveryOver > 0 && subtotal >= commerce.freeDeliveryOver;
-  const delivery = isDelivery && !qualifiesFree ? Math.max(0, commerce.deliveryFee) : 0;
+  const baseFee = typeof zoneFee === "number" && zoneFee >= 0 ? zoneFee : commerce.deliveryFee;
+  const delivery = isDelivery && !qualifiesFree ? Math.max(0, baseFee) : 0;
   const service =
     commerce.serviceChargePercent > 0
       ? Math.round(((subtotal + delivery) * commerce.serviceChargePercent) / 100)
       : 0;
   return subtotal + delivery + service;
+}
+
+const ORDER_STATUSES: OrderStatus[] = ["new", "confirmed", "delivered", "cancelled"];
+
+function isValidStatus(value: string): value is OrderStatus {
+  return (ORDER_STATUSES as string[]).includes(value);
 }
 
 /* ------------------------------------------------------------------ */
@@ -206,25 +216,45 @@ export async function createOrder(input: PlaceOrderInput): Promise<{ order: Save
       };
     }),
     total: Number(input.total) || 0,
+    zoneId: sanitizeText(input.zoneId ?? "", 60) || undefined,
+    paymentMethod: sanitizeText(input.paymentMethod ?? "", 40) || undefined,
   };
 
   const status = await storageStatus();
 
   if (status.driver === "supabase") {
-    // احسب الإجمالي على السيرفر قبل الإرسال للـ DB (مكافحة تلاعب)
+    // تحقق من مواعيد المحل + مناطق التوصيل + حساب الإجمالي من الكتالوج الحقيقي (مكافحة تلاعب)
     try {
       const menu = await getMenu();
+      // المحل مقفل حسب الجدول الأوتوماتيكي؟ مفيش طلبات جديدة
+      if (menu.contact.autoSchedule && !isStoreOpenBySchedule(menu.contact.weeklySchedule ?? [])) {
+        throw new StoreError("المحل مقفل حالياً — مش ممكن تسجيل طلبات دلوقتي", 409);
+      }
+      if (sanitizedInput.orderType === "delivery" && menu.commerce.enableZones) {
+        const zones = menu.commerce.deliveryZones ?? [];
+        if (zones.length > 0) {
+          const zone = zones.find((z) => z.id === sanitizedInput.zoneId);
+          if (!zone) throw new StoreError("اختار منطقة التوصيل", 400);
+        }
+      }
       const linesWithPrice = sanitizedInput.lines.map((l) => {
         const item = menu.items.find((m) => m.id === l.itemId);
         return { price: item?.price ?? 0, quantity: l.quantity };
       });
-      const serverTotal = computeServerTotal(linesWithPrice, menu.commerce, sanitizedInput.orderType);
+      const zone = (menu.commerce.deliveryZones ?? []).find((z) => z.id === sanitizedInput.zoneId);
+      const serverTotal = computeServerTotal(
+        linesWithPrice,
+        menu.commerce,
+        sanitizedInput.orderType,
+        zone?.fee,
+      );
       // اسمح بفارق بسيط (تقريب) لكن ارفض التلاعب الكبير
       if (Math.abs(serverTotal - sanitizedInput.total) > 5 && sanitizedInput.total < serverTotal * 0.5) {
         console.warn(`[order] total mismatch client=${sanitizedInput.total} server=${serverTotal} - using server total`);
       }
       sanitizedInput.total = serverTotal;
-    } catch {
+    } catch (error) {
+      if (error instanceof StoreError) throw error;
       // لو فشل الحساب، استمر لكن الـ DB سيعيد الحساب أيضاً
     }
 
@@ -242,6 +272,21 @@ async function createOrderInFile(input: PlaceOrderInput) {
   const database = await readFileDatabase();
   if (!Array.isArray(input.lines) || input.lines.length === 0) throw new StoreError("السلة فارغة", 400);
   if (input.lines.length > 50) throw new StoreError("عدد المنتجات كبير جداً", 400);
+
+  // الجدول الأوتوماتيكي بيتحقق على السيرفر حتى في وضع الملف
+  if (database.menu.contact.autoSchedule && !isStoreOpenBySchedule(database.menu.contact.weeklySchedule ?? [])) {
+    throw new StoreError("المحل مقفل حالياً — مش ممكن تسجيل طلبات دلوقتي", 409);
+  }
+
+  // منطقة التوصيل لازم تكون موجودة لو المناطق مفعّلة
+  const zones = database.menu.commerce.deliveryZones ?? [];
+  const zone =
+    input.orderType === "delivery" && database.menu.commerce.enableZones && zones.length > 0
+      ? zones.find((z) => z.id === input.zoneId)
+      : undefined;
+  if (input.orderType === "delivery" && database.menu.commerce.enableZones && zones.length > 0 && !zone) {
+    throw new StoreError("اختار منطقة التوصيل", 400);
+  }
 
   const orderLines: SavedOrder["lines"] = [];
 
@@ -261,6 +306,7 @@ async function createOrderInFile(input: PlaceOrderInput) {
     orderLines.map((l) => ({ price: l.unitPrice, quantity: l.quantity })),
     database.menu.commerce,
     input.orderType,
+    zone?.fee,
   );
 
   const order: SavedOrder = {
@@ -275,14 +321,49 @@ async function createOrderInFile(input: PlaceOrderInput) {
     orderType: input.orderType,
     lines: orderLines,
     total: serverTotal,
+    status: "new",
+    ...(zone ? { zoneName: zone.name } : {}),
+    ...(input.paymentMethod ? { paymentMethod: input.paymentMethod } : {}),
   };
 
   database.orders.push(order);
-  // احتفظ بآخر 100 طلب فقط في وضع الملف (منع تضخم)
-  if (database.orders.length > 100) database.orders = database.orders.slice(-100);
+  // احتفظ بآخر 500 طلب فقط في وضع الملف (منع تضخم)
+  if (database.orders.length > 500) database.orders = database.orders.slice(-500);
   database.menu.updatedAt = new Date().toISOString();
   await writeFileDatabase(database);
   return order;
+}
+
+/** تحديث حالة طلب مسجّل — للأدمن فقط */
+export async function setOrderStatus(
+  orderId: string,
+  status: string,
+  token: string | null,
+): Promise<SavedOrder> {
+  const id = sanitizeText(orderId, 40);
+  if (!id) throw new StoreError("رقم الطلب مطلوب", 400);
+  if (!isValidStatus(status)) throw new StoreError("حالة الطلب غير صالحة", 400);
+
+  const storage = await storageStatus();
+
+  if (storage.driver === "supabase") {
+    if (!token) throw new StoreError("غير مصرّح", 401);
+    const result = await updateOrderStatus(id, status, token);
+    if (!result.ok || !result.data?.order) {
+      throw new StoreError("تعذّر تحديث حالة الطلب", result.status || 502);
+    }
+    return result.data.order;
+  }
+
+  return serialized(async () => {
+    const database = await readFileDatabase();
+    const order = database.orders.find((candidate) => candidate.id === id);
+    if (!order) throw new StoreError("الطلب غير موجود", 404);
+    order.status = status;
+    order.statusUpdatedAt = new Date().toISOString();
+    await writeFileDatabase(database);
+    return order;
+  });
 }
 
 export async function getAdminOverview(token: string | null): Promise<AdminOverview> {
@@ -297,7 +378,7 @@ export async function getAdminOverview(token: string | null): Promise<AdminOverv
 
   const database = await readFileDatabase();
   return {
-    orders: database.orders.slice(-30).reverse(),
+    orders: database.orders.slice(-500).reverse(),
     storage: { driver: "file", persistent: false },
   };
 }

@@ -2,7 +2,9 @@ import type {
   CartLine,
   CommerceSettings,
   ContactSettings,
+  DeliveryZone,
   MenuItem,
+  OrderStatus,
   OrderType,
   SiteLanguage,
 } from "./types";
@@ -12,6 +14,18 @@ export const ORDER_TYPE_LABEL: Record<OrderType, { ar: string; en: string }> = {
   pickup: { ar: "استلام من المحل", en: "Pickup" },
   instore: { ar: "من داخل المحل", en: "In-store" },
 };
+
+export const ORDER_STATUS_LABEL: Record<OrderStatus, { ar: string; en: string }> = {
+  new: { ar: "جديد", en: "New" },
+  confirmed: { ar: "مؤكد", en: "Confirmed" },
+  delivered: { ar: "تم التسليم", en: "Delivered" },
+  cancelled: { ar: "ملغي", en: "Cancelled" },
+};
+
+/** حالة الطلب مع التوافق مع الطلبات القديمة اللي ملهاش status */
+export function orderStatusOf(order: { status?: OrderStatus }): OrderStatus {
+  return order.status ?? "new";
+}
 
 /** يرجّع النص المناسب للغة الحالية مع رجوع للغة التانية لو فاضية */
 export function pick(
@@ -46,13 +60,16 @@ export function computeTotals(
   lines: { line: CartLine; item: MenuItem }[],
   commerce: CommerceSettings,
   orderType: OrderType,
+  zone?: DeliveryZone | null,
 ): CartTotals {
   const subtotal = lines.reduce((sum, { line, item }) => sum + item.price * line.quantity, 0);
   const itemCount = lines.reduce((sum, { line }) => sum + line.quantity, 0);
   const isDelivery = orderType === "delivery";
   const qualifiesFree =
     isDelivery && commerce.freeDeliveryOver > 0 && subtotal >= commerce.freeDeliveryOver;
-  const delivery = isDelivery && !qualifiesFree ? Math.max(0, commerce.deliveryFee) : 0;
+  // لو فيه منطقة توصيل مختارة، رسومها هي اللي بتتحسب بدل الرسوم العامة
+  const baseDeliveryFee = zone ? Math.max(0, zone.fee) : Math.max(0, commerce.deliveryFee);
+  const delivery = isDelivery && !qualifiesFree ? baseDeliveryFee : 0;
   const service =
     commerce.serviceChargePercent > 0
       ? Math.round(((subtotal + delivery) * commerce.serviceChargePercent) / 100)
@@ -88,11 +105,15 @@ export interface OrderPayload {
   orderType: OrderType;
   lines: { line: CartLine; item: MenuItem }[];
   totals: CartTotals;
+  /** اسم منطقة التوصيل المختارة (لو مفعّل) */
+  zoneName?: string;
+  /** طريقة الدفع المختارة (لو مفعّلة) */
+  paymentMethod?: string;
 }
 
 /**
  * يبني رسالة واتساب من القالب اللي الأدمين كاتبه — يدعم البلايسهولدرز دي:
- * {storeName} {name} {phone} {orderType} {addressLine} {items}
+ * {storeName} {name} {phone} {orderType} {addressLine} {items} {zone} {payment}
  * {notes} {total} {subtotal} {delivery} {service} {currency} {count} {date}
  */
 export function buildOrderMessage(
@@ -124,6 +145,9 @@ export function buildOrderMessage(
     })
     .join("\n");
 
+  const zoneName = payload.zoneName?.trim() ?? "";
+  const paymentMethod = payload.paymentMethod?.trim() ?? "";
+
   const addressLine =
     payload.orderType === "delivery" && payload.address
       ? en
@@ -141,6 +165,8 @@ export function buildOrderMessage(
     orderType: typeLabel,
     addressLine,
     items: itemsText,
+    zone: zoneName,
+    payment: paymentMethod,
     notes: notesValue || fallbackNotes,
     total: `${formatPrice(payload.totals.total, lang, commerce)}`,
     subtotal: `${formatPrice(payload.totals.subtotal, lang, commerce)}`,
@@ -155,9 +181,21 @@ export function buildOrderMessage(
   };
 
   const template = (commerce.orderTemplate || "").trim() || defaultMessage(lang);
-  const rendered = template.replace(/\{(\w+)\}/g, (match, key: string) =>
+  let rendered = template.replace(/\{(\w+)\}/g, (match, key: string) =>
     key in map ? map[key] : match,
   );
+
+  // لو القالب مش فيه {zone} أو {payment}، بنضيفهم في آخر الرسالة تلقائياً
+  // عشان المعلومات توصل واتساب من غير ما الأدمين يعدّل القالب بنفسه
+  const extras: string[] = [];
+  if (zoneName && !template.includes("{zone}")) {
+    extras.push(en ? `🗺️ *Zone:* ${zoneName}` : `🗺️ *المنطقة:* ${zoneName}`);
+  }
+  if (paymentMethod && !template.includes("{payment}")) {
+    extras.push(en ? `💳 *Payment:* ${paymentMethod}` : `💳 *الدفع:* ${paymentMethod}`);
+  }
+  if (extras.length) rendered = `${rendered}\n${extras.join("\n")}`;
+
   // تنظيف السطور الفاضلة اللي بتنتج عن {addressLine} فاضي
   return rendered
     .split("\n")
@@ -182,6 +220,8 @@ export const TEMPLATE_TOKENS = [
   "{phone}",
   "{orderType}",
   "{addressLine}",
+  "{zone}",
+  "{payment}",
   "{items}",
   "{notes}",
   "{count}",

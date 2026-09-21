@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CircleCheck,
+  ClipboardList,
   Cloud,
   Database,
   ExternalLink,
@@ -28,6 +29,11 @@ import { useAdminSession } from "@/lib/use-admin-session";
 import { pick } from "@/lib/format";
 import { useHashValue } from "@/lib/use-hash";
 import { cx } from "@/lib/cx";
+import { flashTitle, playOrderChime, primeAlertAudio, stopTitleFlash } from "@/lib/alerts";
+import { subscribeRealtime } from "@/lib/realtime";
+import { ORDERS_TABLE } from "@/lib/supabase";
+import { authenticatedFetch } from "@/lib/supabase-auth-core";
+import type { AdminOverview } from "@/lib/types";
 import { Button, Field, TextInput } from "@/components/ui";
 import { DashboardPanel } from "./panel-dashboard";
 import { BrandPanel } from "./panel-brand";
@@ -35,12 +41,14 @@ import { LookPanel } from "./panel-look";
 import { CategoriesPanel } from "./panel-categories";
 import { ItemsPanel } from "./panel-items";
 import { OrderingPanel } from "./panel-ordering";
+import { OrdersPanel } from "./panel-orders";
 import { DataPanel } from "./panel-data";
 
-type TabKey = "dashboard" | "brand" | "look" | "categories" | "items" | "ordering" | "data" | "preview";
+type TabKey = "dashboard" | "brand" | "look" | "categories" | "items" | "ordering" | "orders" | "data" | "preview";
 
 const TABS: { key: TabKey; label: string; icon: typeof LayoutDashboard }[] = [
   { key: "dashboard", label: "نظرة عامة", icon: LayoutDashboard },
+  { key: "orders", label: "الطلبات", icon: ClipboardList },
   { key: "brand", label: "الهوية", icon: Store },
   { key: "look", label: "المظهر", icon: Palette },
   { key: "categories", label: "الأقسام", icon: FolderTree },
@@ -59,11 +67,20 @@ export function AdminApp() {
     "dashboard",
   );
   const [jump, setJump] = useState<{ intent?: string; nonce: number }>({ nonce: 0 });
+  const [newOrderCount, setNewOrderCount] = useState(0);
 
   const go = (next: string, intent?: string) => {
     setTab(next as TabKey);
     setJump((prev) => ({ intent, nonce: prev.nonce + 1 }));
   };
+
+  const selectTab = (next: TabKey) => {
+    setTab(next);
+    // فتح تبويب الطلبات بيمسح عداد التنبيه
+    if (next === "orders") setNewOrderCount(0);
+  };
+
+  const onNewOrder = useCallback(() => setNewOrderCount((count) => count + 1), []);
 
   const siteTitle = useMemo(
     () => pick(data.brand.language, data.brand.storeName, data.brand.storeNameEn),
@@ -133,7 +150,7 @@ export function AdminApp() {
           {TABS.map((item) => (
             <button
               key={item.key}
-              onClick={() => setTab(item.key)}
+              onClick={() => selectTab(item.key)}
               className={cx(
                 "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition",
                 tab === item.key ? "bg-accent text-accent-contrast" : "bg-surface text-muted",
@@ -141,10 +158,18 @@ export function AdminApp() {
             >
               <item.icon className="h-3.5 w-3.5" />
               {item.label}
+              {item.key === "orders" && newOrderCount > 0 ? (
+                <span className="grid h-4.5 min-w-4.5 place-items-center rounded-full bg-red-500 px-1 text-[10px] font-black text-white">
+                  {newOrderCount}
+                </span>
+              ) : null}
             </button>
           ))}
         </nav>
       </header>
+
+      {/* تنبيه صوتي + وميض في العنوان مع أي طلب جديد — من غير اعتماد على التبويب المفتوح */}
+      <OrderAlerts onNewOrder={onNewOrder} />
 
       <div className="mx-auto flex max-w-7xl gap-5 px-4 py-5">
         <aside className="sticky top-24 hidden w-56 shrink-0 lg:block">
@@ -152,7 +177,7 @@ export function AdminApp() {
             {TABS.map((item) => (
               <button
                 key={item.key}
-                onClick={() => setTab(item.key)}
+                onClick={() => selectTab(item.key)}
                 className={cx(
                   "flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-start text-[13px] font-bold transition",
                   tab === item.key
@@ -162,6 +187,11 @@ export function AdminApp() {
               >
                 <item.icon className="h-4 w-4" />
                 {item.label}
+                {item.key === "orders" && newOrderCount > 0 ? (
+                  <span className="ms-auto grid h-5 min-w-5 place-items-center rounded-full bg-red-500 px-1 text-[10px] font-black text-white">
+                    {newOrderCount}
+                  </span>
+                ) : null}
               </button>
             ))}
           </nav>
@@ -177,12 +207,82 @@ export function AdminApp() {
           {tab === "categories" ? <CategoriesPanel intent={jump.intent} nonce={jump.nonce} /> : null}
           {tab === "items" ? <ItemsPanel intent={jump.intent} nonce={jump.nonce} /> : null}
           {tab === "ordering" ? <OrderingPanel /> : null}
+          {tab === "orders" ? <OrdersPanel /> : null}
           {tab === "preview" ? <PreviewPanel /> : null}
           {tab === "data" ? <DataPanel /> : null}
         </main>
       </div>
     </div>
   );
+}
+
+/**
+ * تنبيهات الطلبات الجديدة على مستوى اللوحة كلها (أي تبويب مفتوح):
+ *  - Realtime لحظي لما يكون Supabase مفعّل
+ *  - فحص دوري كل دقيقة كشبكة أمان (يغطي كمان وضع الملف المحلي)
+ * التنبيه = نغمة + وميض عنوان التاب + عداد أحمر على تبويب الطلبات.
+ */
+function OrderAlerts({ onNewOrder }: { onNewOrder: () => void }) {
+  const lastSeenId = useRef<string | null>(null);
+  const lastAnnounceAt = useRef(0);
+  const onNewOrderRef = useRef(onNewOrder);
+  useEffect(() => {
+    onNewOrderRef.current = onNewOrder;
+  }, [onNewOrder]);
+
+  const announce = useCallback(() => {
+    // منع تكرار التنبيه لو نفس الطلب وصل من Realtime والفحص الدوري مع بعض
+    const now = Date.now();
+    if (now - lastAnnounceAt.current < 5_000) return;
+    lastAnnounceAt.current = now;
+    playOrderChime();
+    flashTitle("🔔 طلب جديد!");
+    onNewOrderRef.current();
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeRealtime(
+      "realtime:admin-order-alerts",
+      [{ table: ORDERS_TABLE, event: "INSERT" }],
+      () => announce(),
+    );
+
+    // المتصفح بيمنع الصوت قبل أول تفاعل — بنجهّزه من أول نقرة/كبسة
+    const prime = () => primeAlertAudio();
+    window.addEventListener("pointerdown", prime, { once: true });
+    window.addEventListener("keydown", prime, { once: true });
+
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const response = await authenticatedFetch("/api/admin/overview", { cache: "no-store" });
+        if (!response.ok) return;
+        const result = (await response.json()) as AdminOverview;
+        const latest = result.orders?.[0]?.id ?? null;
+        if (!latest) return;
+        // أول تحميل بيثبّت آخر طلب من غير تنبيه
+        if (lastSeenId.current && latest !== lastSeenId.current) announce();
+        lastSeenId.current = latest;
+      } catch {
+        // تجاهل — الفحص الجاي هيجرب تاني
+      }
+    };
+    const timer = window.setInterval(() => {
+      if (!cancelled) void poll();
+    }, 60_000);
+    void poll();
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+      window.clearInterval(timer);
+      window.removeEventListener("pointerdown", prime);
+      window.removeEventListener("keydown", prime);
+      stopTitleFlash();
+    };
+  }, [announce]);
+
+  return null;
 }
 
 function SaveChip({ state, error }: { state: ReturnType<typeof useMenu>["saveState"]; error: string | null }) {

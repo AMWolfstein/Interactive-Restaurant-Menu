@@ -31,6 +31,31 @@ function mergeWithDefaults<T>(base: T, saved: unknown): T {
   return out as T;
 }
 
+function clampFee(value: unknown): number {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num < 0) return 0;
+  return Math.min(100000, Math.round(num * 100) / 100);
+}
+
+/** يضمن جدول أسبوعي كامل (7 أيام) بأوقات HH:MM صالحة */
+function normalizeWeeklySchedule(raw: unknown): import("./types").WeekDaySchedule[] {
+  const fallback = DEFAULT_DATA.contact.weeklySchedule;
+  const source = Array.isArray(raw) ? raw : [];
+  return fallback.map((day) => {
+    const entry = source.find((slot) => slot && (slot as { day?: unknown }).day === day.day) as
+      | { open?: unknown; close?: unknown; enabled?: unknown }
+      | undefined;
+    const valid = (value: unknown, fb: string) =>
+      typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value.trim()) ? value.trim() : fb;
+    return {
+      day: day.day,
+      enabled: entry ? entry.enabled !== false : day.enabled,
+      open: valid(entry?.open, day.open),
+      close: valid(entry?.close, day.close),
+    };
+  });
+}
+
 /** تطبيع أي كتالوج قادم من الباك إند قبل ما يُعرض أو يُحفظ */
 function firestoreDate(value: unknown): { day: number; month: number; year: number } | null {
   if (!isPlainObject(value) || typeof value.seconds !== "number") return null;
@@ -167,6 +192,30 @@ export function normalizeData(raw: unknown): MenuData {
   merged.contact.mapUrl = sanitizeUrl(merged.contact.mapUrl);
   merged.contact.instagram = sanitizeUrl(merged.contact.instagram);
   merged.contact.facebook = sanitizeUrl(merged.contact.facebook);
+
+  // جدول الفتح/القفل الأوتوماتيكي: 7 أيام بأوقات صالحة دايماً
+  merged.contact.autoSchedule = merged.contact.autoSchedule === true;
+  merged.contact.weeklySchedule = normalizeWeeklySchedule(merged.contact.weeklySchedule);
+
+  // مناطق التوصيل: أسماء وأرقام منطقية بس
+  merged.commerce.enableZones = merged.commerce.enableZones === true;
+  merged.commerce.deliveryZones = (merged.commerce.deliveryZones ?? [])
+    .filter((zone) => zone && typeof zone.name === "string" && zone.name.trim())
+    .slice(0, 30)
+    .map((zone, index) => ({
+      id: String(zone.id ?? `zone-${index}`),
+      name: String(zone.name).trim().slice(0, 60),
+      fee: clampFee(zone.fee),
+      minimumOrder: clampFee(zone.minimumOrder),
+    }));
+
+  // طرق الدفع: نصوص قصيرة نظيفة من غير تكرار
+  merged.commerce.paymentMethods = (merged.commerce.paymentMethods ?? [])
+    .filter((method): method is string => typeof method === "string")
+    .map((method) => method.trim().slice(0, 40))
+    .filter(Boolean)
+    .filter((method, index, list) => list.indexOf(method) === index)
+    .slice(0, 10);
 
   // ضمان أسعار وحدود منطقية (مكافحة حقن أسعار سالبة أو كبيرة)
   for (const item of merged.items) {

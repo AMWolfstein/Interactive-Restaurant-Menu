@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowUpRight,
+  Banknote,
+  ChartColumn,
   CircleCheck,
+  Clock,
   Database,
   FolderTree,
   Package,
@@ -13,6 +16,8 @@ import {
   Wallet,
 } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
+import { orderStatusOf, ORDER_STATUS_LABEL } from "@/lib/format";
+import { effectiveStoreOpen } from "@/lib/schedule";
 import { Badge, Button, Panel } from "@/components/ui";
 import { cx } from "@/lib/cx";
 import { subscribeRealtime } from "@/lib/realtime";
@@ -35,6 +40,8 @@ const ORDER_TYPE_LABEL: Record<string, string> = {
   pickup: "استلام",
   instore: "من المحل",
 };
+
+const DAY = 86_400_000;
 
 export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: string) => void }) {
   const { data, isCustomized, storageKb } = useMenu();
@@ -88,6 +95,58 @@ export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: str
     return { soldOut, offers, noImage, avg };
   }, [items]);
 
+  /** تحليلات من الطلبات الفعلية — الملغي مستثنى من الإيرادات */
+  const analytics = useMemo(() => {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const active = overview.orders.filter((order) => orderStatusOf(order) !== "cancelled");
+    const revenueSince = (since: number) =>
+      active
+        .filter((order) => new Date(order.createdAt).getTime() >= since)
+        .reduce((sum, order) => sum + order.total, 0);
+    const ordersSince = (since: number) =>
+      active.filter((order) => new Date(order.createdAt).getTime() >= since).length;
+
+    const revenueToday = revenueSince(todayStart);
+    const revenueWeek = revenueSince(now.getTime() - 7 * DAY);
+    const revenueMonth = revenueSince(now.getTime() - 30 * DAY);
+    const ordersMonth = ordersSince(now.getTime() - 30 * DAY);
+    const avgOrderValue = ordersMonth > 0 ? Math.round(revenueMonth / ordersMonth) : 0;
+    const newCount = overview.orders.filter((order) => orderStatusOf(order) === "new").length;
+
+    // أعلى المنتجات بالإيراد خلال آخر 30 يوم
+    const monthStart = now.getTime() - 30 * DAY;
+    const productRevenue = new Map<string, { revenue: number; quantity: number }>();
+    for (const order of active) {
+      if (new Date(order.createdAt).getTime() < monthStart) continue;
+      for (const line of order.lines ?? []) {
+        const entry = productRevenue.get(line.name) ?? { revenue: 0, quantity: 0 };
+        entry.revenue += line.unitPrice * line.quantity;
+        entry.quantity += line.quantity;
+        productRevenue.set(line.name, entry);
+      }
+    }
+    const topProducts = [...productRevenue.entries()]
+      .map(([name, value]) => ({ name, ...value }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5);
+
+    // إيراد آخر 14 يوم (رسم بياني بسيط)
+    const daily = Array.from({ length: 14 }, (_, index) => {
+      const dayStart = todayStart - (13 - index) * DAY;
+      const dayEnd = dayStart + DAY;
+      const revenue = active
+        .filter((order) => {
+          const at = new Date(order.createdAt).getTime();
+          return at >= dayStart && at < dayEnd;
+        })
+        .reduce((sum, order) => sum + order.total, 0);
+      return { dayStart, revenue };
+    });
+
+    return { revenueToday, revenueWeek, revenueMonth, ordersMonth, avgOrderValue, newCount, topProducts, daily };
+  }, [overview.orders]);
+
   const checks = [
     {
       ok: /^\d{9,15}$/.test(contact.whatsapp.replace(/\D/g, "")),
@@ -116,9 +175,11 @@ export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: str
       tab: "items",
     },
     {
-      ok: contact.isOpen,
+      ok: effectiveStoreOpen(contact),
       label: "حالة المحل",
-      fix: contact.closedMessage || "المحل مقفل حالياً",
+      fix: contact.autoSchedule
+        ? "مقفل حالياً حسب جدول المواعيد الأوتوماتيكي"
+        : contact.closedMessage || "المحل مقفل حالياً",
       tab: "ordering",
     },
     {
@@ -140,9 +201,87 @@ export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: str
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat icon={<Package className="h-4 w-4" />} label="المنتجات" value={String(items.length)} hint={`${stats.soldOut} خلصت`} />
         <Stat icon={<FolderTree className="h-4 w-4" />} label="الأقسام" value={String(categories.length)} hint={`${categories.filter((c) => c.visible).length} ظاهر`} />
-        <Stat icon={<Receipt className="h-4 w-4" />} label="طلبات مسجّلة" value={String(overview.orders.length)} hint="محفوظة في الباك إند" />
-        <Stat icon={<Wallet className="h-4 w-4" />} label="متوسط السعر" value={`${stats.avg} ${commerce.currency}`} hint="لكل منتج" />
+        <Stat icon={<Receipt className="h-4 w-4" />} label="إيراد اليوم" value={`${analytics.revenueToday} ${commerce.currency}`} hint={`${overview.orders.length} طلب مسجّل إجمالاً`} />
+        <Stat icon={<Wallet className="h-4 w-4" />} label="متوسط قيمة الطلب" value={`${analytics.avgOrderValue} ${commerce.currency}`} hint="آخر ٣٠ يوم (بدون الملغي)" />
       </div>
+
+      <Panel
+        title="تحليلات المبيعات"
+        description="من الطلبات الفعلية المسجّلة — الطلبات الملغية مستثناة من الإيرادات"
+        icon={<ChartColumn className="h-4 w-4" />}
+        actions={
+          <Button size="sm" variant="outline" onClick={() => onJump("orders")}>
+            كل الطلبات <ArrowUpRight className="h-3.5 w-3.5" />
+          </Button>
+        }
+      >
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Stat icon={<Banknote className="h-4 w-4" />} label="إيراد النهارده" value={`${analytics.revenueToday} ${commerce.currency}`} />
+          <Stat icon={<Banknote className="h-4 w-4" />} label="إيراد آخر ٧ أيام" value={`${analytics.revenueWeek} ${commerce.currency}`} />
+          <Stat icon={<Banknote className="h-4 w-4" />} label="إيراد آخر ٣٠ يوم" value={`${analytics.revenueMonth} ${commerce.currency}`} hint={`${analytics.ordersMonth} طلب`} />
+          <Stat icon={<Clock className="h-4 w-4" />} label="طلبات جديدة بتستناك" value={String(analytics.newCount)} hint="حدّث حالتها من تبويب الطلبات" />
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          {/* إيراد آخر 14 يوم */}
+          <div className="rounded-xl border border-line bg-surface-2/40 p-3.5">
+            <p className="mb-3 text-xs font-black">إيراد آخر ١٤ يوم</p>
+            <div dir="ltr" className="flex h-32 items-end gap-1">
+              {analytics.daily.map((day) => {
+                const max = Math.max(...analytics.daily.map((d) => d.revenue), 1);
+                return (
+                  <div key={day.dayStart} className="group relative flex-1">
+                    <div
+                      className={cx(
+                        "w-full rounded-t transition-all",
+                        day.revenue > 0 ? "bg-accent/70 group-hover:bg-accent" : "bg-surface-2",
+                      )}
+                      style={{ height: `${Math.max(4, Math.round((day.revenue / max) * 100))}%` }}
+                    />
+                    <span className="pointer-events-none absolute -top-6 start-1/2 hidden -translate-x-1/2 rounded bg-ink px-1.5 py-0.5 text-[10px] font-bold text-bg group-hover:block">
+                      {day.revenue} {commerce.currency}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <div dir="rtl" className="mt-1.5 flex justify-between text-[10px] text-muted">
+              <span>قبل ١٤ يوم</span>
+              <span>النهارده</span>
+            </div>
+          </div>
+
+          {/* أعلى المنتجات بالإيراد */}
+          <div className="rounded-xl border border-line bg-surface-2/40 p-3.5">
+            <p className="mb-3 text-xs font-black">أعلى المنتجات بالإيراد — آخر ٣٠ يوم</p>
+            {analytics.topProducts.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-line p-4 text-center text-[11px] text-muted">
+                لسه مفيش بيانات كفاية — هتظهر هنا مع أول الطلبات المسجّلة
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {analytics.topProducts.map((product, index) => {
+                  const max = analytics.topProducts[0].revenue || 1;
+                  return (
+                    <li key={product.name}>
+                      <div className="flex items-center justify-between gap-2 text-[11px] font-bold">
+                        <span className="truncate">
+                          <span className="text-muted">{index + 1}.</span> {product.name}
+                          <span className="ms-1 text-muted/70">({product.quantity} قطعة)</span>
+                        </span>
+                        <span className="shrink-0 text-accent">{product.revenue} {commerce.currency}</span>
+                      </div>
+                      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2">
+                        <div className="h-full rounded-full bg-accent/70" style={{ width: `${Math.round((product.revenue / max) * 100)}%` }} />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
+      </Panel>
 
       {!overview.storage.persistent ? (
         <div className="rounded-card border border-red-500/30 bg-red-500/10 p-3 text-[11px] leading-relaxed text-red-300">
@@ -194,7 +333,18 @@ export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: str
         </Panel>
 
         <div className="space-y-4">
-          <Panel title="آخر الطلبات" description="مسجّلة في الباك إند قبل فتح رسالة واتساب" icon={<Receipt className="h-4 w-4" />}>
+          <Panel
+            title="آخر الطلبات"
+            description="مسجّلة في الباك إند قبل فتح رسالة واتساب"
+            icon={<Receipt className="h-4 w-4" />}
+            actions={
+              overview.orders.length > 0 ? (
+                <Button size="sm" variant="soft" onClick={() => onJump("orders")}>
+                  إدارة الطلبات <ArrowUpRight className="h-3.5 w-3.5" />
+                </Button>
+              ) : undefined
+            }
+          >
             {overview.orders.length === 0 ? (
               <p className="rounded-xl border border-line bg-surface-2/40 p-3 text-[11px] text-muted">
                 لسه مفيش طلبات — أول طلب من الموقع هيتسجّل هنا فوراً.
@@ -204,9 +354,22 @@ export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: str
                 {overview.orders.slice(0, 5).map((order) => (
                   <li key={order.id} className="rounded-xl border border-line bg-surface-2/40 p-3">
                     <div className="flex items-center justify-between gap-2">
-                      <span dir="ltr" className="font-mono text-[11px] font-black text-accent">
-                        {order.id}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span dir="ltr" className="font-mono text-[11px] font-black text-accent">
+                          {order.id}
+                        </span>
+                        <Badge
+                          tone={
+                            orderStatusOf(order) === "cancelled"
+                              ? "danger"
+                              : orderStatusOf(order) === "delivered"
+                                ? "success"
+                                : "accent"
+                          }
+                        >
+                          {ORDER_STATUS_LABEL[orderStatusOf(order)].ar}
+                        </Badge>
+                      </div>
                       <span className="text-[11px] font-black">
                         {order.total} {commerce.currency}
                       </span>

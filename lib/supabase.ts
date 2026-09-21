@@ -24,6 +24,8 @@ export const PUBLISHED_SLUG = "main";
 export const ORDERS_TABLE = "orders";
 /** دالة تسجيل الطلب في قاعدة البيانات */
 export const PLACE_ORDER_FUNCTION = "place_order";
+/** دالة تحديث حالة الطلب (أدمن فقط) */
+export const UPDATE_ORDER_STATUS_FUNCTION = "update_order_status";
 /** مفتاح تخزين جلسة الدخول في المتصفح */
 export const AUTH_STORAGE_KEY = "store-catalog:sb-auth:v1";
 
