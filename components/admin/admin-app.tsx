@@ -97,6 +97,32 @@ export function AdminApp() {
     );
   }
 
+  // حساب موظف الفواتير: كل API إداري بيرفضه بـ403 من السيرفر، فبنوجّهه
+  // لشاشته بدل ما نسيبه في لوحة مكسورة. ده مجرد UX — المنع نفسه على السيرفر.
+  if (session.forbidden)
+    return (
+      <div className="grid min-h-screen place-items-center bg-bg px-4" dir="rtl">
+        <div className="w-full max-w-sm rounded-xl2 border border-line bg-surface p-6 text-center">
+          <span className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-red-500/15 text-red-400">
+            <TriangleAlert className="h-5 w-5" />
+          </span>
+          <h1 className="text-lg font-black">مالكش صلاحية على لوحة التحكم</h1>
+          <p className="mt-2 text-xs leading-relaxed text-muted">
+            الحساب ده مخصص للطلبات والفواتير بس. افتح شاشة الفواتير من الزر تحت.
+          </p>
+          <a
+            href="/invoices"
+            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-3 text-sm font-bold text-accent-contrast"
+          >
+            <Receipt className="h-4 w-4" /> فتح صفحة الفواتير
+          </a>
+          <Button variant="ghost" className="mt-2 w-full" onClick={logout}>
+            <LogOut className="h-3.5 w-3.5" /> تسجيل الخروج
+          </Button>
+        </div>
+      </div>
+    );
+
   if (!authed)
     return (
       <AdminLogin
@@ -131,6 +157,15 @@ export function AdminApp() {
 
           <div className="flex items-center gap-2">
             <SaveChip state={saveState} error={saveError} />
+            <a
+              href="/invoices"
+              target="_blank"
+              rel="noopener"
+              title="شاشة الطلبات والفواتير للموظفين"
+              className="hidden items-center gap-1.5 rounded-xl border border-line px-3 py-2 text-xs font-bold text-muted transition hover:border-accent/60 hover:text-accent sm:inline-flex"
+            >
+              الفواتير <Receipt className="h-3.5 w-3.5" />
+            </a>
             <a
               href="/"
               target="_blank"

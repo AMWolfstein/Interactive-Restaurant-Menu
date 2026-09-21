@@ -93,7 +93,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           // اختيار الزائر للستايل (أسود/أبيض) محفوظ على جهازه — بنطبقه قبل أول
           // رسم للصفحة عشان ما يحصلش وميض من ستايل المحل لستايل الزائر.
           dangerouslySetInnerHTML={{
-            __html: `try{if(!location.pathname.startsWith("/admin")){var t=localStorage.getItem("${VISITOR_THEME_KEY}");if(t==="dark"||t==="light")document.documentElement.dataset.theme=t;}}catch(e){}`,
+            __html: `try{if(!location.pathname.startsWith("/admin")&&!location.pathname.startsWith("/invoices")){var t=localStorage.getItem("${VISITOR_THEME_KEY}");if(t==="dark"||t==="light")document.documentElement.dataset.theme=t;}}catch(e){}`,
           }}
         />
       </head>

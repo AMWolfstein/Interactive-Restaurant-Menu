@@ -17,6 +17,7 @@ import {
 } from "./supabase-store";
 import { isStoreOpenBySchedule } from "./schedule";
 import { isValidOrderType, sanitizeText } from "./validation";
+import { generateOrderNumber, orderPrefixFrom } from "./order-number";
 import type { AdminOverview, MenuData, OrderStatus, SavedOrder } from "./types";
 
 /**
@@ -122,12 +123,19 @@ async function writeFileDatabase(database: FileDatabase) {
 /* حساب الإجمالي على السيرفر (مكافحة التلاعب)                         */
 /* ------------------------------------------------------------------ */
 
-function computeServerTotal(
+interface ServerTotals {
+  subtotal: number;
+  delivery: number;
+  service: number;
+  total: number;
+}
+
+function computeServerTotals(
   lines: { price: number; quantity: number }[],
   commerce: MenuData["commerce"],
   orderType: string,
   zoneFee?: number | null,
-): number {
+): ServerTotals {
   const subtotal = lines.reduce((s, l) => s + l.price * l.quantity, 0);
   const isDelivery = orderType === "delivery";
   const qualifiesFree =
@@ -138,7 +146,7 @@ function computeServerTotal(
     commerce.serviceChargePercent > 0
       ? Math.round(((subtotal + delivery) * commerce.serviceChargePercent) / 100)
       : 0;
-  return subtotal + delivery + service;
+  return { subtotal, delivery, service, total: subtotal + delivery + service };
 }
 
 const ORDER_STATUSES: OrderStatus[] = ["new", "confirmed", "delivered", "cancelled"];
@@ -250,12 +258,12 @@ export async function createOrder(input: PlaceOrderInput): Promise<{ order: Save
         return { price: item?.price ?? 0, quantity: l.quantity };
       });
       const zone = (menu.commerce.deliveryZones ?? []).find((z) => z.id === sanitizedInput.zoneId);
-      const serverTotal = computeServerTotal(
+      const serverTotal = computeServerTotals(
         linesWithPrice,
         menu.commerce,
         sanitizedInput.orderType,
         zone?.fee,
-      );
+      ).total;
       // اسمح بفارق بسيط (تقريب) لكن ارفض التلاعب الكبير
       if (Math.abs(serverTotal - sanitizedInput.total) > 5 && sanitizedInput.total < serverTotal * 0.5) {
         console.warn(`[order] total mismatch client=${sanitizedInput.total} server=${serverTotal} - using server total`);
@@ -310,15 +318,24 @@ async function createOrderInFile(input: PlaceOrderInput) {
   }
 
   // احسب الإجمالي على السيرفر - تجاهل total القادم من العميل
-  const serverTotal = computeServerTotal(
+  const totals = computeServerTotals(
     orderLines.map((l) => ({ price: l.unitPrice, quantity: l.quantity })),
     database.menu.commerce,
     input.orderType,
     zone?.fee,
   );
 
+  // نفس شكل رقم الطلب اللي بتولّده قاعدة البيانات: BF-7K4P2
+  const existingIds = new Set(database.orders.map((candidate) => candidate.id));
   const order: SavedOrder = {
-    id: `ORD-${Date.now().toString(36).toUpperCase()}`,
+    id: generateOrderNumber(
+      orderPrefixFrom({
+        orderPrefix: database.menu.commerce.orderPrefix,
+        storeNameEn: database.menu.brand.storeNameEn,
+        storeName: database.menu.brand.storeName,
+      }),
+      (candidate) => existingIds.has(candidate),
+    ),
     createdAt: new Date().toISOString(),
     customer: {
       name: sanitizeText(input.customer?.name ?? "", 100),
@@ -328,7 +345,11 @@ async function createOrderInFile(input: PlaceOrderInput) {
     },
     orderType: input.orderType,
     lines: orderLines,
-    total: serverTotal,
+    total: totals.total,
+    subtotal: totals.subtotal,
+    deliveryFee: totals.delivery,
+    serviceFee: totals.service,
+    currency: database.menu.commerce.currency,
     status: "new",
     ...(zone ? { zoneName: zone.name } : {}),
     ...(input.paymentMethod ? { paymentMethod: input.paymentMethod } : {}),
@@ -372,6 +393,15 @@ export async function setOrderStatus(
     await writeFileDatabase(database);
     return order;
   });
+}
+
+/**
+ * الطلبات لصفحة الفواتير — نفس مصدر بيانات الأدمن (جدول orders) بالظبط،
+ * لكن الرد بيرجّع الطلبات بس من غير حالة التخزين أو أي بيانات إدارية.
+ */
+export async function getOrdersForInvoices(token: string | null): Promise<SavedOrder[]> {
+  const overview = await getAdminOverview(token);
+  return overview.orders;
 }
 
 export async function getAdminOverview(token: string | null): Promise<AdminOverview> {

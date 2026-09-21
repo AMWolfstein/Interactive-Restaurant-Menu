@@ -1,55 +1,21 @@
--- Interactive Store Catalog — كتالوج منتجات وطلبات واتساب فقط
--- نفّذ الملف في Supabase Dashboard → SQL Editor.
-
-create table if not exists public.catalog_data (
-  slug text primary key,
-  data jsonb not null,
-  updated_at timestamptz not null default now()
-);
-
-create table if not exists public.orders (
-  id text primary key,
-  created_at timestamptz not null default now(),
-  data jsonb not null
-);
-
-create index if not exists orders_created_at_idx on public.orders (created_at desc);
-
--- نسخ كاملة من الكتالوج: ينشئها الـ Cron أو الأدمن من خلال API آمن.
--- لا توجد سياسة قراءة عامة: service_role فقط يقرأها ويعيدها بعد التحقق من جلسة الأدمن.
-create table if not exists public.catalog_backups (
-  id uuid primary key default gen_random_uuid(),
-  created_at timestamptz not null default now(),
-  reason text not null check (reason in ('scheduled', 'manual')),
-  data jsonb not null
-);
-create index if not exists catalog_backups_created_at_idx on public.catalog_backups (created_at desc);
-
--- اشتراكات Web Push لا تُقرأ أو تُعدّل مباشرةً من المتصفح.
-create table if not exists public.push_subscriptions (
-  endpoint text primary key check (length(endpoint) between 20 and 2000),
-  p256dh text not null check (length(p256dh) between 20 and 400),
-  auth text not null check (length(auth) between 8 and 200),
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
 -- ─────────────────────────────────────────────────────────────────────────────
--- الأدوار (Roles)
+-- Migration: نظام صفحة الفواتير /invoices
 --
--- الدور بيتخزن في Supabase Auth نفسه داخل `app_metadata.role` — المستخدم
--- مش بيقدر يعدّله من المتصفح (على عكس user_metadata)، والـ JWT بيحمله معاه
--- فالـ RLS والسيرفر الاتنين بيشوفوه.
+-- نفّذ الملف ده مرة واحدة في Supabase Dashboard → SQL Editor على قاعدة
+-- بيانات شغالة بالفعل. الملف idempotent (ينفع يتنفذ أكتر من مرة بأمان)،
+-- وهو نفس محتوى supabase/schema.sql المحدّث — يعني لو نفّذت schema.sql
+-- كامل مش محتاج الملف ده.
 --
---   admin          → لوحة التحكم الكاملة /admin (الافتراضي لأي حساب قديم)
---   invoice_staff  → صفحة الفواتير /invoices فقط
+-- بيضيف:
+--   1) الأدوار: current_app_role() + تقييد الكتابة على الكتالوج للأدمن فقط
+--   2) رقم الطلب القصير: BF-7K4P2 بدل ORD-9F3A17B2C4
+--   3) لقطة الحساب في الطلب (subtotal / deliveryFee / serviceFee / currency)
 --
--- لإنشاء موظف فواتير (من Supabase Dashboard → SQL Editor بعد إنشاء اليوزر):
---   update auth.users
---      set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb)
---                              || '{"role":"invoice_staff"}'::jsonb
---    where email = 'staff@your-store.example';
+-- مش بيضيف أي جدول جديد — الطلبات بتفضل في public.orders زي ما هي،
+-- والطلبات القديمة ما بتتغيرش.
 -- ─────────────────────────────────────────────────────────────────────────────
+
+-- (1) الأدوار
 create or replace function public.current_app_role()
 returns text
 language sql
@@ -64,13 +30,6 @@ as $function$
   end;
 $function$;
 
-alter table public.catalog_data enable row level security;
-alter table public.orders enable row level security;
-alter table public.catalog_backups enable row level security;
-alter table public.push_subscriptions enable row level security;
-
-drop policy if exists "catalog_public_read" on public.catalog_data;
-create policy "catalog_public_read" on public.catalog_data for select using (true);
 
 -- الكتابة على الكتالوج (منتجات/أسعار/إعدادات) للأدمن فقط —
 -- موظف الفواتير ممنوع حتى لو نادى Supabase REST مباشرةً بالتوكن بتاعه.
@@ -80,26 +39,8 @@ create policy "catalog_owner_write" on public.catalog_data
   using (public.current_app_role() = 'admin')
   with check (public.current_app_role() = 'admin');
 
--- قراءة الطلبات متاحة للأدمن ولموظف الفواتير (ده شغلهم الأساسي).
-drop policy if exists "orders_owner_read" on public.orders;
-create policy "orders_owner_read" on public.orders
-  for select to authenticated using (true);
 
-grant usage on schema public to anon, authenticated;
-grant select on public.catalog_data to anon, authenticated;
-grant insert, update, delete on public.catalog_data to authenticated;
-grant select on public.orders to authenticated;
--- هذان الجدولان مقفولان بـ RLS بدون policy عامة. API السيرفر فقط يستخدم service_role
--- (المفتاح لا يصل إطلاقاً للمتصفح) لإنشاء النسخ وإرسال الإشعارات.
-grant all on public.catalog_backups to service_role;
-grant all on public.push_subscriptions to service_role;
-
--- ─────────────────────────────────────────────────────────────────────────────
--- رقم الطلب القصير: BF-7K4P2
---   - بادئة من إعدادات المحل (commerce.orderPrefix) أو من أوائل حروف اسم المحل.
---   - 5 رموز عشوائية من أبجدية بدون حروف متشابهة (0/O/1/I) — سهل القراءة
---     والإملاء على التليفون، ومش تسلسلي فمش ممكن تخمين أرقام طلبات غيرك.
--- ─────────────────────────────────────────────────────────────────────────────
+-- (2) رقم الطلب القصير
 create or replace function public.order_code_alphabet()
 returns text language sql immutable as $function$ select '23456789ABCDEFGHJKLMNPQRSTUVWXYZ' $function$;
 
@@ -163,14 +104,14 @@ begin
 end;
 $function$;
 
+
 -- الدوال المساعدة دي بتتنادى من جوه place_order (security definer) بس —
 -- مفيش داعي إن anon يقدر يناديها مباشرةً.
 revoke all on function public.generate_order_number(text) from public, anon;
 revoke all on function public.order_prefix_from_menu(jsonb) from public, anon;
 revoke all on function public.order_code_alphabet() from public, anon;
 
--- يسجل الطلب فقط. لا يتابع أو يخصم أي مخزون.
--- يدعم مناطق التوصيل (رسوم لكل منطقة) وطرق الدفع، والطلب بيتسجل بحالة "new".
+-- (3) تسجيل الطلب برقم قصير + لقطة الحساب
 create or replace function public.place_order(payload jsonb)
 returns jsonb
 language plpgsql
@@ -329,50 +270,18 @@ $function$;
 revoke all on function public.place_order(jsonb) from public;
 grant execute on function public.place_order(jsonb) to anon, authenticated;
 
--- تحديث حالة الطلب (جديد/مؤكد/تم التسليم/ملغي) — للأدمن فقط (authenticated).
-create or replace function public.update_order_status(p_order_id text, p_status text)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public, pg_temp
-as $function$
-declare
-  v_order jsonb;
-begin
-  if p_status not in ('new', 'confirmed', 'delivered', 'cancelled') then
-    raise exception 'حالة الطلب غير صالحة' using errcode = '22023';
-  end if;
-
-  select data into v_order from public.orders where id = btrim(coalesce(p_order_id, '')) for update;
-  if v_order is null then
-    raise exception 'الطلب غير موجود' using errcode = '22023';
-  end if;
-
-  v_order := v_order || jsonb_build_object(
-    'status', p_status,
-    'statusUpdatedAt', to_char(now() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
-  );
-
-  update public.orders set data = v_order where id = btrim(coalesce(p_order_id, ''));
-  return jsonb_build_object('order', v_order);
-end;
-$function$;
-
-revoke all on function public.update_order_status(text, text) from public, anon;
-grant execute on function public.update_order_status(text, text) to authenticated;
-
-do $$
-begin
-  if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
-    create publication supabase_realtime;
-  end if;
-  if not exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='catalog_data') then
-    alter publication supabase_realtime add table public.catalog_data;
-  end if;
-  if not exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='orders') then
-    alter publication supabase_realtime add table public.orders;
-  end if;
-end $$;
-
-alter table public.catalog_data replica identity full;
-alter table public.orders replica identity full;
+-- ─────────────────────────────────────────────────────────────────────────────
+-- إنشاء موظف فواتير:
+--   1. Supabase → Authentication → Users → Add user (إيميل + باسورد)
+--   2. نفّذ السطر ده بإيميله:
+--
+--      update auth.users
+--         set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb)
+--                                 || '{"role":"invoice_staff"}'::jsonb
+--       where email = 'staff@your-store.example';
+--
+--   3. الموظف يدخل على /invoices بالحساب ده. لو جرّب يفتح /admin أو ينادي
+--      أي API إداري هيترفض من السيرفر (403) ومن RLS كمان.
+--
+-- أي حساب موجود دلوقتي (من غير الحقل ده) بيفضل admin زي ما هو.
+-- ─────────────────────────────────────────────────────────────────────────────
