@@ -11,7 +11,6 @@ import {
   Receipt,
   Send,
   ShoppingBag,
-  Store,
   Trash2,
   Truck,
 } from "lucide-react";
@@ -25,10 +24,10 @@ import { cx } from "@/lib/cx";
 import { ProductImage } from "./product-card";
 import { PREVIOUS_ORDER_KEY } from "./previous-order-button";
 
+// المحل تيك-أواي: استلام من المحل أو توصيل — مفيش طاولات ولا طلبات من داخل المحل
 const TYPE_ICON: Record<OrderType, typeof Truck> = {
   delivery: Truck,
   pickup: Receipt,
-  instore: Store,
 };
 
 export function CartSheet({
@@ -52,11 +51,11 @@ export function CartSheet({
   const en = lang === "en";
   const storeOpen = useStoreOpen(contact);
 
-  const [pickedType, setOrderType] = useState<OrderType>(commerce.orderTypes[0] ?? "delivery");
+  const [pickedType, setOrderType] = useState<OrderType>(commerce.orderTypes[0] ?? "pickup");
   // لو الأدمين قفل نوع الطلب اللي اختاره العميل، نرجع لأول نوع متاح
   const orderType: OrderType = commerce.orderTypes.includes(pickedType)
     ? pickedType
-    : (commerce.orderTypes[0] ?? "delivery");
+    : (commerce.orderTypes[0] ?? "pickup");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
@@ -81,7 +80,7 @@ export function CartSheet({
   const belowZoneMinimum =
     orderType === "delivery" && zone && zone.minimumOrder > 0 && totals.subtotal > 0 && totals.subtotal < zone.minimumOrder;
   const needsAddress = orderType === "delivery" && commerce.requireAddress;
-  const needsPhone = orderType !== "instore" && commerce.requirePhone;
+  const needsPhone = commerce.requirePhone;
   const needsZone = orderType === "delivery" && zonesEnabled;
 
   if (!open) return null;
@@ -213,9 +212,9 @@ export function CartSheet({
           </div>
         ) : (
           <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
-            {/* نوع الطلب */}
-            <div className="grid grid-cols-3 gap-2">
-              {(["delivery", "pickup", "instore"] as OrderType[])
+            {/* نوع الطلب: استلام من المحل أو توصيل — مفيش طاولات */}
+            <div className="grid grid-cols-2 gap-2">
+              {(["pickup", "delivery"] as OrderType[])
                 .filter((type) => commerce.orderTypes.includes(type))
                 .map((type) => {
                   const Icon = TYPE_ICON[type];

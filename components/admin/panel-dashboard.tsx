@@ -38,7 +38,8 @@ const EMPTY_OVERVIEW: OverviewState = {
 const ORDER_TYPE_LABEL: Record<string, string> = {
   delivery: "دليفري",
   pickup: "استلام",
-  instore: "من المحل",
+  // طلبات قديمة اتسجلت بنوع «من داخل المحل» قبل ما يتشال (المحل مفيهوش طاولات)
+  instore: "من المحل (قديم)",
 };
 
 const DAY = 86_400_000;

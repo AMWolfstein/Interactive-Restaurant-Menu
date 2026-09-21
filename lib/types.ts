@@ -4,7 +4,11 @@
 
 export type SiteLanguage = "ar" | "en";
 export type ThemeMode = "dark" | "light";
-export type OrderType = "delivery" | "pickup" | "instore";
+/**
+ * أنواع الطلب المتاحة: المحل مفيهوش طاولات — العميل بيستلم من المحل ويمشي،
+ * أو يطلب توصيل لباب البيت. (نوع «من داخل المحل» اتشال لأن مفيش قعدة)
+ */
+export type OrderType = "delivery" | "pickup";
 
 /** حالة الطلب — بتتحدث من لوحة التحكم */
 export type OrderStatus = "new" | "confirmed" | "delivered" | "cancelled";
