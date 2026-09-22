@@ -407,20 +407,6 @@ function wrapText(
   return y;
 }
 
-/** يحوّل الفاتورة لـ Blob صورة PNG */
-export async function renderInvoicePng(
-  model: InvoiceModel,
-  brand: InvoiceBrandInfo,
-): Promise<Blob> {
-  const canvas = await renderInvoiceCanvas(model, brand);
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (blob) resolve(blob);
-      else reject(new Error("تعذّر توليد صورة الفاتورة"));
-    }, "image/png");
-  });
-}
-
 export function invoiceFileName(orderNumber: string): string {
   return `invoice-${orderNumber.replace(/[^A-Za-z0-9-]/g, "")}.png`;
 }
