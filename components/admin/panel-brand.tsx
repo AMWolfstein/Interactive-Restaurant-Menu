@@ -103,11 +103,18 @@ export function BrandPanel() {
       </Panel>
 
       <Panel title="الفوتر والسوشيال" description="آخر الصفحة — ملاحظة أخيرة وروابط التواصل">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Field label="ملاحظة الفوتر">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Field label="ملاحظة الفوتر" className="sm:col-span-2 lg:col-span-4">
             <TextArea
               value={contact.footerNote}
               onChange={(event) => patchContact({ footerNote: event.target.value })}
+            />
+          </Field>
+          <Field label="رقم واتساب" hint="نفس الرقم المستخدم في استقبال الطلبات، وهيظهر كأيقونة في الفوتر">
+            <TextInput
+              value={contact.whatsapp}
+              onChange={(event) => patchContact({ whatsapp: event.target.value })}
+              placeholder="2010xxxxxxxx"
             />
           </Field>
           <Field label="رابط إنستجرام">
@@ -122,6 +129,13 @@ export function BrandPanel() {
               value={contact.facebook}
               onChange={(event) => patchContact({ facebook: event.target.value })}
               placeholder="https://facebook.com/shop"
+            />
+          </Field>
+          <Field label="رابط تيك توك">
+            <TextInput
+              value={contact.tiktok}
+              onChange={(event) => patchContact({ tiktok: event.target.value })}
+              placeholder="https://www.tiktok.com/@shop"
             />
           </Field>
         </div>

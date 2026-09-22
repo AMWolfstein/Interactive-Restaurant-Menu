@@ -154,6 +154,7 @@ function migrateLegacyBackup(raw: unknown): unknown {
     whatsapp: String(restaurant.phone ?? "").replace(/\\D/g, ""),
     instagram: String(restaurant.instagramUrl ?? ""),
     facebook: String(restaurant.facebookUrl ?? ""),
+    tiktok: String(restaurant.tiktokUrl ?? ""),
     mapUrl: String(restaurant.googleMapsUrl ?? ""),
   };
   const commerce = { ...DEFAULT_DATA.commerce, currency: String(restaurant.currency ?? DEFAULT_DATA.commerce.currency) };
@@ -211,6 +212,7 @@ export function normalizeData(raw: unknown): MenuData {
   merged.contact.mapUrl = sanitizeUrl(merged.contact.mapUrl);
   merged.contact.instagram = sanitizeUrl(merged.contact.instagram);
   merged.contact.facebook = sanitizeUrl(merged.contact.facebook);
+  merged.contact.tiktok = sanitizeUrl(merged.contact.tiktok);
 
   // جدول الفتح/القفل الأوتوماتيكي: 7 أيام بأوقات صالحة دايماً
   merged.contact.autoSchedule = merged.contact.autoSchedule === true;

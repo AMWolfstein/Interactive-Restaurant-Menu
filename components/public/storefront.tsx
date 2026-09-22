@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode, type SVGProps } from "react";
 import {
   Clock,
   Search,
@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
 import { useCart } from "@/lib/use-cart";
-import { computeTotals, formatPrice, pick } from "@/lib/format";
+import { computeTotals, formatPrice, pick, toWhatsappNumber } from "@/lib/format";
 import { useStoreOpen } from "@/lib/use-store-open";
 import { describeNextOpening } from "@/lib/schedule";
 import { cx } from "@/lib/cx";
@@ -35,6 +35,13 @@ const ALL = "all";
 const FAVORITES = "favorites";
 const OFFERS = "offers";
 type SortBy = "newest" | "priceAsc" | "priceDesc";
+type SocialIconName = "whatsapp" | "instagram" | "facebook" | "tiktok";
+interface SocialLink {
+  key: SocialIconName;
+  label: string;
+  href: string;
+  className: string;
+}
 /** عدد المنتجات المعروضة في الصفحة الواحدة من الكتالوج. */
 const PAGE_SIZE = 15;
 
@@ -171,6 +178,44 @@ export function Storefront() {
   // في العربي «التالية» بتشاور شمال، وفي الإنجليزي العكس.
   const PrevIcon = en ? ChevronLeft : ChevronRight;
   const NextIcon = en ? ChevronRight : ChevronLeft;
+  const whatsappNumber = toWhatsappNumber(contact.whatsapp);
+  const instagramHref = safeHref(contact.instagram);
+  const facebookHref = safeHref(contact.facebook);
+  const tiktokHref = safeHref(contact.tiktok);
+  const socialLinks: SocialLink[] = [
+    whatsappNumber
+      ? {
+          key: "whatsapp",
+          label: en ? "WhatsApp" : "واتساب",
+          href: `https://wa.me/${whatsappNumber}`,
+          className: "hover:border-[#25D366]/60 hover:text-[#25D366]",
+        }
+      : null,
+    instagramHref
+      ? {
+          key: "instagram",
+          label: en ? "Instagram" : "إنستجرام",
+          href: instagramHref,
+          className: "hover:border-[#E1306C]/60 hover:text-[#E1306C]",
+        }
+      : null,
+    facebookHref
+      ? {
+          key: "facebook",
+          label: en ? "Facebook" : "فيسبوك",
+          href: facebookHref,
+          className: "hover:border-[#1877F2]/60 hover:text-[#1877F2]",
+        }
+      : null,
+    tiktokHref
+      ? {
+          key: "tiktok",
+          label: en ? "TikTok" : "تيك توك",
+          href: tiktokHref,
+          className: "hover:border-ink/50 hover:text-ink",
+        }
+      : null,
+  ].filter((link): link is SocialLink => link !== null);
 
   return (
     <div className="min-h-screen bg-bg pb-28 text-ink" dir={en ? "ltr" : "rtl"}>
@@ -498,19 +543,25 @@ export function Storefront() {
                   <Phone className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" /> {contact.phone}
                 </a>
               ) : null}
-              {safeHref(contact.instagram) || safeHref(contact.facebook) ? (
-                <p className="flex flex-wrap gap-2 pt-1">
-                  {safeHref(contact.instagram) ? (
-                    <a href={safeHref(contact.instagram)} target="_blank" rel="noopener" className="rounded-lg border border-line px-2.5 py-1 font-bold transition hover:border-accent hover:text-accent">
-                      Instagram
+              {socialLinks.length > 0 ? (
+                <div className="flex flex-wrap gap-2 pt-1" aria-label={en ? "Social links" : "روابط السوشيال"}>
+                  {socialLinks.map((link) => (
+                    <a
+                      key={link.key}
+                      href={link.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={link.label}
+                      title={link.label}
+                      className={cx(
+                        "grid h-9 w-9 place-items-center rounded-full border border-line bg-surface-2 text-muted transition hover:-translate-y-0.5 hover:bg-surface",
+                        link.className,
+                      )}
+                    >
+                      <SocialAppIcon name={link.key} className="h-4.5 w-4.5" />
                     </a>
-                  ) : null}
-                  {safeHref(contact.facebook) ? (
-                    <a href={safeHref(contact.facebook)} target="_blank" rel="noopener" className="rounded-lg border border-line px-2.5 py-1 font-bold transition hover:border-accent hover:text-accent">
-                      Facebook
-                    </a>
-                  ) : null}
-                </p>
+                  ))}
+                </div>
               ) : null}
               {commerce.paymentMethods.filter(Boolean).length > 0 ? (
                 <div className="pt-1">
@@ -563,6 +614,40 @@ export function Storefront() {
         clear={cart.clear}
       />
     </div>
+  );
+}
+
+function SocialAppIcon({ name, ...props }: SVGProps<SVGSVGElement> & { name: SocialIconName }) {
+  if (name === "whatsapp") {
+    return (
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
+        <path d="M17.47 14.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.16-.17.2-.35.22-.64.08-.3-.15-1.26-.46-2.39-1.48-.88-.79-1.48-1.76-1.65-2.06-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.61-.92-2.21-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.88 1.21 3.07c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.69.63.71.23 1.36.2 1.87.12.57-.09 1.76-.72 2.01-1.41.25-.69.25-1.29.17-1.41-.07-.13-.27-.2-.57-.35ZM12.05 21.79h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.74.98 1-3.65-.24-.37a9.86 9.86 0 0 1-1.51-5.26c0-5.45 4.44-9.88 9.89-9.88 2.64 0 5.12 1.03 6.99 2.9a9.83 9.83 0 0 1 2.89 6.99c0 5.45-4.44 9.88-9.88 9.88ZM20.46 3.49A11.82 11.82 0 0 0 12.05 0C5.5 0 .16 5.34.16 11.89c0 2.1.55 4.14 1.59 5.95L.06 24l6.3-1.65a11.88 11.88 0 0 0 5.68 1.45h.01c6.55 0 11.89-5.34 11.89-11.89 0-3.18-1.24-6.16-3.48-8.42Z" />
+      </svg>
+    );
+  }
+
+  if (name === "instagram") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+        <rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" strokeWidth="2" />
+        <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="2" />
+        <circle cx="17.5" cy="6.5" r="1.25" fill="currentColor" />
+      </svg>
+    );
+  }
+
+  if (name === "facebook") {
+    return (
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
+        <path d="M14 8h2V5h-2.35C10.9 5 10 6.8 10 8.86V11H8v3h2v7h3v-7h2.35l.65-3h-3V9.2c0-.8.25-1.2 1-1.2Z" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
+      <path d="M16.6 2c.28 1.62 1.16 3 2.5 3.82A6.23 6.23 0 0 0 22 6.57v3.05a9.05 9.05 0 0 1-5.34-1.72v6.83a6.03 6.03 0 1 1-5.2-5.97v3.16a2.96 2.96 0 1 0 2.09 2.81V2h3.05Z" />
+    </svg>
   );
 }
 
