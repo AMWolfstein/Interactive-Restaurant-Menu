@@ -9,7 +9,7 @@ import { formatPrice } from "@/lib/format";
 import { isDiscountActive, isVariantOnOffer, offerPercent } from "@/lib/offers";
 import { safeAccent } from "@/lib/color";
 import { ProductImage } from "@/components/public/product-card";
-import type { Category, CommerceSettings, MenuItem } from "@/lib/types";
+import type { Category, CommerceSettings, HeroImage, MenuItem } from "@/lib/types";
 
 function discountFor(item: MenuItem) {
   return isDiscountActive(item.price, item.oldPrice, {
@@ -229,17 +229,25 @@ function PosterHeader({
   contact,
   compact = false,
 }: {
-  brand: { storeName: string; tagline?: string; logo?: string };
+  brand: { storeName: string; tagline?: string; logo?: string; heroImage?: string; heroImages?: HeroImage[] };
   contact: { address?: string; phone?: string };
   compact?: boolean;
 }) {
+  // صورة الهيدر بتيجي من أول صورة فعّالة في سلايدر الصفحة الرئيسية وبنفس
+  // ترتيبه. لو مفيش صور سلايدر بنرجع لصورة الهيرو القديمة (heroImage)،
+  // وأخيراً للوجو عشان الهيدر ما يفضلش فاضي.
+  const headerImage =
+    (brand.heroImages ?? []).find((slide) => slide.image.trim())?.image.trim()
+    || brand.heroImage?.trim()
+    || brand.logo;
+
   return (
     <header className={`relative overflow-hidden text-center ${compact ? "px-4 pt-5 pb-3" : "px-5 pt-6 pb-4 sm:px-10 sm:pt-7"}`}>
       <Snowflake className="absolute left-6 top-4 h-10 w-10 rotate-12 text-white/70 sm:h-14 sm:w-14" strokeWidth={1} />
       <Snowflake className="absolute right-6 top-6 h-9 w-9 -rotate-12 text-white/65 sm:h-12 sm:w-12" strokeWidth={1} />
-      {brand.logo ? (
+      {headerImage ? (
         <ProductImage
-          src={brand.logo}
+          src={headerImage}
           alt=""
           className="relative mx-auto mb-2 h-14 w-14 rounded-2xl border-2 border-white/80 bg-white/50 object-cover shadow-md sm:h-16 sm:w-16"
         />
@@ -319,7 +327,7 @@ export function MenuPoster() {
     let savedPages = 0;
     const failedPages: number[] = [];
 
-    /** ننتظر تحميل صور الصفحة (لوجو/صور المنتجات) قبل التصوير، وبمهلة قصوى
+    /** ننتظر تحميل صور الصفحة (صورة الهيدر/صور المنتجات) قبل التصوير، وبمهلة قصوى
      *  عشان صورة واحدة بطيئة أو مقطوعة ما توقفش التصدير كله. */
     const waitForAssets = async (capture: HTMLDivElement) => {
       const images = Array.from(capture.querySelectorAll("img"));
