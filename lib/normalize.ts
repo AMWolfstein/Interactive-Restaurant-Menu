@@ -198,7 +198,15 @@ export function normalizeData(raw: unknown): MenuData {
     .map((hero, index) => ({ ...hero, id: hero.id || `hero-${index}`, image: sanitizeUrl(hero.image), order: Number.isFinite(hero.order) ? hero.order : index }))
     .filter((hero) => Boolean(hero.image))
     .sort((a, b) => a.order - b.order);
-  merged.suppliers = (merged.suppliers ?? []).filter((supplier) => supplier?.id && supplier?.name).map((supplier) => ({ ...supplier, visible: supplier.visible !== false }));
+  merged.suppliers = (merged.suppliers ?? [])
+    .filter((supplier) => supplier?.id && typeof supplier.name === "string" && supplier.name.trim())
+    .map((supplier) => ({
+      ...supplier,
+      id: String(supplier.id),
+      name: supplier.name.trim().slice(0, 120),
+      visible: supplier.visible !== false,
+    }))
+    .filter((supplier, index, list) => list.findIndex((row) => row.name.toLocaleLowerCase() === supplier.name.toLocaleLowerCase()) === index);
   merged.categories = merged.categories.map((category) => ({ ...category, visible: category.visible !== false }));
   merged.contact.mapUrl = sanitizeUrl(merged.contact.mapUrl);
   merged.contact.instagram = sanitizeUrl(merged.contact.instagram);
@@ -251,8 +259,9 @@ export function normalizeData(raw: unknown): MenuData {
     ...merged,
     items: merged.items.map((item) => ({
       ...item,
-      // النظام الحالي له اختياران فقط: عادي افتراضياً أو حار.
-      spicy: item.spicy > 0 ? 1 : 0,
+      supplier: typeof item.supplier === "string" ? item.supplier.trim().slice(0, 120) : "",
+      // 0 = عادي، 1 = حار، 2 = نباتي. القيم القديمة الأكبر من 2 تتراجع لعادي.
+      spicy: item.spicy === 2 ? 2 : item.spicy > 0 ? 1 : 0,
       salesCount: Math.max(0, Math.floor(item.salesCount ?? 0)),
       createdAt: typeof item.createdAt === "string" && !Number.isNaN(new Date(item.createdAt).getTime()) ? item.createdAt : undefined,
       offerEndDay: item.offerEndDay ?? null,

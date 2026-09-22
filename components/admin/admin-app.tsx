@@ -20,6 +20,7 @@ import {
   Receipt,
   RefreshCw,
   Store,
+  Truck,
   Smartphone,
   Tablet,
   TriangleAlert,
@@ -43,8 +44,9 @@ import { ItemsPanel } from "./panel-items";
 import { OrderingPanel } from "./panel-ordering";
 import { OrdersPanel } from "./panel-orders";
 import { DataPanel } from "./panel-data";
+import { SuppliersPanel } from "./panel-suppliers";
 
-type TabKey = "dashboard" | "brand" | "look" | "categories" | "items" | "ordering" | "orders" | "data" | "preview";
+type TabKey = "dashboard" | "brand" | "look" | "categories" | "suppliers" | "items" | "ordering" | "orders" | "data" | "preview";
 
 const TABS: { key: TabKey; label: string; icon: typeof LayoutDashboard }[] = [
   { key: "dashboard", label: "نظرة عامة", icon: LayoutDashboard },
@@ -52,6 +54,7 @@ const TABS: { key: TabKey; label: string; icon: typeof LayoutDashboard }[] = [
   { key: "brand", label: "الهوية", icon: Store },
   { key: "look", label: "المظهر", icon: Palette },
   { key: "categories", label: "الأقسام", icon: FolderTree },
+  { key: "suppliers", label: "الموردين", icon: Truck },
   { key: "items", label: "المنتجات", icon: Package },
   { key: "ordering", label: "الطلب والأسعار", icon: Receipt },
   { key: "preview", label: "معاينة", icon: QrCode },
@@ -240,6 +243,7 @@ export function AdminApp() {
           {tab === "brand" ? <BrandPanel /> : null}
           {tab === "look" ? <LookPanel /> : null}
           {tab === "categories" ? <CategoriesPanel intent={jump.intent} nonce={jump.nonce} /> : null}
+          {tab === "suppliers" ? <SuppliersPanel /> : null}
           {tab === "items" ? <ItemsPanel intent={jump.intent} nonce={jump.nonce} /> : null}
           {tab === "ordering" ? <OrderingPanel /> : null}
           {tab === "orders" ? <OrdersPanel /> : null}

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Copy,
   Flame,
+  Leaf,
   ListFilter,
   Package,
   Pencil,
@@ -53,6 +54,19 @@ const emptyDraft = (categoryId: string): Draft => ({
   isNew: false,
   spicy: 0,
 });
+
+/** يحوّل الحقول القديمة (يوم/شهر/سنة) لقيمة يفهمها date input. */
+function offerDateValue(draft: Pick<Draft, "offerEndDay" | "offerEndMonth" | "offerEndYear">) {
+  if (!draft.offerEndDay || !draft.offerEndMonth || !draft.offerEndYear) return "";
+  return `${draft.offerEndYear}-${String(draft.offerEndMonth).padStart(2, "0")}-${String(draft.offerEndDay).padStart(2, "0")}`;
+}
+
+function offerDateParts(value: string) {
+  if (!value) return { offerEndDay: null, offerEndMonth: null, offerEndYear: null };
+  const [year, month, day] = value.split("-").map(Number);
+  if (![year, month, day].every(Number.isFinite)) return { offerEndDay: null, offerEndMonth: null, offerEndYear: null };
+  return { offerEndDay: day, offerEndMonth: month, offerEndYear: year };
+}
 
 export function ItemsPanel({ intent, nonce }: { intent?: string; nonce: number }) {
   const { data, updateItem, deleteItem, duplicateItem, addItem, setCategoryAvailability } = useMenu();
@@ -254,7 +268,7 @@ export function ItemsPanel({ intent, nonce }: { intent?: string; nonce: number }
                             {item.available ? "متاح" : "خلصت"}
                           </span>
                           {item.isNew ? <span className="text-emerald-400">جديد</span> : null}
-                          {item.spicy ? <Flame className="h-3 w-3 text-red-500" /> : null}
+                          {item.spicy === 1 ? <Flame className="h-3 w-3 text-red-500" /> : item.spicy === 2 ? <Leaf className="h-3 w-3 text-emerald-400" /> : null}
                           {item.oldPrice && item.oldPrice > item.price ? (
                             <span className="text-red-400">خصم {Math.round(((item.oldPrice - item.price) / item.oldPrice) * 100)}%</span>
                           ) : null}
@@ -340,7 +354,7 @@ function ItemEditor({
   onSave: () => void;
 }) {
   const { data } = useMenu();
-  const { categories, brand, commerce } = data;
+  const { categories, suppliers, brand, commerce } = data;
   if (!editing) return null;
   const draft = editing.draft;
   const set = (patch: Partial<Draft>) => onChange({ ...draft, ...patch });
@@ -377,8 +391,18 @@ function ItemEditor({
           <Field label="الوزن / حجم العبوة" hint="مثال: 1 كجم أو 500 جم">
             <TextInput value={draft.weight ?? ""} onChange={(event) => set({ weight: event.target.value })} placeholder="1 كجم" />
           </Field>
-          <Field label="المورد">
-            <TextInput value={draft.supplier ?? ""} onChange={(event) => set({ supplier: event.target.value })} placeholder="اسم المورد" />
+          <Field label="المورد" hint="اختار من قائمة الموردين التي أضفتها في تبويب الموردين">
+            <Select value={draft.supplier ?? ""} onChange={(event) => set({ supplier: event.target.value })}>
+              <option value="">بدون مورد</option>
+              {draft.supplier && !suppliers.some((supplier) => supplier.name === draft.supplier) ? (
+                <option value={draft.supplier}>{draft.supplier} (قديم)</option>
+              ) : null}
+              {suppliers.map((supplier) => (
+                <option key={supplier.id} value={supplier.name}>
+                  {supplier.name}{supplier.visible ? "" : " (مخفي من الموقع)"}
+                </option>
+              ))}
+            </Select>
           </Field>
           <Field label="السعر الجديد">
             <NumberInput value={draft.price} onValueChange={(value) => set({ price: value })} suffix={commerce.currency} />
@@ -386,27 +410,14 @@ function ItemEditor({
           <Field label="السعر قبل الخصم" hint="اكتب السعر القديم والنظام هيحسب نسبة الخصم تلقائياً">
             <NumberInput value={draft.oldPrice ?? 0} onValueChange={(value) => set({ oldPrice: value || null })} suffix={commerce.currency} />
           </Field>
-          <Field label="تاريخ انتهاء العرض" hint="اختياري — اليوم / الشهر / السنة">
-            <div className="grid grid-cols-3 gap-2" dir="rtl">
-              <TextInput
-                inputMode="numeric"
-                placeholder="اليوم"
-                value={draft.offerEndDay ?? ""}
-                onChange={(event) => set({ offerEndDay: event.target.value ? Math.min(31, Math.max(1, Number(event.target.value))) : null })}
-              />
-              <TextInput
-                inputMode="numeric"
-                placeholder="الشهر"
-                value={draft.offerEndMonth ?? ""}
-                onChange={(event) => set({ offerEndMonth: event.target.value ? Math.min(12, Math.max(1, Number(event.target.value))) : null })}
-              />
-              <TextInput
-                inputMode="numeric"
-                placeholder="السنة"
-                value={draft.offerEndYear ?? ""}
-                onChange={(event) => set({ offerEndYear: event.target.value ? Math.max(new Date().getFullYear(), Number(event.target.value)) : null })}
-              />
-            </div>
+          <Field label="تاريخ انتهاء العرض" hint="اختياري — اضغط على الخانة واختار اليوم مباشرة من التقويم">
+            <TextInput
+              type="date"
+              value={offerDateValue(draft)}
+              onChange={(event) => set(offerDateParts(event.target.value))}
+              dir="ltr"
+              className="text-start"
+            />
           </Field>
           <Field label="القسم">
             <Select value={draft.categoryId} onChange={(event) => set({ categoryId: event.target.value })}>
@@ -433,10 +444,11 @@ function ItemEditor({
           <CheckboxPill active={draft.isNew} onClick={() => set({ isNew: !draft.isNew })}>
             جديد 🆕
           </CheckboxPill>
-          <span className="ms-1 text-[11px] font-bold text-muted">الشطة 🌶️:</span>
+          <span className="ms-1 text-[11px] font-bold text-muted">الصفة الغذائية 🥗:</span>
           {([
             { value: 0, label: "عادي" },
             { value: 1, label: "حار" },
+            { value: 2, label: "نباتي 🌱" },
           ] as const).map((option) => (
             <button
               key={option.value}
@@ -447,7 +459,7 @@ function ItemEditor({
                 draft.spicy === option.value ? "border-accent bg-accent/15 text-accent" : "border-line bg-surface-2 text-muted",
               )}
             >
-              {option.value === 1 ? <Flame className="h-3 w-3" /> : null}
+              {option.value === 1 ? <Flame className="h-3 w-3 text-red-500" /> : option.value === 2 ? <Leaf className="h-3 w-3 text-emerald-400" /> : <span aria-hidden>🍽️</span>}
               {option.label}
             </button>
           ))}
