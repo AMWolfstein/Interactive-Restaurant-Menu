@@ -9,12 +9,13 @@ import {
   Package,
   Pencil,
   Plus,
+  Scale,
   Search,
   Trash2,
 } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
 import { formatPrice, pick } from "@/lib/format";
-import type { MenuItem } from "@/lib/types";
+import type { MenuItem, MenuVariant } from "@/lib/types";
 import { ImageField } from "@/components/image-field";
 import {
   Badge,
@@ -37,6 +38,49 @@ import { isItemOnOffer } from "@/lib/offers";
 
 type Draft = Omit<MenuItem, "id">;
 
+/** معرّف بسيط للوزن الجديد داخل الفورم */
+function newVariantId() {
+  return `v_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/** وزن فارغ جديد */
+function emptyVariant(): MenuVariant {
+  return {
+    id: newVariantId(),
+    label: "",
+    price: 0,
+    oldPrice: null,
+    offerEndDay: null,
+    offerEndMonth: null,
+    offerEndYear: null,
+  };
+}
+
+/**
+ * يضمن إن المنتج معاه مصفوفة أوزان (variants) عشان الفورم يشتغل بيها دايماً.
+ * - المنتج الجديد بيبدأ بمصفوفة فاضية (variants: []) عشان يظهر زرار الإضافة بس.
+ * - المنتجات القديمة (variants غير معرّفة، والسعر/الوزن في الحقول الأساسية) بتتحوّل
+ *   لأول وزن أوتوماتيك أول ما تتفتح للتعديل عشان بياناتها ما تضيعش.
+ */
+function ensureVariants(draft: Draft): MenuVariant[] {
+  if (Array.isArray(draft.variants)) return draft.variants.map((variant) => ({ ...variant }));
+  // منتج قديم بدون أوزان: نحوّل الحقول الأساسية لأول وزن
+  if ((draft.weight?.trim() || draft.price) ?? false) {
+    return [
+      {
+        id: newVariantId(),
+        label: draft.weight?.trim() ?? "",
+        price: draft.price ?? 0,
+        oldPrice: draft.oldPrice ?? null,
+        offerEndDay: draft.offerEndDay ?? null,
+        offerEndMonth: draft.offerEndMonth ?? null,
+        offerEndYear: draft.offerEndYear ?? null,
+      },
+    ];
+  }
+  return [];
+}
+
 const emptyDraft = (categoryId: string): Draft => ({
   categoryId,
   name: "",
@@ -53,10 +97,11 @@ const emptyDraft = (categoryId: string): Draft => ({
   available: true,
   isNew: false,
   spicy: 0,
+  variants: [],
 });
 
 /** يحوّل الحقول القديمة (يوم/شهر/سنة) لقيمة يفهمها date input. */
-function offerDateValue(draft: Pick<Draft, "offerEndDay" | "offerEndMonth" | "offerEndYear">) {
+function offerDateValue(draft: { offerEndDay?: number | null; offerEndMonth?: number | null; offerEndYear?: number | null }) {
   if (!draft.offerEndDay || !draft.offerEndMonth || !draft.offerEndYear) return "";
   return `${draft.offerEndYear}-${String(draft.offerEndMonth).padStart(2, "0")}-${String(draft.offerEndDay).padStart(2, "0")}`;
 }
@@ -119,13 +164,20 @@ export function ItemsPanel({ intent, nonce }: { intent?: string; nonce: number }
 
   const save = () => {
     if (!editing) return;
-    const draft = {
+    const rawVariants = ensureVariants(editing.draft);
+    // تنظيف الأوزان: تشذيب النص وتصفير السعر القديم الغلط
+    const variants: MenuVariant[] = rawVariants.map((variant) => ({
+      ...variant,
+      label: variant.label.trim(),
+      oldPrice: variant.oldPrice && variant.oldPrice > 0 ? variant.oldPrice : null,
+    }));
+
+    const draft: Draft = {
       ...editing.draft,
       name: editing.draft.name.trim(),
       description: editing.draft.description?.trim() ?? "",
-      weight: editing.draft.weight?.trim() ?? "",
       supplier: editing.draft.supplier?.trim() ?? "",
-      oldPrice: editing.draft.oldPrice && editing.draft.oldPrice > 0 ? editing.draft.oldPrice : null,
+      variants,
     };
     if (!draft.name) {
       show("اسم المنتج مطلوب", "error");
@@ -135,18 +187,35 @@ export function ItemsPanel({ intent, nonce }: { intent?: string; nonce: number }
       show("أضف قسماً أولاً ثم اختاره للمنتج", "error");
       return;
     }
-    const offerParts = [draft.offerEndDay, draft.offerEndMonth, draft.offerEndYear];
-    if (offerParts.some(Boolean) && !offerParts.every(Boolean)) {
-      show("اكتب يوم وشهر وسنة انتهاء العرض بالكامل", "error");
+    if (!variants.length) {
+      show("أضف وزناً واحداً على الأقل بسعره", "error");
       return;
     }
-    if (draft.offerEndDay && draft.offerEndMonth && draft.offerEndYear) {
-      const date = new Date(draft.offerEndYear, draft.offerEndMonth - 1, draft.offerEndDay);
-      if (date.getDate() !== draft.offerEndDay || date.getMonth() !== draft.offerEndMonth - 1) {
-        show("تاريخ انتهاء العرض غير صحيح", "error");
+    // تحقق من كل وزن: العرض لازم يكون تاريخ كامل وصحيح لو مكتوب
+    for (const variant of variants) {
+      const offerParts = [variant.offerEndDay, variant.offerEndMonth, variant.offerEndYear];
+      if (offerParts.some(Boolean) && !offerParts.every(Boolean)) {
+        show("اكتب يوم وشهر وسنة انتهاء العرض بالكامل", "error");
         return;
       }
+      if (variant.offerEndDay && variant.offerEndMonth && variant.offerEndYear) {
+        const date = new Date(variant.offerEndYear, variant.offerEndMonth - 1, variant.offerEndDay);
+        if (date.getDate() !== variant.offerEndDay || date.getMonth() !== variant.offerEndMonth - 1) {
+          show("تاريخ انتهاء العرض غير صحيح", "error");
+          return;
+        }
+      }
     }
+
+    // أول وزن بيتزامن مع الحقول الأساسية عشان الشبكة والفواتير والبوستر يفضلوا شغالين
+    const first = variants[0];
+    draft.weight = first.label;
+    draft.price = first.price;
+    draft.oldPrice = first.oldPrice ?? null;
+    draft.offerEndDay = first.offerEndDay ?? null;
+    draft.offerEndMonth = first.offerEndMonth ?? null;
+    draft.offerEndYear = first.offerEndYear ?? null;
+
     if (editing.id) {
       updateItem(editing.id, draft);
       show("تم تحديث المنتج ✅");
@@ -359,6 +428,16 @@ function ItemEditor({
   const draft = editing.draft;
   const set = (patch: Partial<Draft>) => onChange({ ...draft, ...patch });
 
+  const variants = ensureVariants(draft);
+  const setVariants = (next: MenuVariant[]) => onChange({ ...draft, variants: next });
+  const updateVariant = (id: string, patch: Partial<MenuVariant>) =>
+    setVariants(variants.map((variant) => (variant.id === id ? { ...variant, ...patch } : variant)));
+  const addVariant = () => setVariants([...variants, emptyVariant()]);
+  const removeVariant = (id: string) => {
+    const next = variants.filter((variant) => variant.id !== id);
+    setVariants(next.length ? next : [emptyVariant()]);
+  };
+
   return (
     <Modal
       open
@@ -388,9 +467,6 @@ function ItemEditor({
           <Field label="وصف المنتج">
             <TextArea value={draft.description ?? ""} onChange={(event) => set({ description: event.target.value })} rows={2} />
           </Field>
-          <Field label="الوزن / حجم العبوة" hint="مثال: 1 كجم أو 500 جم">
-            <TextInput value={draft.weight ?? ""} onChange={(event) => set({ weight: event.target.value })} placeholder="1 كجم" />
-          </Field>
           <Field label="المورد" hint="اختار من قائمة الموردين التي أضفتها في تبويب الموردين">
             <Select value={draft.supplier ?? ""} onChange={(event) => set({ supplier: event.target.value })}>
               <option value="">بدون مورد</option>
@@ -404,21 +480,6 @@ function ItemEditor({
               ))}
             </Select>
           </Field>
-          <Field label="السعر الجديد">
-            <NumberInput value={draft.price} onValueChange={(value) => set({ price: value })} suffix={commerce.currency} />
-          </Field>
-          <Field label="السعر قبل الخصم" hint="اكتب السعر القديم والنظام هيحسب نسبة الخصم تلقائياً">
-            <NumberInput value={draft.oldPrice ?? 0} onValueChange={(value) => set({ oldPrice: value || null })} suffix={commerce.currency} />
-          </Field>
-          <Field label="تاريخ انتهاء العرض" hint="اختياري — اضغط على الخانة واختار اليوم مباشرة من التقويم">
-            <TextInput
-              type="date"
-              value={offerDateValue(draft)}
-              onChange={(event) => set(offerDateParts(event.target.value))}
-              dir="ltr"
-              className="text-start"
-            />
-          </Field>
           <Field label="القسم">
             <Select value={draft.categoryId} onChange={(event) => set({ categoryId: event.target.value })}>
               {categories.map((category) => (
@@ -429,6 +490,14 @@ function ItemEditor({
             </Select>
           </Field>
         </div>
+
+        <VariantsEditor
+          variants={variants}
+          currency={commerce.currency}
+          onAdd={addVariant}
+          onRemove={removeVariant}
+          onUpdate={updateVariant}
+        />
 
         <ImageField
           label="صورة المنتج"
@@ -466,5 +535,109 @@ function ItemEditor({
         </div>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * محرّر الأوزان: كل وزن له سعره الجديد وسعره قبل الخصم وتاريخ انتهاء العرض.
+ * تظهر الحقول بس بعد الضغط على «+ إضافة وزن»، وكل وزن مضاف بيبان كشريحة جنب الزرار
+ * عشان تقدر تضيف أكتر من وزن بسعر مختلف لنفس المنتج (مثلاً 1 كجم و 500 جرام).
+ */
+function VariantsEditor({
+  variants,
+  currency,
+  onAdd,
+  onRemove,
+  onUpdate,
+}: {
+  variants: MenuVariant[];
+  currency: string;
+  onAdd: () => void;
+  onRemove: (id: string) => void;
+  onUpdate: (id: string, patch: Partial<MenuVariant>) => void;
+}) {
+  // نبدأ بزرار الإضافة بس (variants فاضية)، وأول ما نضيف وزن تظهر حقوله
+  const showCards = variants.length > 0;
+
+  return (
+    <div className="rounded-card border border-line bg-surface-2/40 p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <Scale className="h-4 w-4 text-accent" />
+        <h4 className="text-sm font-black">الأوزان والأسعار</h4>
+        <span className="text-[11px] text-muted">أضف وزناً واحداً على الأقل بسعره</span>
+      </div>
+
+      {showCards ? (
+        <div className="space-y-2.5">
+          {variants.map((variant, index) => (
+            <div key={variant.id} className="rounded-xl border border-line bg-surface p-2.5">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-accent">
+                  <Scale className="h-3.5 w-3.5" /> وزن {index + 1}
+                  {variant.label.trim() ? <span className="text-foreground">— {variant.label.trim()}</span> : null}
+                </span>
+                <IconButton
+                  label="حذف الوزن"
+                  className="hover:border-red-500/50 hover:text-red-400"
+                  onClick={() => onRemove(variant.id)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </IconButton>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="الوزن / حجم العبوة" hint="مثال: 1 كجم أو 500 جم">
+                  <TextInput
+                    value={variant.label}
+                    onChange={(event) => onUpdate(variant.id, { label: event.target.value })}
+                    placeholder="1 كجم"
+                  />
+                </Field>
+                <Field label="السعر قبل الخصم" hint="اكتب السعر القديم والنظام هيحسب نسبة الخصم تلقائياً">
+                  <NumberInput
+                    value={variant.oldPrice ?? 0}
+                    onValueChange={(value) => onUpdate(variant.id, { oldPrice: value || null })}
+                    suffix={currency}
+                  />
+                </Field>
+                <Field label="السعر الجديد">
+                  <NumberInput
+                    value={variant.price}
+                    onValueChange={(value) => onUpdate(variant.id, { price: value })}
+                    suffix={currency}
+                  />
+                </Field>
+                <Field label="تاريخ انتهاء العرض" hint="اختياري — اضغط على الخانة واختار اليوم من التقويم">
+                  <TextInput
+                    type="date"
+                    value={offerDateValue(variant)}
+                    onChange={(event) => onUpdate(variant.id, offerDateParts(event.target.value))}
+                    dir="ltr"
+                    className="text-start"
+                  />
+                </Field>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="mt-2.5 flex flex-wrap items-center gap-2">
+        {showCards
+          ? variants
+              .filter((variant) => variant.label.trim())
+              .map((variant) => (
+                <span
+                  key={`chip-${variant.id}`}
+                  className="inline-flex items-center gap-1 rounded-lg border border-accent/35 bg-accent/10 px-2 py-1 text-[11px] font-bold text-accent"
+                >
+                  {variant.label.trim()}
+                </span>
+              ))
+          : null}
+        <Button type="button" size="sm" variant="outline" onClick={onAdd}>
+          <Plus className="h-3.5 w-3.5" /> إضافة وزن
+        </Button>
+      </div>
+    </div>
   );
 }
