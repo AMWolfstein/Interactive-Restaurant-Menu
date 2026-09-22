@@ -11,6 +11,7 @@ import {
   Receipt,
   Send,
   ShoppingBag,
+  Sparkles,
   Trash2,
   Truck,
 } from "lucide-react";
@@ -18,6 +19,7 @@ import confetti from "canvas-confetti";
 import { useMenu } from "@/lib/use-menu";
 import { computeTotals, formatPrice, ORDER_TYPE_LABEL, pick, toWhatsappNumber } from "@/lib/format";
 import { useStoreOpen } from "@/lib/use-store-open";
+import { previewDiscount, useLoyalty } from "@/lib/use-loyalty";
 import type { OrderType } from "@/lib/types";
 import type { DetailedLine } from "@/lib/use-cart";
 import { cx } from "@/lib/cx";
@@ -72,9 +74,20 @@ export function CartSheet({
     [zonesEnabled, commerce.deliveryZones, zoneId],
   );
 
+  // نظام «كاشك» — رصيد العميل بيتجاب من السيرفر أول ما يكتب رقم صالح
+  const loyalty = useLoyalty(phone, commerce.loyalty);
+  const rawSubtotal = useMemo(
+    () => lines.reduce((sum, { line, item }) => sum + item.price * line.quantity, 0),
+    [lines],
+  );
+  const reward = useMemo(
+    () => previewDiscount(loyalty, commerce.loyalty, rawSubtotal),
+    [loyalty, commerce.loyalty, rawSubtotal],
+  );
+
   const totals = useMemo(
-    () => computeTotals(lines, commerce, orderType, zone),
-    [lines, commerce, orderType, zone],
+    () => computeTotals(lines, commerce, orderType, zone, reward?.discount ?? 0),
+    [lines, commerce, orderType, zone, reward],
   );
   const belowMinimum = commerce.minimumOrder > 0 && totals.subtotal > 0 && totals.subtotal < commerce.minimumOrder;
   const belowZoneMinimum =
@@ -412,6 +425,19 @@ export function CartSheet({
                   accent={!totals.delivery}
                 />
               ) : null}
+              {totals.discount > 0 ? (
+                <div className="flex items-center justify-between text-emerald-400">
+                  <span className="flex items-center gap-1 font-bold">
+                    <Sparkles className="h-3 w-3" />
+                    {en
+                      ? `${commerce.loyalty.label} ${loyalty.percent}% off`
+                      : `خصم ${commerce.loyalty.label} ${loyalty.percent}٪`}
+                  </span>
+                  <span className="font-black">
+                    −{formatPrice(totals.discount, lang, commerce)}
+                  </span>
+                </div>
+              ) : null}
               {totals.service ? (
                 <Row
                   label={`${en ? "Service" : "خدمة"} ${commerce.serviceChargePercent}%`}
@@ -422,6 +448,30 @@ export function CartSheet({
                 <span>{en ? "Total" : "الإجمالي"}</span>
                 <span className="text-accent">{formatPrice(totals.total, lang, commerce)}</span>
               </div>
+              {/* شريط تقدّم كاشك — بيظهر بعد ما العميل يكتب رقمه */}
+              {loyalty.show && !loyalty.eligible && loyalty.remaining > 0 ? (
+                <div className="pt-1">
+                  <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
+                    <div
+                      className="h-full rounded-full bg-emerald-500 transition-all"
+                      style={{ width: `${loyalty.progress}%` }}
+                    />
+                  </div>
+                  <p className="mt-1 text-[11px] text-muted">
+                    {en
+                      ? `Spend ${formatPrice(loyalty.remaining, lang, commerce)} more to unlock ${loyalty.percent}% off (${commerce.loyalty.label})`
+                      : `فاضل ${formatPrice(loyalty.remaining, lang, commerce)} وتاخد خصم ${loyalty.percent}٪ — ${commerce.loyalty.label} 🎁`}
+                  </p>
+                </div>
+              ) : null}
+              {loyalty.show && loyalty.eligible ? (
+                <p className="flex items-center gap-1 rounded-lg bg-emerald-500/10 p-2 text-[11px] font-bold text-emerald-400">
+                  <Sparkles className="h-3 w-3 shrink-0" />
+                  {en
+                    ? `You earned ${loyalty.percent}% off on this order!`
+                    : `مبروك! مشترياتك وصلت ${formatPrice(loyalty.threshold, lang, commerce)} — خصم ${loyalty.percent}٪ على الطلب ده 🎉`}
+                </p>
+              ) : null}
               {totals.freeDeliveryGap > 0 ? (
                 <div className="pt-1">
                   <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">

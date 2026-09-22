@@ -2,13 +2,23 @@ import "server-only";
 
 import {
   CATALOG_TABLE,
+  CUSTOMER_LOYALTY_FUNCTION,
+  CUSTOMER_ORDERS_FUNCTION,
   ORDERS_TABLE,
   PLACE_ORDER_FUNCTION,
   PUBLISHED_SLUG,
+  SEARCH_CUSTOMERS_FUNCTION,
   UPDATE_ORDER_STATUS_FUNCTION,
 } from "./supabase";
 import { normalizeData } from "./normalize";
-import type { AdminOverview, CartLine, MenuData, OrderType, SavedOrder } from "./types";
+import type {
+  AdminOverview,
+  CartLine,
+  CustomerRecord,
+  MenuData,
+  OrderType,
+  SavedOrder,
+} from "./types";
 
 /**
  * مخزن البيانات السحابي — Supabase (Postgres) عن طريق REST API.
@@ -200,4 +210,85 @@ export async function updateOrderStatus(
     body: { p_order_id: orderId, p_status: status },
     token,
   });
+}
+
+/* ------------------------------------------------------------------ */
+/* نظام «كاشك» — العملاء والأرصدة                                     */
+/* ------------------------------------------------------------------ */
+
+/** الشكل اللي بترجّعه دالة customer_loyalty في قاعدة البيانات */
+export interface LoyaltyLookup {
+  enabled: boolean;
+  balance: number;
+  threshold?: number;
+  percent?: number;
+  eligible?: boolean;
+  remaining?: number;
+}
+
+/**
+ * رصيد كاشك لعميل — بيتنادى بمفتاح anon (العميل نفسه في السلة).
+ * الدالة في قاعدة البيانات بترجّع أرقام الرصيد بس، من غير الاسم أو العنوان
+ * أو تاريخ الطلبات، عشان معرفة رقم موبايل متبقاش تسريب لبيانات صاحبه.
+ */
+export async function fetchCustomerLoyalty(phone: string): Promise<RestResult<LoyaltyLookup>> {
+  return rest<LoyaltyLookup>(`rpc/${CUSTOMER_LOYALTY_FUNCTION}`, {
+    method: "POST",
+    body: { p_phone: phone },
+  });
+}
+
+interface CustomerRow {
+  phone: string;
+  name: string;
+  spent: number | string;
+  lifetime: number | string;
+  orders_count: number;
+  rewards_used: number;
+  discount_total: number | string;
+  created_at: string;
+  updated_at: string;
+}
+
+const toCustomer = (row: CustomerRow): CustomerRecord => ({
+  phone: row.phone,
+  name: row.name ?? "",
+  // Postgres numeric بيرجع كنص في JSON — لازم تحويل صريح
+  spent: Number(row.spent) || 0,
+  lifetime: Number(row.lifetime) || 0,
+  ordersCount: Number(row.orders_count) || 0,
+  rewardsUsed: Number(row.rewards_used) || 0,
+  discountTotal: Number(row.discount_total) || 0,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
+/** بحث العملاء — بيتم على السيرفر فمش مقيّد بآخر ٥٠٠ طلب زي البحث القديم */
+export async function searchCustomers(
+  query: string,
+  limit: number,
+  token: string,
+): Promise<RestResult<CustomerRecord[]>> {
+  const result = await rest<CustomerRow[]>(`rpc/${SEARCH_CUSTOMERS_FUNCTION}`, {
+    method: "POST",
+    body: { p_query: query, p_limit: limit },
+    token,
+  });
+  if (!result.ok) return { ...result, data: null };
+  return { ...result, data: (result.data ?? []).map(toCustomer) };
+}
+
+/** كل طلبات عميل واحد بالموبايل — مش محدودة بصفحة الطلبات الأخيرة */
+export async function fetchCustomerOrders(
+  phone: string,
+  limit: number,
+  token: string,
+): Promise<RestResult<SavedOrder[]>> {
+  const result = await rest<OrderRow[]>(`rpc/${CUSTOMER_ORDERS_FUNCTION}`, {
+    method: "POST",
+    body: { p_phone: phone, p_limit: limit },
+    token,
+  });
+  if (!result.ok) return { ...result, data: null };
+  return { ...result, data: (result.data ?? []).map((row) => row.data) };
 }

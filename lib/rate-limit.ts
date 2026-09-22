@@ -63,4 +63,6 @@ export const LIMITS = {
   auth: { limit: 10, windowMs: 15 * 60_000 },
   /** 20 تعديل كتالوج / دقيقة للأدمن */
   menuSave: { limit: 20, windowMs: 60_000 },
+  /** 15 استعلام رصيد كاشك / دقيقة — يمنع استخدام النقطة دي لتخمين الأرقام */
+  loyalty: { limit: 15, windowMs: 60_000 },
 } as const;

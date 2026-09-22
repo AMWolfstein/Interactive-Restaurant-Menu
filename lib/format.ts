@@ -56,13 +56,21 @@ export interface CartTotals {
   total: number;
   itemCount: number;
   freeDeliveryGap: number;
+  /** خصم «كاشك» المطبّق على الطلب ده (٠ = مفيش) */
+  discount: number;
 }
 
+/**
+ * @param discount خصم «كاشك» لو العميل مستحق — بيتخصم من قيمة الأصناف قبل
+ *                 حساب رسوم الخدمة، والتوصيل مش بيتأثر بيه.
+ *                 ده للعرض في السلة بس؛ الفاتورة الحقيقية بتتحسب في الداتابيز.
+ */
 export function computeTotals(
   lines: { line: CartLine; item: MenuItem }[],
   commerce: CommerceSettings,
   orderType: OrderType,
   zone?: DeliveryZone | null,
+  discount = 0,
 ): CartTotals {
   const subtotal = lines.reduce((sum, { line, item }) => sum + item.price * line.quantity, 0);
   const itemCount = lines.reduce((sum, { line }) => sum + line.quantity, 0);
@@ -72,15 +80,17 @@ export function computeTotals(
   // لو فيه منطقة توصيل مختارة، رسومها هي اللي بتتحسب بدل الرسوم العامة
   const baseDeliveryFee = zone ? Math.max(0, zone.fee) : Math.max(0, commerce.deliveryFee);
   const delivery = isDelivery && !qualifiesFree ? baseDeliveryFee : 0;
+  const safeDiscount = Math.max(0, Math.min(subtotal, discount));
   const service =
     commerce.serviceChargePercent > 0
-      ? Math.round(((subtotal + delivery) * commerce.serviceChargePercent) / 100)
+      ? Math.round(((subtotal - safeDiscount + delivery) * commerce.serviceChargePercent) / 100)
       : 0;
   return {
     subtotal,
     delivery,
     service,
-    total: subtotal + delivery + service,
+    discount: safeDiscount,
+    total: Math.max(0, subtotal - safeDiscount + delivery + service),
     itemCount,
     freeDeliveryGap:
       isDelivery && commerce.freeDeliveryOver > 0
@@ -174,6 +184,7 @@ export function buildOrderMessage(
     subtotal: `${formatPrice(payload.totals.subtotal, lang, commerce)}`,
     delivery: payload.totals.delivery ? `${formatPrice(payload.totals.delivery, lang, commerce)}` : "0",
     service: payload.totals.service ? `${formatPrice(payload.totals.service, lang, commerce)}` : "0",
+    discount: payload.totals.discount ? `${formatPrice(payload.totals.discount, lang, commerce)}` : "0",
     currency: unit,
     count: String(payload.totals.itemCount),
     date: new Date().toLocaleString(en ? "en-GB" : "ar-EG", {
@@ -195,6 +206,13 @@ export function buildOrderMessage(
   }
   if (paymentMethod && !template.includes("{payment}")) {
     extras.push(en ? `💳 *Payment:* ${paymentMethod}` : `💳 *الدفع:* ${paymentMethod}`);
+  }
+  // خصم كاشك بيتضاف تلقائياً لو مش مذكور في القالب — العميل والمحل لازم
+  // الاتنين يشوفوا الخصم في رسالة الواتساب.
+  if (payload.totals.discount > 0 && !template.includes("{discount}")) {
+    const value = formatPrice(payload.totals.discount, lang, commerce);
+    const label = (commerce.loyalty?.label || "كاشك").trim();
+    extras.push(en ? `🎁 *${label} discount:* -${value}` : `🎁 *خصم ${label}:* −${value}`);
   }
   if (extras.length) rendered = `${rendered}\n${extras.join("\n")}`;
 
@@ -230,6 +248,7 @@ export const TEMPLATE_TOKENS = [
   "{subtotal}",
   "{delivery}",
   "{service}",
+  "{discount}",
   "{total}",
   "{currency}",
   "{date}",

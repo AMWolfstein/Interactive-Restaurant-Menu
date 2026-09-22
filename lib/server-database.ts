@@ -7,9 +7,12 @@ import { DEFAULT_DATA } from "./defaults";
 import { normalizeData } from "./normalize";
 import {
   fetchAdminOverview,
+  fetchCustomerLoyalty,
+  fetchCustomerOrders,
   fetchPublishedMenu,
   isSupabaseStoreConfigured,
   placeOrder,
+  searchCustomers,
   probeSupabaseStore,
   savePublishedMenu,
   updateOrderStatus,
@@ -18,7 +21,21 @@ import {
 import { isStoreOpenBySchedule } from "./schedule";
 import { isValidOrderType, sanitizeText } from "./validation";
 import { generateOrderNumber, orderPrefixFrom } from "./order-number";
-import type { AdminOverview, MenuData, OrderStatus, SavedOrder } from "./types";
+import {
+  computeLoyaltyDiscount,
+  isUsablePhone,
+  loyaltyStatus,
+  nextBalance,
+  normalizePhone,
+  type LoyaltyStatus,
+} from "./loyalty";
+import type {
+  AdminOverview,
+  CustomerRecord,
+  MenuData,
+  OrderStatus,
+  SavedOrder,
+} from "./types";
 
 /**
  * طبقة الباك إند لحفظ بيانات المتجر والكتالوج والطلبات.
@@ -74,11 +91,14 @@ async function storageStatus(force = false): Promise<StorageStatus> {
 interface FileDatabase {
   menu: MenuData;
   orders: SavedOrder[];
+  /** عملاء نظام «كاشك» — مفتاحهم رقم الموبايل بصيغة موحّدة */
+  customers: CustomerRecord[];
 }
 
 const freshDatabase = (): FileDatabase => ({
   menu: normalizeData(structuredClone(DEFAULT_DATA)),
   orders: [],
+  customers: [],
 });
 
 let queue = Promise.resolve();
@@ -109,6 +129,7 @@ async function readFileDatabase(): Promise<FileDatabase> {
   return {
     menu: normalizeData(parsed.menu ?? DEFAULT_DATA),
     orders: Array.isArray(parsed.orders) ? parsed.orders : [],
+    customers: Array.isArray(parsed.customers) ? parsed.customers : [],
   };
 }
 
@@ -130,11 +151,16 @@ interface ServerTotals {
   total: number;
 }
 
+/**
+ * @param discount خصم «كاشك» — بيتخصم من قيمة الأصناف قبل حساب رسوم الخدمة
+ *                 عشان العميل يستفيد بالمكافأة كاملة. التوصيل مش بيتأثر بيه.
+ */
 function computeServerTotals(
   lines: { price: number; quantity: number }[],
   commerce: MenuData["commerce"],
   orderType: string,
   zoneFee?: number | null,
+  discount = 0,
 ): ServerTotals {
   const subtotal = lines.reduce((s, l) => s + l.price * l.quantity, 0);
   const isDelivery = orderType === "delivery";
@@ -142,11 +168,17 @@ function computeServerTotals(
     isDelivery && commerce.freeDeliveryOver > 0 && subtotal >= commerce.freeDeliveryOver;
   const baseFee = typeof zoneFee === "number" && zoneFee >= 0 ? zoneFee : commerce.deliveryFee;
   const delivery = isDelivery && !qualifiesFree ? Math.max(0, baseFee) : 0;
+  const safeDiscount = Math.max(0, Math.min(subtotal, discount));
   const service =
     commerce.serviceChargePercent > 0
-      ? Math.round(((subtotal + delivery) * commerce.serviceChargePercent) / 100)
+      ? Math.round(((subtotal - safeDiscount + delivery) * commerce.serviceChargePercent) / 100)
       : 0;
-  return { subtotal, delivery, service, total: subtotal + delivery + service };
+  return {
+    subtotal,
+    delivery,
+    service,
+    total: Math.max(0, subtotal - safeDiscount + delivery + service),
+  };
 }
 
 // حالتان بس: الطلب من الموقع هيتنفذ (توصيل أو استلام)، والملغي هو اللي
@@ -320,11 +352,31 @@ async function createOrderInFile(input: PlaceOrderInput) {
   }
 
   // احسب الإجمالي على السيرفر - تجاهل total القادم من العميل
+  const rawPhone = sanitizeText(input.customer?.phone ?? "", 30);
+  const customerName = sanitizeText(input.customer?.name ?? "", 100);
+
+  // ── خصم «كاشك» ──────────────────────────────────────────────────────────
+  // نفس منطق دالة place_order في Supabase بالظبط عشان السلوك ميختلفش بين
+  // التطوير المحلي والإنتاج.
+  const loyaltySettings = database.menu.commerce.loyalty;
+  const phoneKey = normalizePhone(rawPhone);
+  const loyaltyActive = loyaltySettings.enabled && isUsablePhone(rawPhone);
+  const customer = loyaltyActive
+    ? database.customers.find((row) => row.phone === phoneKey)
+    : undefined;
+
+  const subtotalOnly = orderLines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0);
+  const snapshot = loyaltyActive
+    ? computeLoyaltyDiscount(loyaltySettings, subtotalOnly, customer?.spent ?? 0)
+    : null;
+  const discount = snapshot?.discount ?? 0;
+
   const totals = computeServerTotals(
     orderLines.map((l) => ({ price: l.unitPrice, quantity: l.quantity })),
     database.menu.commerce,
     input.orderType,
     zone?.fee,
+    discount,
   );
 
   // نفس شكل رقم الطلب اللي بتولّده قاعدة البيانات: BF-7K4P2
@@ -340,8 +392,8 @@ async function createOrderInFile(input: PlaceOrderInput) {
     ),
     createdAt: new Date().toISOString(),
     customer: {
-      name: sanitizeText(input.customer?.name ?? "", 100),
-      phone: sanitizeText(input.customer?.phone ?? "", 30),
+      name: customerName,
+      phone: rawPhone,
       address: sanitizeText(input.customer?.address ?? "", 500),
       notes: sanitizeText(input.customer?.notes ?? "", 500),
     },
@@ -355,7 +407,37 @@ async function createOrderInFile(input: PlaceOrderInput) {
     status: "new",
     ...(zone ? { zoneName: zone.name } : {}),
     ...(input.paymentMethod ? { paymentMethod: input.paymentMethod } : {}),
+    ...(snapshot ? { loyalty: snapshot } : {}),
   };
+
+  // تحديث ملف العميل في نظام كاشك
+  if (loyaltyActive) {
+    const now = new Date().toISOString();
+    const balanceAfter = snapshot ? snapshot.balanceAfter : nextBalance(customer?.spent ?? 0, subtotalOnly);
+    if (customer) {
+      customer.name = customerName || customer.name;
+      customer.spent = balanceAfter;
+      customer.lifetime += subtotalOnly;
+      customer.ordersCount += 1;
+      if (discount > 0) {
+        customer.rewardsUsed += 1;
+        customer.discountTotal += discount;
+      }
+      customer.updatedAt = now;
+    } else {
+      database.customers.push({
+        phone: phoneKey,
+        name: customerName,
+        spent: balanceAfter,
+        lifetime: subtotalOnly,
+        ordersCount: 1,
+        rewardsUsed: discount > 0 ? 1 : 0,
+        discountTotal: discount,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+  }
 
   database.orders.push(order);
   // احتفظ بآخر 500 طلب فقط في وضع الملف (منع تضخم)
@@ -390,6 +472,29 @@ export async function setOrderStatus(
     const database = await readFileDatabase();
     const order = database.orders.find((candidate) => candidate.id === id);
     if (!order) throw new StoreError("الطلب غير موجود", 404);
+
+    // عكس أثر كاشك عند الإلغاء — من غير كده حد يقدر يعمل طلبات كبيرة ويلغيها
+    // ويجمع رصيد من غير ما يشتري حاجة.
+    const was = order.status === "cancelled" ? "cancelled" : "new";
+    if (was !== status) {
+      const phoneKey = normalizePhone(order.customer?.phone ?? "");
+      const customer = database.customers.find((row) => row.phone === phoneKey);
+      if (customer) {
+        const base = Math.max(0, order.subtotal ?? 0);
+        const sign = status === "cancelled" ? -1 : 1;
+        // لو الطلب كان صرف مكافأة، الإلغاء بيرجّع العتبة لرصيد العميل تاني
+        const delta = sign * (base - (order.loyalty?.threshold ?? 0));
+        customer.spent = Math.max(0, customer.spent + delta);
+        customer.lifetime = Math.max(0, customer.lifetime + sign * base);
+        customer.ordersCount = Math.max(0, customer.ordersCount + sign);
+        if (order.loyalty) {
+          customer.rewardsUsed = Math.max(0, customer.rewardsUsed + sign);
+          customer.discountTotal = Math.max(0, customer.discountTotal + sign * order.loyalty.discount);
+        }
+        customer.updatedAt = new Date().toISOString();
+      }
+    }
+
     order.status = status;
     order.statusUpdatedAt = new Date().toISOString();
     await writeFileDatabase(database);
@@ -421,4 +526,92 @@ export async function getAdminOverview(token: string | null): Promise<AdminOverv
     orders: database.orders.slice(-500).reverse(),
     storage: { driver: "file", persistent: false },
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* نظام «كاشك» — أرصدة العملاء                                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * رصيد كاشك لعميل بالموبايل — بيتنادى من السلة قبل تسجيل الطلب عشان نعرض
+ * للعميل «فاضلك كذا» أو «مبروك، خصم ٥٪ على الطلب ده».
+ *
+ * ده للعرض بس؛ الخصم الحقيقي بيتحسب في قاعدة البيانات وقت تسجيل الطلب،
+ * فحتى لو حد زوّد الرقم ده من المتصفح مش هيغيّر حاجة في الفاتورة.
+ */
+export async function getLoyaltyStatus(phone: string): Promise<LoyaltyStatus> {
+  const menu = await getMenu();
+  const settings = menu.commerce.loyalty;
+  const off = loyaltyStatus({ ...settings, enabled: false }, 0);
+  if (!settings.enabled || !isUsablePhone(phone)) return off;
+
+  const status = await storageStatus();
+
+  if (status.driver === "supabase") {
+    const result = await fetchCustomerLoyalty(phone);
+    if (!result.ok || !result.data) return off;
+    return loyaltyStatus(settings, Number(result.data.balance) || 0);
+  }
+
+  const database = await readFileDatabase();
+  const key = normalizePhone(phone);
+  const customer = database.customers.find((row) => row.phone === key);
+  return loyaltyStatus(settings, customer?.spent ?? 0);
+}
+
+/** بحث العملاء للوحة التحكم — بحث على السيرفر مش مقيّد بآخر ٥٠٠ طلب */
+export async function listCustomers(
+  query: string,
+  token: string | null,
+  limit = 50,
+): Promise<CustomerRecord[]> {
+  const status = await storageStatus();
+  const safeLimit = Math.min(200, Math.max(1, Math.floor(limit) || 50));
+  const search = sanitizeText(query, 60);
+
+  if (status.driver === "supabase") {
+    if (!token) throw new StoreError("غير مصرّح", 401);
+    const result = await searchCustomers(search, safeLimit, token);
+    if (!result.ok) throw new StoreError("تعذّر قراءة العملاء", result.status || 502);
+    return result.data ?? [];
+  }
+
+  const database = await readFileDatabase();
+  const needle = search.trim().toLowerCase();
+  const digits = normalizePhone(search);
+  return database.customers
+    .filter((row) => {
+      if (!needle) return true;
+      return (
+        (digits.length > 0 && row.phone.includes(digits)) ||
+        row.name.toLowerCase().includes(needle)
+      );
+    })
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, safeLimit);
+}
+
+/** كل طلبات عميل واحد بالموبايل — تاريخ مشترياته الكامل */
+export async function getCustomerOrders(
+  phone: string,
+  token: string | null,
+  limit = 100,
+): Promise<SavedOrder[]> {
+  const status = await storageStatus();
+  const safeLimit = Math.min(500, Math.max(1, Math.floor(limit) || 100));
+  if (!isUsablePhone(phone)) return [];
+
+  if (status.driver === "supabase") {
+    if (!token) throw new StoreError("غير مصرّح", 401);
+    const result = await fetchCustomerOrders(phone, safeLimit, token);
+    if (!result.ok) throw new StoreError("تعذّر قراءة طلبات العميل", result.status || 502);
+    return result.data ?? [];
+  }
+
+  const key = normalizePhone(phone);
+  const database = await readFileDatabase();
+  return database.orders
+    .filter((order) => normalizePhone(order.customer?.phone ?? "") === key)
+    .reverse()
+    .slice(0, safeLimit);
 }

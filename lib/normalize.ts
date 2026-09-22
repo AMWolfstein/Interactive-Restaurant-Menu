@@ -1,4 +1,5 @@
 import { DEFAULT_DATA } from "./defaults";
+import { MAX_LOYALTY_PERCENT, MAX_LOYALTY_THRESHOLD } from "./loyalty";
 import type { MenuData, OrderType } from "./types";
 
 type Plain = Record<string, unknown>;
@@ -236,6 +237,26 @@ export function normalizeData(raw: unknown): MenuData {
     .filter(Boolean)
     .filter((method, index, list) => list.indexOf(method) === index)
     .slice(0, 10);
+
+  // نظام «كاشك»: قيم منطقية بس — عتبة موجبة ونسبة خصم معقولة (مكافحة 100٪ بالغلط)
+  {
+    const fallback = DEFAULT_DATA.commerce.loyalty;
+    const raw = merged.commerce.loyalty ?? fallback;
+    const threshold = Math.round(Number(raw.threshold));
+    const percent = Number(raw.percent);
+    merged.commerce.loyalty = {
+      enabled: raw.enabled === true,
+      label: String(raw.label ?? fallback.label).trim().slice(0, 30) || fallback.label,
+      threshold:
+        Number.isFinite(threshold) && threshold > 0
+          ? Math.min(MAX_LOYALTY_THRESHOLD, threshold)
+          : fallback.threshold,
+      percent:
+        Number.isFinite(percent) && percent > 0
+          ? Math.min(MAX_LOYALTY_PERCENT, Math.round(percent * 100) / 100)
+          : fallback.percent,
+    };
+  }
 
   // بادئة رقم الطلب: حروف وأرقام إنجليزية بس، 4 خانات كحد أقصى (BF-7K4P2)
   merged.commerce.orderPrefix = String(merged.commerce.orderPrefix ?? "")
