@@ -9,44 +9,112 @@ interface InstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 }
 
+interface NavigatorWithInstall extends Navigator {
+  standalone?: boolean;
+  getInstalledRelatedApps?: () => Promise<Array<{ id?: string; platform?: string; url?: string }>>;
+}
+
+const INSTALLED_KEY = "pwa-installed";
+
 export function PwaInstallButton({ language }: { language: SiteLanguage }) {
   const [promptEvent, setPromptEvent] = useState<InstallPromptEvent | null>(null);
-  const [installed, setInstalled] = useState(false);
+  // `null` = still checking, so we never flash the button for installed users.
+  const [installed, setInstalled] = useState<boolean | null>(null);
   const en = language === "en";
 
   useEffect(() => {
+    let active = true;
+    const nav = navigator as NavigatorWithInstall;
+
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {
         // Installation is an enhancement; the website must keep working if registration fails.
       });
     }
 
-    const standalone = window.matchMedia("(display-mode: standalone)").matches;
-    if (standalone) queueMicrotask(() => setInstalled(true));
-
-    const onPrompt = (event: Event) => {
-      event.preventDefault();
-      setPromptEvent(event as InstallPromptEvent);
-    };
-    const onInstalled = () => {
+    const markInstalled = () => {
+      try {
+        window.localStorage.setItem(INSTALLED_KEY, "1");
+      } catch {
+        // Storage can be blocked; detection still works per session.
+      }
+      if (!active) return;
       setInstalled(true);
       setPromptEvent(null);
     };
+
+    const standaloneQuery = window.matchMedia("(display-mode: standalone)");
+    const isStandalone =
+      standaloneQuery.matches ||
+      window.matchMedia("(display-mode: minimal-ui)").matches ||
+      window.matchMedia("(display-mode: fullscreen)").matches ||
+      nav.standalone === true;
+
+    let remembered = false;
+    try {
+      remembered = window.localStorage.getItem(INSTALLED_KEY) === "1";
+    } catch {
+      remembered = false;
+    }
+
+    if (isStandalone) {
+      markInstalled();
+    } else {
+      setInstalled(remembered);
+    }
+
+    // Chromium can tell us the app is already installed even inside a normal tab.
+    nav.getInstalledRelatedApps?.()
+      .then((apps) => {
+        if (active && apps.length > 0) markInstalled();
+      })
+      .catch(() => {
+        // Not supported / not allowed: fall back to the other signals.
+      });
+
+    const onDisplayModeChange = (event: MediaQueryListEvent) => {
+      if (event.matches) markInstalled();
+    };
+    standaloneQuery.addEventListener("change", onDisplayModeChange);
+
+    const onPrompt = (event: Event) => {
+      event.preventDefault();
+      if (!active) return;
+      // The browser only fires this when the app is installable, i.e. not installed.
+      try {
+        window.localStorage.removeItem(INSTALLED_KEY);
+      } catch {
+        // ignore
+      }
+      setInstalled(false);
+      setPromptEvent(event as InstallPromptEvent);
+    };
     window.addEventListener("beforeinstallprompt", onPrompt);
-    window.addEventListener("appinstalled", onInstalled);
+    window.addEventListener("appinstalled", markInstalled);
+
     return () => {
+      active = false;
+      standaloneQuery.removeEventListener("change", onDisplayModeChange);
       window.removeEventListener("beforeinstallprompt", onPrompt);
-      window.removeEventListener("appinstalled", onInstalled);
+      window.removeEventListener("appinstalled", markInstalled);
     };
   }, []);
 
-  if (installed) return null;
+  if (installed !== false) return null;
 
   const install = async () => {
     if (promptEvent) {
       await promptEvent.prompt();
-      await promptEvent.userChoice;
+      const choice = await promptEvent.userChoice;
       setPromptEvent(null);
+      if (choice.outcome === "accepted") {
+        try {
+          window.localStorage.setItem(INSTALLED_KEY, "1");
+        } catch {
+          // ignore
+        }
+        setInstalled(true);
+      }
       return;
     }
 
