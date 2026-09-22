@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, ChevronLeft, ChevronRight, Download, Loader2, MapPin, Phone, QrCode, Snowflake } from "lucide-react";
+import { ArrowRight, Download, Loader2, MapPin, Phone, QrCode, Snowflake } from "lucide-react";
 import { toBlob, toPng } from "html-to-image";
 import { useMenu } from "@/lib/use-menu";
 import { formatPrice } from "@/lib/format";
@@ -312,9 +312,9 @@ export function MenuPoster() {
   const { brand, contact, commerce, categories, items } = data;
   const accent = safeAccent(brand.accent);
   const [isExporting, setIsExporting] = useState(false);
-  const [exportPage, setExportPage] = useState(0);
+  const [exportProgress, setExportProgress] = useState(0);
   const [exportMessage, setExportMessage] = useState("");
-  const pngCaptureRef = useRef<HTMLDivElement>(null);
+  const pngCaptureRefs = useRef<Array<HTMLDivElement | null>>([]);
 
   const groups: PosterGroup[] = categories
     .filter((category) => category.visible)
@@ -328,34 +328,15 @@ export function MenuPoster() {
   const twoColumns = [0, 1].map((colIndex) => groups.filter((_, index) => index % 2 === colIndex));
   const exportPages = paginateForExport(groups);
   const exportPageCount = exportPages.length;
-  const currentExportPage = Math.min(exportPage, Math.max(0, exportPageCount - 1));
-  const exportColumns = exportPages[currentExportPage]?.columns ?? ([[], []] as PosterPage["columns"]);
 
   const handleSavePng = async () => {
-    const capture = pngCaptureRef.current;
-    if (!capture || isExporting || exportPageCount === 0) return;
-    const pageNumber = currentExportPage + 1;
+    if (isExporting || exportPageCount === 0) return;
     setIsExporting(true);
+    setExportProgress(1);
     setExportMessage("");
+    let savedPages = 0;
 
-    const download = (href: string) => {
-      const link = document.createElement("a");
-      link.href = href;
-      link.download = `${filePart(brand.storeName)}-menu-page-${String(pageNumber).padStart(2, "0")}-of-${String(exportPageCount).padStart(2, "0")}.png`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    };
-
-    const markAsSaved = () => {
-      setExportMessage(`تم حفظ الصفحة ${pageNumber} من ${exportPageCount} ✅`);
-      // كل ضغطة تحفظ صفحة واحدة فقط، وبعدها نجهّز الصفحة التالية تلقائياً.
-      if (currentExportPage < exportPageCount - 1) setExportPage(currentExportPage + 1);
-    };
-
-    try {
-      // انتظر الخطوط والصور قبل التصوير؛ التصوير المبكر كان يفشل خصوصًا على الموبايل.
-      await document.fonts?.ready;
+    const waitForAssets = async (capture: HTMLDivElement) => {
       await Promise.all(
         Array.from(capture.querySelectorAll("img")).map((image) =>
           image.complete ? image.decode?.().catch(() => undefined) : new Promise<void>((resolve) => {
@@ -364,38 +345,64 @@ export function MenuPoster() {
           }),
         ),
       );
+    };
 
-      const blob = await toBlob(capture, {
-        // الصفحة الواحدة أخف من صورة المنيو الطويلة، و1.5 يفضل واضح من غير
-        // استهلاك ذاكرة مبالغ فيه على الموبايلات.
-        pixelRatio: 1.5,
-        backgroundColor: "#dff5ff",
-        cacheBust: true,
-      });
-      if (!blob) throw new Error("PNG generation returned an empty file");
-      const objectUrl = URL.createObjectURL(blob);
-      download(objectUrl);
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 10_000);
-      markAsSaved();
-    } catch (err) {
-      console.error("PNG export error:", err);
-      try {
-        // نسخة أخف للأجهزة ذات الذاكرة المحدودة.
-        const fallbackUrl = await toPng(capture, {
-          pixelRatio: 1,
-          backgroundColor: "#dff5ff",
-          skipFonts: true,
-          cacheBust: true,
-        });
-        download(fallbackUrl);
-        markAsSaved();
-      } catch (fallbackError) {
-        console.error("PNG fallback error:", fallbackError);
-        setExportMessage("تعذّر حفظ الصفحة. حاول مرة أخرى.");
-        alert("تعذّر حفظ الصفحة، يُرجى المحاولة مرة أخرى.");
+    const download = (href: string, pageNumber: number) => {
+      const link = document.createElement("a");
+      link.href = href;
+      link.download = `${filePart(brand.storeName)}-menu-page-${String(pageNumber).padStart(2, "0")}-of-${String(exportPageCount).padStart(2, "0")}.png`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    };
+
+    try {
+      // الخطوط تتجهّز مرة واحدة، وبعدها كل صفحة تتصور وتتحمل قبل بدء التالية.
+      await document.fonts?.ready;
+      for (let pageIndex = 0; pageIndex < exportPageCount; pageIndex += 1) {
+        const capture = pngCaptureRefs.current[pageIndex];
+        if (!capture) throw new Error(`PNG page ${pageIndex + 1} is not ready`);
+        const pageNumber = pageIndex + 1;
+        setExportProgress(pageNumber);
+        await waitForAssets(capture);
+
+        try {
+          const blob = await toBlob(capture, {
+            // بنحتفظ بصورة واضحة لكن خفيفة؛ الـ Canvas بيتعمل لصفحة واحدة فقط كل مرة.
+            pixelRatio: 1.5,
+            backgroundColor: "#dff5ff",
+            cacheBust: true,
+          });
+          if (!blob) throw new Error("PNG generation returned an empty file");
+          const objectUrl = URL.createObjectURL(blob);
+          download(objectUrl, pageNumber);
+          window.setTimeout(() => URL.revokeObjectURL(objectUrl), 10_000);
+        } catch (pageError) {
+          console.error(`PNG page ${pageNumber} export error:`, pageError);
+          // محاولة أخف لنفس الصفحة على الأجهزة ذات الذاكرة المحدودة، ثم نكمل باقي الصفحات.
+          const fallbackUrl = await toPng(capture, {
+            pixelRatio: 1,
+            backgroundColor: "#dff5ff",
+            skipFonts: true,
+            cacheBust: true,
+          });
+          download(fallbackUrl, pageNumber);
+        }
+
+        savedPages += 1;
+        // مهلة قصيرة تفصل تنزيلات المتصفح المتتالية من غير تحميل كل الصور في الذاكرة.
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
       }
+
+      setExportMessage(`تم تحميل المنيو بالكامل في ${exportPageCount} ${exportPageCount === 1 ? "صورة" : "صور"} PNG ✅`);
+    } catch (error) {
+      console.error("PNG menu export error:", error);
+      const savedHint = savedPages > 0 ? ` تم تحميل ${savedPages} من ${exportPageCount}.` : "";
+      setExportMessage(`تعذّر إكمال تحميل المنيو.${savedHint} حاول مرة أخرى.`);
+      alert(`تعذّر إكمال تحميل المنيو.${savedHint}`);
     } finally {
       setIsExporting(false);
+      setExportProgress(0);
     }
   };
 
@@ -427,37 +434,6 @@ export function MenuPoster() {
             >
               <QrCode className="h-3.5 w-3.5" /> QR للطباعة
             </a>
-            {exportPageCount > 1 ? (
-              <div className="inline-flex items-center rounded-xl border border-sky-900/15 bg-white/60 p-0.5 text-sky-900">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setExportPage(Math.max(0, currentExportPage - 1));
-                    setExportMessage("");
-                  }}
-                  disabled={currentExportPage === 0 || isExporting}
-                  aria-label="صفحة التحميل السابقة"
-                  className="grid h-7 w-7 place-items-center rounded-lg transition hover:bg-white disabled:opacity-30"
-                >
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </button>
-                <span className="min-w-20 px-1 text-center text-[11px] font-black">
-                  صفحة {currentExportPage + 1} من {exportPageCount}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setExportPage(Math.min(exportPageCount - 1, currentExportPage + 1));
-                    setExportMessage("");
-                  }}
-                  disabled={currentExportPage >= exportPageCount - 1 || isExporting}
-                  aria-label="صفحة التحميل التالية"
-                  className="grid h-7 w-7 place-items-center rounded-lg transition hover:bg-white disabled:opacity-30"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ) : null}
             <button
               type="button"
               onClick={handleSavePng}
@@ -465,13 +441,18 @@ export function MenuPoster() {
               className="inline-flex items-center gap-1.5 rounded-xl bg-sky-700 px-3.5 py-2 text-xs font-black text-white shadow transition hover:bg-sky-800 disabled:opacity-50"
             >
               {isExporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-              {isExporting ? `جاري حفظ الصفحة ${currentExportPage + 1}...` : `حفظ الصفحة ${currentExportPage + 1} PNG`}
+              {isExporting
+                ? `جاري تحميل الصورة ${exportProgress} من ${exportPageCount}...`
+                : exportPageCount > 1
+                  ? `تحميل المنيو — ${exportPageCount} صور PNG`
+                  : "تحميل المنيو PNG"}
             </button>
           </div>
         </div>
         {exportPageCount > 1 ? (
           <p className="mt-2 text-end text-[11px] font-bold text-sky-900/70">
-            المنيو متقسم إلى {exportPageCount} صفحات خفيفة. كل ضغطة تحفظ صفحة واحدة ثم تجهّز الصفحة التالية.
+            ضغطة واحدة تحمّل المنيو بالكامل تلقائياً في {exportPageCount} صور مرقّمة وراء بعض.
+            <span className="block font-medium">لو المتصفح طلب السماح بتنزيل ملفات متعددة، اختار «سماح».</span>
           </p>
         ) : null}
         {exportMessage ? (
@@ -557,7 +538,7 @@ export function MenuPoster() {
         <PosterFooter contact={contact} />
       </article>
 
-      {/* Off-screen Capture Element: الصفحة المختارة فقط لتقليل استهلاك الذاكرة */}
+      {/* كل الصفحات موجودة خارج الشاشة، لكن التصوير والتحميل بيتم صفحة وراء صفحة. */}
       <div
         style={{
           position: "fixed",
@@ -569,18 +550,21 @@ export function MenuPoster() {
         }}
         aria-hidden="true"
       >
-        <div
-          ref={pngCaptureRef}
-          dir="rtl"
-          className="p-6 text-[#10213a]"
-          style={bgStyle}
-        >
-          <article className="overflow-hidden rounded-[24px] border-2 border-white/90 bg-white/30 shadow-[0_20px_60px_-25px_rgba(0,92,150,.5)]">
-            <PosterHeader brand={brand} contact={contact} />
+        {exportPages.map((posterPage, pageIndex) => (
+          <div
+            key={pageIndex}
+            ref={(node) => {
+              pngCaptureRefs.current[pageIndex] = node;
+            }}
+            dir="rtl"
+            className="p-6 text-[#10213a]"
+            style={bgStyle}
+          >
+            <article className="overflow-hidden rounded-[24px] border-2 border-white/90 bg-white/30 shadow-[0_20px_60px_-25px_rgba(0,92,150,.5)]">
+              <PosterHeader brand={brand} contact={contact} />
 
-            {exportPageCount ? (
               <div className="grid grid-cols-2 gap-x-6 gap-y-5 px-6 pb-6">
-                {exportColumns.map((column, columnIndex) => (
+                {posterPage.columns.map((column, columnIndex) => (
                   <div key={columnIndex} className="space-y-5">
                     {column.map(({ category, items: categoryItems, continuation }, sectionIndex) => (
                       <section key={`${category.id}-${sectionIndex}`} className="rounded-2xl border border-white/70 bg-white/40 p-4 shadow-sm">
@@ -609,11 +593,11 @@ export function MenuPoster() {
                   </div>
                 ))}
               </div>
-            ) : null}
 
-            <PosterFooter contact={contact} pageNumber={currentExportPage + 1} pageCount={exportPageCount} />
-          </article>
-        </div>
+              <PosterFooter contact={contact} pageNumber={pageIndex + 1} pageCount={exportPageCount} />
+            </article>
+          </div>
+        ))}
       </div>
     </main>
   );
