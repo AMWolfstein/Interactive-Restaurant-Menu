@@ -11,6 +11,7 @@ import {
   Plus,
   Scale,
   Search,
+  Tag,
   Trash2,
 } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
@@ -559,6 +560,21 @@ function VariantsEditor({
   // نبدأ بزرار الإضافة بس (variants فاضية)، وأول ما نضيف وزن تظهر حقوله
   const showCards = variants.length > 0;
 
+  // الأوزان اللي المستخدم فعّل عليها العرض يدوياً (غير اللي عندها بيانات عرض محفوظة)
+  const [manualOffers, setManualOffers] = useState<Record<string, boolean>>({});
+  const hasOfferData = (variant: MenuVariant) =>
+    Boolean(variant.oldPrice || variant.offerEndDay || variant.offerEndMonth || variant.offerEndYear);
+  const isOfferOn = (variant: MenuVariant) => manualOffers[variant.id] ?? hasOfferData(variant);
+
+  const toggleOffer = (variant: MenuVariant) => {
+    const next = !isOfferOn(variant);
+    setManualOffers((current) => ({ ...current, [variant.id]: next }));
+    // إلغاء العرض = تفضية بيانات الخصم عشان المنتج يرجع بسعره العادي
+    if (!next) {
+      onUpdate(variant.id, { oldPrice: null, offerEndDay: null, offerEndMonth: null, offerEndYear: null });
+    }
+  };
+
   return (
     <div className="rounded-card border border-line bg-surface-2/40 p-3">
       <div className="mb-2 flex items-center gap-2">
@@ -592,18 +608,31 @@ function VariantsEditor({
                     placeholder="1 كجم"
                   />
                 </Field>
+                <Field label="السعر">
+                  <NumberInput
+                    value={variant.price}
+                    onValueChange={(value) => onUpdate(variant.id, { price: value })}
+                    suffix={currency}
+                  />
+                </Field>
+                <Field label="عرض / خصم" hint="من غير عرض السعر هيفضل زي ما هو">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={isOfferOn(variant) ? "success" : "outline"}
+                    onClick={() => toggleOffer(variant)}
+                    className="w-full"
+                  >
+                    <Tag className="h-3.5 w-3.5" />
+                    {isOfferOn(variant) ? "العرض مفعّل — اضغط للإلغاء" : "تفعيل عرض على الوزن ده"}
+                  </Button>
+                </Field>
                 <Field label="السعر قبل الخصم" hint="اكتب السعر القديم والنظام هيحسب نسبة الخصم تلقائياً">
                   <NumberInput
                     value={variant.oldPrice ?? 0}
                     onValueChange={(value) => onUpdate(variant.id, { oldPrice: value || null })}
                     suffix={currency}
-                  />
-                </Field>
-                <Field label="السعر الجديد">
-                  <NumberInput
-                    value={variant.price}
-                    onValueChange={(value) => onUpdate(variant.id, { price: value })}
-                    suffix={currency}
+                    disabled={!isOfferOn(variant)}
                   />
                 </Field>
                 <Field label="تاريخ انتهاء العرض" hint="اختياري — اضغط على الخانة واختار اليوم من التقويم">
@@ -612,7 +641,8 @@ function VariantsEditor({
                     value={offerDateValue(variant)}
                     onChange={(event) => onUpdate(variant.id, offerDateParts(event.target.value))}
                     dir="ltr"
-                    className="text-start"
+                    className="text-start disabled:opacity-40"
+                    disabled={!isOfferOn(variant)}
                   />
                 </Field>
               </div>
