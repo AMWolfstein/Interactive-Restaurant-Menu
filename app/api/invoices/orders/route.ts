@@ -27,7 +27,8 @@ export async function GET(request: NextRequest) {
 
 /**
  * تغيير حالة الطلب — نفس دالة update_order_status الموجودة أصلاً ونفس
- * الحالات (new / confirmed / delivered / cancelled). مفيش نظام حالات جديد.
+ * الحالات (new / cancelled). مفيش نظام حالات جديد: الطلب من الموقع هيتنفذ،
+ * والإجراء الوحيد هو الإلغاء.
  */
 export async function PATCH(request: NextRequest) {
   const guard = await guardInvoiceRequest(request, { rateKey: "invoices-status" });

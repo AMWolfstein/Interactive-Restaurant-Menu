@@ -149,7 +149,9 @@ function computeServerTotals(
   return { subtotal, delivery, service, total: subtotal + delivery + service };
 }
 
-const ORDER_STATUSES: OrderStatus[] = ["new", "confirmed", "delivered", "cancelled"];
+// حالتان بس: الطلب من الموقع هيتنفذ (توصيل أو استلام)، والملغي هو اللي
+// الأدمن لغاه — «مؤكد» و«تم التسليم» اتشالوا.
+const ORDER_STATUSES: OrderStatus[] = ["new", "cancelled"];
 
 function isValidStatus(value: string): value is OrderStatus {
   return (ORDER_STATUSES as string[]).includes(value);

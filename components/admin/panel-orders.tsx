@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  CircleCheck,
   CircleX,
   ClipboardList,
   Clock,
@@ -40,23 +39,14 @@ const ORDER_TYPE_LABEL: Record<string, string> = {
 
 const STATUS_STYLE: Record<OrderStatus, string> = {
   new: "bg-accent/15 text-accent",
-  confirmed: "bg-sky-500/15 text-sky-400",
-  delivered: "bg-emerald-500/15 text-emerald-400",
   cancelled: "bg-red-500/15 text-red-400",
 };
 
-const NEXT_ACTIONS: Record<OrderStatus, { status: OrderStatus; label: string; icon: typeof CircleCheck; tone: string }[]> = {
+// الطلب من الموقع هيتنفذ (توصيل أو استلام) — الإجراء الوحيد من الأدمن
+// هو الإلغاء، ولو ملغي ممكن يرجّعه جديد.
+const NEXT_ACTIONS: Record<OrderStatus, { status: OrderStatus; label: string; icon: typeof CircleX; tone: string }[]> = {
   new: [
-    { status: "confirmed", label: "تأكيد", icon: CircleCheck, tone: "border-sky-500/40 bg-sky-500/10 text-sky-400 hover:bg-sky-500/20" },
-    { status: "delivered", label: "تم التسليم", icon: CircleCheck, tone: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20" },
     { status: "cancelled", label: "إلغاء", icon: CircleX, tone: "border-red-500/40 bg-red-500/10 text-red-400 hover:bg-red-500/20" },
-  ],
-  confirmed: [
-    { status: "delivered", label: "تم التسليم", icon: CircleCheck, tone: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20" },
-    { status: "cancelled", label: "إلغاء", icon: CircleX, tone: "border-red-500/40 bg-red-500/10 text-red-400 hover:bg-red-500/20" },
-  ],
-  delivered: [
-    { status: "new", label: "إرجاع كجديد", icon: RotateCcw, tone: "border-line bg-surface-2 text-muted hover:text-ink" },
   ],
   cancelled: [
     { status: "new", label: "إرجاع كجديد", icon: RotateCcw, tone: "border-line bg-surface-2 text-muted hover:text-ink" },
@@ -170,7 +160,7 @@ export function OrdersPanel() {
   }, [orders, statusFilter, typeFilter, period, query]);
 
   const counts = useMemo(() => {
-    const base = { new: 0, confirmed: 0, delivered: 0, cancelled: 0 };
+    const base = { new: 0, cancelled: 0 };
     for (const order of orders) base[orderStatusOf(order)] += 1;
     return base;
   }, [orders]);
@@ -207,7 +197,7 @@ export function OrdersPanel() {
     <div className="space-y-4">
       <Panel
         title="إدارة الطلبات"
-        description="كل طلب بيتسجّل هنا لحظة تأكيده من الموقع — حدّث الحالة وتابع التنفيذ"
+        description="كل طلب بيتسجّل هنا لحظة وصوله من الموقع — طالما جه من الموقع هيتنفذ (توصيل أو استلام)، والملغي هو اللي بتلغيه بنفسك"
         icon={<ClipboardList className="h-4 w-4" />}
         actions={
           <Button size="sm" variant="outline" onClick={exportCsv} disabled={filtered.length === 0}>
@@ -224,8 +214,6 @@ export function OrdersPanel() {
               options={[
                 { value: "all", label: `الكل (${orders.length})` },
                 { value: "new", label: `جديد (${counts.new})` },
-                { value: "confirmed", label: `مؤكد (${counts.confirmed})` },
-                { value: "delivered", label: `تم التسليم (${counts.delivered})` },
                 { value: "cancelled", label: `ملغي (${counts.cancelled})` },
               ]}
             />

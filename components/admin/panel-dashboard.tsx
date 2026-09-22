@@ -359,15 +359,7 @@ export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: str
                         <span dir="ltr" className="font-mono text-[11px] font-black text-accent">
                           {order.id}
                         </span>
-                        <Badge
-                          tone={
-                            orderStatusOf(order) === "cancelled"
-                              ? "danger"
-                              : orderStatusOf(order) === "delivered"
-                                ? "success"
-                                : "accent"
-                          }
-                        >
+                        <Badge tone={orderStatusOf(order) === "cancelled" ? "danger" : "accent"}>
                           {ORDER_STATUS_LABEL[orderStatusOf(order)].ar}
                         </Badge>
                       </div>

@@ -29,7 +29,7 @@
 - سائق احتياطي للتطوير المحلي: ملف JSON (`lib/server-database.ts`) بنفس المنطق.
 
 ## 6) حالات الطلب الموجودة
-`new | confirmed | delivered | cancelled` (`lib/types.ts` + `ORDER_STATUS_LABEL` في `lib/format.ts` + `update_order_status` في DB). **اتستخدمت كما هي** — مفيش نظام حالات جديد.
+كانت `new | confirmed | delivered | cancelled` وقت المراجعة، وبعدها اتبسّطت إلى `new | cancelled` (`lib/types.ts` + `ORDER_STATUS_LABEL` في `lib/format.ts` + `update_order_status` في DB): أي طلب جه من الموقع هيتنفذ (توصيل أو استلام)، ف«مؤكد» و«تم التسليم» اتشالوا، والإجراء الوحيد هو الإلغاء (أو إرجاع الملغي جديد). الطلبات القديمة بحالة confirmed/delivered بتتعامل كـ `new` عند القراءة.
 
 ## 7) مكونات UI الموجودة والمعاد استخدامها
 `components/ui.tsx` (Button, Panel, TextInput, Segmented, Badge, Toast…)، `lib/use-menu.tsx` (بيانات المحل من السيرفر)، `lib/realtime.ts`، `lib/format.ts` (`formatPrice`, `ORDER_STATUS_LABEL`, `toWhatsappNumber`)، `lib/alerts.ts` (نغمة + وميض عنوان التاب).

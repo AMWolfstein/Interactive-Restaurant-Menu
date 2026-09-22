@@ -329,7 +329,10 @@ $function$;
 revoke all on function public.place_order(jsonb) from public;
 grant execute on function public.place_order(jsonb) to anon, authenticated;
 
--- تحديث حالة الطلب (جديد/مؤكد/تم التسليم/ملغي) — للأدمن فقط (authenticated).
+-- تحديث حالة الطلب (جديد/ملغي) — للأدمن فقط (authenticated).
+-- أي طلب جه من الموقع هيتنفذ (توصيل أو استلام)، فمفيش «مؤكد» ولا «تم التسليم» —
+-- الإجراء الوحيد هو الإلغاء (أو إرجاع الملغي جديد). الطلبات القديمة المحفوظة
+-- بحالة confirmed/delivered بتتعامل كـ new عند القراءة في التطبيق.
 create or replace function public.update_order_status(p_order_id text, p_status text)
 returns jsonb
 language plpgsql
@@ -339,7 +342,7 @@ as $function$
 declare
   v_order jsonb;
 begin
-  if p_status not in ('new', 'confirmed', 'delivered', 'cancelled') then
+  if p_status not in ('new', 'cancelled') then
     raise exception 'حالة الطلب غير صالحة' using errcode = '22023';
   end if;
 
