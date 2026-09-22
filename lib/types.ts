@@ -102,8 +102,6 @@ export interface BrandSettings {
   heroSubtitle: string;
   announcementEnabled: boolean;
   announcementText: string;
-  /** صورة كفر / هيدر مخصصة للمنيو عند الطباعة أو الحفظ كـ PDF */
-  menuPdfCover?: string;
 }
 
 export interface ContactSettings {
