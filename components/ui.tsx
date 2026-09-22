@@ -452,7 +452,7 @@ export function ColorField({
       <div className="flex flex-wrap items-center gap-2">
         <input
           type="color"
-          value={/^#[0-9a-f]{6}$/i.test(value) ? value : "#f59e0b"}
+          value={/^#[0-9a-f]{6}$/i.test(value) ? value : "#3b82f6"}
           onChange={(e) => onChange(e.target.value)}
           className="h-10 w-14 rounded-lg"
           aria-label={label}
