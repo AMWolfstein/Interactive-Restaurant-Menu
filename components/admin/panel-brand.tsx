@@ -1,6 +1,6 @@
 "use client";
 
-import { Globe, Sparkles, Store } from "lucide-react";
+import { FileText, Globe, Sparkles, Store } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
 import { ImageField } from "@/components/image-field";
 import { HeroSlidesManager } from "./hero-slides-manager";
@@ -100,6 +100,20 @@ export function BrandPanel() {
             </Field>
           </div>
         </div>
+      </Panel>
+
+      <Panel
+        title="كفر وهيدر المنيو (PDF والطباعة)"
+        description="صورة كفر / هيدر تظهر في أعلى صفحات المنيو عند الطباعة أو الحفظ كـ PDF"
+        icon={<FileText className="h-4 w-4" />}
+      >
+        <ImageField
+          label="صورة كفر المنيو (PDF / Print)"
+          value={brand.menuPdfCover || ""}
+          onChange={(value) => patchBrand({ menuPdfCover: value })}
+          hint="اختياري: ارفع بانر أو كفر هيدر بمقاس مناسب ليظهر أعلى صفحات المنيو للطباعة والـ PDF"
+          aspect="aspect-[4/1]"
+        />
       </Panel>
 
       <Panel title="الفوتر والسوشيال" description="آخر الصفحة — ملاحظة أخيرة وروابط التواصل">

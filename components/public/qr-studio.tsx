@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import QRCode from "qrcode";
-import { Download, Printer, QrCode } from "lucide-react";
+import { ArrowRight, Download, Printer, QrCode } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
 import { ProductImage } from "@/components/public/product-card";
 
@@ -42,6 +43,12 @@ export function QrStudio() {
 
   return (
     <main className="min-h-screen bg-bg px-4 py-8 text-ink sm:py-12" dir="rtl">
+      <div className="print:hidden mx-auto mb-4 flex max-w-md items-center justify-between gap-3">
+        <Link href="/" className="inline-flex items-center gap-1.5 text-xs font-bold text-muted transition hover:text-ink">
+          <ArrowRight className="h-3.5 w-3.5" /> العودة للصفحة الرئيسية
+        </Link>
+      </div>
+
       <section className="mx-auto w-full max-w-md rounded-xl2 border border-line bg-surface p-5 text-center shadow-[0_22px_70px_-45px_rgba(0,0,0,.8)] sm:p-8" id="qr-card">
         <div className="print:hidden mx-auto mb-4 flex w-fit items-center gap-2 rounded-full bg-accent/12 px-3 py-1.5 text-xs font-black text-accent">
           <QrCode className="h-4 w-4" /> كود QR للطباعة
