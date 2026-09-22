@@ -66,9 +66,10 @@ export async function refreshMenu() {
     if (state.saveState === "dirty") return;
     set({ data, ready: true, isCustomized: true, storageKb: sizeOf(data), saveState: "idle", saveError: null });
   } catch (error) {
+    // لا نستبدل لقطة السيرفر الصحيحة ببيانات الـ seed عند انقطاع الشبكة.
+    // إبقاء ready=false يجعل useMenu يعرض initialData التي جاءت مع الصفحة؛
+    // وكان الاستبدال بـ DEFAULT_DATA هو سبب ظهور البراند القديم بشكل متقطع.
     set({
-      data: DEFAULT_DATA,
-      ready: true,
       saveState: "error",
       saveError: error instanceof Error && error.message ? error.message : "تعذّر الاتصال بالباك إند",
     });

@@ -19,7 +19,7 @@ export function readableOn(hex: string): "#0b0b0d" | "#ffffff" {
 }
 
 /** لون أكسنت صالح للاستخدام في CSS — بيرجع الافتراضي لو القيمة غلط */
-export function safeAccent(value: string | undefined, fallback = "#f59e0b"): string {
+export function safeAccent(value: string | undefined, fallback = "#3b82f6"): string {
   const trimmed = (value ?? "").trim();
   if (!HEX.test(trimmed)) return fallback;
   return trimmed.startsWith("#") ? trimmed : `#${trimmed}`;

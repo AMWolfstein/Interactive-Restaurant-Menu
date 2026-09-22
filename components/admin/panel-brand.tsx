@@ -22,7 +22,7 @@ export function BrandPanel() {
             <TextInput
               value={brand.storeName}
               onChange={(event) => patchBrand({ storeName: event.target.value })}
-              placeholder="محل البركة"
+              placeholder="اسم المتجر"
             />
           </Field>
           <Field label="الشعار النصي">

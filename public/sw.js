@@ -1,5 +1,5 @@
 // غيّر الرقم ده لو عدّلت استراتيجية الكاش — بيمسح كل النسخ القديمة.
-const CACHE_NAME = "store-catalog-v4";
+const CACHE_NAME = "store-catalog-v5";
 // صفحة احتياطية للعرض وقت انقطاع النت فقط.
 const OFFLINE_URLS = ["/"];
 
@@ -25,6 +25,9 @@ self.addEventListener("activate", (event) => {
  */
 function isCacheableAsset(url) {
   if (url.pathname.startsWith("/_next/static/")) return true;
+  // دول بيتولدوا من إعدادات البراند، وبالتالي مش static حتى لو favicon
+  // امتداده ico. تخزينهم cache-first كان ممكن يثبت اللوجو/اللون القديم.
+  if (["/icon", "/apple-icon", "/favicon.ico", "/manifest.webmanifest"].includes(url.pathname)) return false;
   return /\.(?:css|js|woff2?|png|jpe?g|gif|svg|webp|avif|ico)$/i.test(url.pathname);
 }
 
