@@ -172,8 +172,12 @@ input[type="color"]::-webkit-color-swatch {
 }
 
 @media print {
-  @page { size: A4; margin: 12mm; }
-  html, body { background: #fff !important; }
+  @page { size: A4; margin: 8mm; }
+  *, *::before, *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
   .print\:hidden { display: none !important; }
   .break-inside-avoid { break-inside: avoid; page-break-inside: avoid; }
 }

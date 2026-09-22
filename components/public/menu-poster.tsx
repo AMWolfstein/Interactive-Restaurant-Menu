@@ -1,18 +1,16 @@
 "use client";
 
+import { useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, MapPin, Phone, Printer, QrCode, Snowflake } from "lucide-react";
+import { ArrowRight, Download, Loader2, MapPin, Phone, Printer, QrCode, Snowflake } from "lucide-react";
+import { toPng } from "html-to-image";
 import { useMenu } from "@/lib/use-menu";
 import { formatPrice } from "@/lib/format";
 import { isDiscountActive, isVariantOnOffer, offerPercent } from "@/lib/offers";
 import { safeAccent } from "@/lib/color";
 import { ProductImage } from "@/components/public/product-card";
-import type { MenuItem } from "@/lib/types";
+import type { CommerceSettings, MenuItem } from "@/lib/types";
 
-/**
- * صفحة المنيو مصممة كفلاير مطبوع: خلفية ثلجية، عنوان كبير، وثلاثة أعمدة
- * صغيرة حتى تظل البيانات قابلة للقراءة وتشبه المنيو المرفق.
- */
 function discountFor(item: MenuItem) {
   return isDiscountActive(item.price, item.oldPrice, {
     day: item.offerEndDay,
@@ -21,10 +19,188 @@ function discountFor(item: MenuItem) {
   });
 }
 
+function filePart(value: string) {
+  return value.trim().replace(/[\\/:*?"<>|]+/g, "-").slice(0, 60) || "menu";
+}
+
+interface MenuItemRowProps {
+  item: MenuItem;
+  accent: string;
+  commerce: CommerceSettings;
+  language: "ar" | "en";
+}
+
+function MenuItemRow({ item, accent, commerce, language }: MenuItemRowProps) {
+  const itemDiscount = discountFor(item);
+  const off = itemDiscount && item.oldPrice ? offerPercent(item.price, item.oldPrice) : 0;
+
+  const metaParts: string[] = [];
+  if (item.supplier?.trim()) {
+    metaParts.push(item.supplier.trim());
+  }
+  if (item.weight?.trim()) {
+    metaParts.push(item.weight.trim());
+  }
+
+  return (
+    <li className="break-inside-avoid text-[12px] leading-snug sm:text-[13px]">
+      <div className="flex items-baseline justify-between gap-1.5 sm:gap-2">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+          <span className="font-extrabold text-slate-900">{item.name}</span>
+          {item.isNew ? <span className="rounded bg-emerald-500/15 px-1 text-[9px] font-black text-emerald-700">جديد</span> : null}
+          {metaParts.length > 0 ? (
+            <span className="text-[11px] font-semibold text-slate-600">
+              - {metaParts.join(" - ")}
+            </span>
+          ) : null}
+        </div>
+
+        <span className="mx-1 min-w-3 flex-1 border-b border-dotted border-slate-400/70 shrink-0 self-center" />
+
+        {commerce.showPrices ? (
+          <div className="shrink-0 whitespace-nowrap text-end font-black flex items-baseline gap-1">
+            {itemDiscount && off ? (
+              <span className="rounded bg-red-100/90 px-1 py-0.2 text-[10px] font-black text-red-600">
+                خصم {off}%
+              </span>
+            ) : null}
+            <span style={{ color: itemDiscount ? "#dc2626" : accent }}>
+              {formatPrice(item.price, language, commerce)}
+            </span>
+          </div>
+        ) : null}
+      </div>
+
+      {item.description?.trim() ? (
+        <p className="mt-0.5 text-[10.5px] text-slate-600 leading-tight">{item.description.trim()}</p>
+      ) : null}
+
+      {item.variants?.length ? (
+        <div className="mt-1 space-y-0.5 border-r-2 border-sky-600/40 pr-2">
+          {item.variants.map((variant) => {
+            const onOffer = isVariantOnOffer(variant);
+            const varOff = onOffer && variant.oldPrice ? offerPercent(variant.price, variant.oldPrice) : 0;
+            return (
+              <div key={variant.id} className="flex items-baseline justify-between gap-1 text-[11px] font-bold text-slate-700">
+                <span>{variant.label}</span>
+                <span className="mx-1 min-w-2 flex-1 border-b border-dotted border-slate-300 shrink-0 self-center" />
+                {commerce.showPrices ? (
+                  <div className="shrink-0 whitespace-nowrap text-end font-black flex items-baseline gap-1">
+                    {onOffer && varOff ? (
+                      <span className="rounded bg-red-100/90 px-1 text-[9px] font-black text-red-600">
+                        خصم {varOff}%
+                      </span>
+                    ) : null}
+                    <span style={{ color: onOffer ? "#dc2626" : accent }}>
+                      {formatPrice(variant.price, language, commerce)}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+    </li>
+  );
+}
+
+function PosterHeader({
+  brand,
+  contact,
+  compact = false,
+}: {
+  brand: { storeName: string; tagline?: string; logo?: string; menuPdfCover?: string };
+  contact: { address?: string; phone?: string };
+  compact?: boolean;
+}) {
+  if (brand.menuPdfCover) {
+    return (
+      <header className="relative overflow-hidden px-4 pt-4 pb-3 text-center sm:px-8">
+        <div className="relative mx-auto max-w-full overflow-hidden rounded-2xl border-2 border-white/80 bg-white/40 shadow-sm">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={brand.menuPdfCover}
+            alt={brand.storeName}
+            className="h-28 sm:h-36 w-full object-cover"
+          />
+        </div>
+        <div className="relative mx-auto mt-2 flex max-w-2xl flex-wrap items-center justify-center gap-x-5 gap-y-1 text-[11px] font-bold text-slate-700">
+          {contact.address ? (
+            <span className="inline-flex items-center gap-1">
+              <MapPin className="h-3.5 w-3.5 text-sky-700" />
+              {contact.address}
+            </span>
+          ) : null}
+          {contact.phone ? (
+            <a href={`tel:${contact.phone.replace(/\D/g, "")}`} className="inline-flex items-center gap-1" dir="ltr">
+              <Phone className="h-3.5 w-3.5 text-sky-700" />
+              {contact.phone}
+            </a>
+          ) : null}
+        </div>
+      </header>
+    );
+  }
+
+  return (
+    <header className={`relative overflow-hidden text-center ${compact ? "px-4 pt-5 pb-3" : "px-5 pt-6 pb-4 sm:px-10 sm:pt-7"}`}>
+      <Snowflake className="absolute left-6 top-4 h-10 w-10 rotate-12 text-white/70 sm:h-14 sm:w-14" strokeWidth={1} />
+      <Snowflake className="absolute right-6 top-6 h-9 w-9 -rotate-12 text-white/65 sm:h-12 sm:w-12" strokeWidth={1} />
+      {brand.logo ? (
+        <ProductImage
+          src={brand.logo}
+          alt=""
+          className="relative mx-auto mb-2 h-14 w-14 rounded-2xl border-2 border-white/80 bg-white/50 object-cover shadow-md sm:h-16 sm:w-16"
+        />
+      ) : null}
+      <h1 className="relative text-2xl font-black tracking-tight text-sky-600 drop-shadow-[0_1px_0_rgba(255,255,255,.8)] sm:text-3xl">
+        {brand.storeName}
+      </h1>
+      {brand.tagline ? <p className="relative mt-1 text-xs font-bold text-slate-700 sm:text-sm">{brand.tagline}</p> : null}
+      <div className="relative mx-auto mt-2 flex max-w-2xl flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] font-bold text-slate-700">
+        {contact.address ? (
+          <span className="inline-flex items-center gap-1">
+            <MapPin className="h-3 w-3 text-sky-700" />
+            {contact.address}
+          </span>
+        ) : null}
+        {contact.phone ? (
+          <a href={`tel:${contact.phone.replace(/\D/g, "")}`} className="inline-flex items-center gap-1" dir="ltr">
+            <Phone className="h-3 w-3 text-sky-700" />
+            {contact.phone}
+          </a>
+        ) : null}
+      </div>
+    </header>
+  );
+}
+
+function PosterFooter({
+  contact,
+}: {
+  contact: { footerNote?: string; phone?: string; whatsapp?: string; openingHours?: string };
+}) {
+  return (
+    <footer className="relative mx-3 mb-4 rounded-2xl border-2 border-white/80 bg-white/30 px-4 py-3 text-center shadow-inner sm:mx-6">
+      <Snowflake className="absolute bottom-2 left-3 h-8 w-8 text-white/60" strokeWidth={1} />
+      {contact.footerNote ? <p className="text-xs font-black text-slate-800">{contact.footerNote}</p> : null}
+      <div className="mt-1.5 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] font-bold text-slate-700">
+        {contact.phone ? <span dir="ltr">☎ {contact.phone}</span> : null}
+        {contact.whatsapp ? <span dir="ltr">WhatsApp: +{contact.whatsapp}</span> : null}
+        {contact.openingHours ? <span>{contact.openingHours}</span> : null}
+      </div>
+    </footer>
+  );
+}
+
 export function MenuPoster() {
   const { data } = useMenu();
   const { brand, contact, commerce, categories, items } = data;
   const accent = safeAccent(brand.accent);
+  const [isExporting, setIsExporting] = useState(false);
+  const pngCaptureRef = useRef<HTMLDivElement>(null);
+
   const groups = categories
     .filter((category) => category.visible)
     .map((category) => ({
@@ -33,114 +209,220 @@ export function MenuPoster() {
     }))
     .filter((group) => group.items.length);
 
-  const columns = [0, 1, 2].map((column) => groups.filter((_, index) => index % 3 === column));
+  // 2-column distribution for PNG export and Print
+  const twoColumns = [0, 1].map((colIndex) => groups.filter((_, index) => index % 2 === colIndex));
+
+  const handleSavePng = async () => {
+    if (!pngCaptureRef.current || isExporting) return;
+    setIsExporting(true);
+    try {
+      const dataUrl = await toPng(pngCaptureRef.current, {
+        pixelRatio: 2,
+        cacheBust: true,
+        backgroundColor: "#dff5ff",
+      });
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = `${filePart(brand.storeName)}-menu.png`;
+      link.click();
+    } catch (err) {
+      console.error("PNG export error:", err);
+      // Fallback attempt
+      try {
+        const fallbackUrl = await toPng(pngCaptureRef.current, { pixelRatio: 1.5 });
+        const link = document.createElement("a");
+        link.href = fallbackUrl;
+        link.download = `${filePart(brand.storeName)}-menu.png`;
+        link.click();
+      } catch {
+        alert("تعذّر حفظ الصورة، يُرجى المحاولة مرة أخرى.");
+      }
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const bgStyle = {
+    backgroundColor: "#dff5ff",
+    backgroundImage:
+      "radial-gradient(circle at 8% 12%, rgba(255,255,255,.95) 0 1px, transparent 2px), radial-gradient(circle at 88% 20%, rgba(255,255,255,.8) 0 2px, transparent 3px), radial-gradient(ellipse at 50% 0%, #ffffff 0%, #d9f3ff 42%, #b8e6fb 100%)",
+  };
 
   return (
     <main
-      className="min-h-screen bg-bg px-2 py-4 text-[#10213a] sm:px-5 sm:py-7 print:bg-white print:p-0"
+      className="min-h-screen px-2 py-4 text-[#10213a] sm:px-5 sm:py-7 print:p-0"
       dir="rtl"
-      style={{
-        backgroundColor: "#dff5ff",
-        backgroundImage:
-          "radial-gradient(circle at 8% 12%, rgba(255,255,255,.95) 0 1px, transparent 2px), radial-gradient(circle at 88% 20%, rgba(255,255,255,.8) 0 2px, transparent 3px), radial-gradient(ellipse at 50% 0%, #ffffff 0%, #d9f3ff 42%, #b8e6fb 100%)",
-      }}
+      style={bgStyle}
     >
-      <div className="print:hidden mx-auto mb-4 flex max-w-[1120px] items-center justify-between gap-3">
-        <Link href="/" className="inline-flex items-center gap-1.5 text-xs font-bold text-sky-900/70 transition hover:text-sky-950">
-          <ArrowRight className="h-3.5 w-3.5" /> العودة للكتالوج
+      {/* Top action bar */}
+      <div className="print:hidden mx-auto mb-4 flex max-w-[840px] items-center justify-between gap-3">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-sky-900/70 transition hover:text-sky-950"
+        >
+          <ArrowRight className="h-3.5 w-3.5" /> العودة للصفحة الرئيسية
         </Link>
-        <div className="flex gap-2">
-          <a href="/qr" className="inline-flex items-center gap-1.5 rounded-xl border border-sky-900/15 bg-white/60 px-3 py-2 text-xs font-bold text-sky-900 transition hover:bg-white">
+        <div className="flex items-center gap-2">
+          <a
+            href="/qr"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-sky-900/15 bg-white/60 px-3 py-2 text-xs font-bold text-sky-900 transition hover:bg-white"
+          >
             <QrCode className="h-3.5 w-3.5" /> QR للطباعة
           </a>
-          <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-1.5 rounded-xl bg-sky-700 px-3 py-2 text-xs font-black text-white transition hover:bg-sky-800">
-            <Printer className="h-3.5 w-3.5" /> طباعة / حفظ PDF
+          <button
+            type="button"
+            onClick={handleSavePng}
+            disabled={isExporting}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-sky-700 px-3.5 py-2 text-xs font-black text-white shadow transition hover:bg-sky-800 disabled:opacity-50"
+          >
+            {isExporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            {isExporting ? "جاري الحفظ..." : "حفظ PNG"}
+          </button>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-sky-900/20 bg-white/70 px-3 py-2 text-xs font-bold text-sky-900 transition hover:bg-white"
+            title="طباعة أو حفظ PDF"
+          >
+            <Printer className="h-3.5 w-3.5" /> طباعة
           </button>
         </div>
       </div>
 
-      <article className="mx-auto max-w-[1120px] overflow-hidden rounded-[28px] border border-white/80 bg-white/25 shadow-[0_24px_80px_-35px_rgba(0,92,150,.65)] backdrop-blur-[2px] print:max-w-none print:rounded-none print:border-0 print:shadow-none">
-        <header className="relative overflow-hidden px-5 pb-7 pt-8 text-center sm:px-12 sm:pt-10">
-          <Snowflake className="absolute left-8 top-6 h-14 w-14 rotate-12 text-white/75 sm:h-24 sm:w-24" strokeWidth={1} />
-          <Snowflake className="absolute right-8 top-10 h-12 w-12 -rotate-12 text-white/70 sm:h-20 sm:w-20" strokeWidth={1} />
-          {brand.logo ? (
-            <ProductImage src={brand.logo} alt="" className="relative mx-auto mb-2 h-20 w-20 rounded-2xl border-4 border-white/70 bg-white/50 object-cover shadow-lg sm:h-24 sm:w-24" />
-          ) : null}
-          <h1 className="relative text-5xl font-black tracking-tight text-sky-600 drop-shadow-[0_2px_0_rgba(255,255,255,.8)] sm:text-7xl">
-            {brand.storeName}
-          </h1>
-          {brand.tagline ? <p className="relative mt-2 text-base font-bold text-slate-700 sm:text-xl">{brand.tagline}</p> : null}
-          <div className="relative mx-auto mt-4 flex max-w-2xl flex-wrap items-center justify-center gap-x-5 gap-y-1.5 text-[11px] font-bold text-slate-700 sm:text-xs">
-            {contact.address ? <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5 text-sky-700" />{contact.address}</span> : null}
-            {contact.phone ? <a href={`tel:${contact.phone.replace(/\D/g, "")}`} className="inline-flex items-center gap-1" dir="ltr"><Phone className="h-3.5 w-3.5 text-sky-700" />{contact.phone}</a> : null}
-          </div>
-        </header>
+      {/* Website View: Single-column list of categories and items */}
+      <article className="mx-auto max-w-[840px] overflow-hidden rounded-[24px] border border-white/80 bg-white/25 shadow-[0_24px_80px_-35px_rgba(0,92,150,.65)] backdrop-blur-[2px] print:hidden">
+        <PosterHeader brand={brand} contact={contact} />
 
         {groups.length ? (
-          <div className="grid grid-cols-1 gap-x-5 gap-y-7 px-4 pb-8 sm:px-8 md:grid-cols-3 md:gap-x-8 md:gap-y-0">
-            {columns.map((column, columnIndex) => (
-              <div key={columnIndex} className="space-y-7">
+          <div className="space-y-6 px-4 pb-6 sm:px-8">
+            {groups.map(({ category, items: categoryItems }) => (
+              <section key={category.id} className="rounded-2xl border border-white/60 bg-white/30 p-4 shadow-sm sm:p-5">
+                <div className="mb-3.5 flex items-center justify-between border-b-2 border-sky-700/60 pb-2">
+                  <h2 className="text-base font-black text-sky-900 sm:text-lg">
+                    {category.emoji ? <span className="ml-1.5" aria-hidden>{category.emoji}</span> : null}
+                    {category.name}
+                  </h2>
+                  <span className="rounded-full bg-sky-700/10 px-2 py-0.5 text-[10px] font-black text-sky-800">
+                    {categoryItems.length} {categoryItems.length === 1 ? "صنف" : "أصناف"}
+                  </span>
+                </div>
+                <ul className="space-y-2.5">
+                  {categoryItems.map((item) => (
+                    <MenuItemRow
+                      key={item.id}
+                      item={item}
+                      accent={accent}
+                      commerce={commerce}
+                      language={brand.language}
+                    />
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
+        ) : (
+          <p className="px-6 py-16 text-center font-bold text-slate-600">لا توجد منتجات متاحة للعرض حاليًا.</p>
+        )}
+
+        <PosterFooter contact={contact} />
+      </article>
+
+      {/* Print View: Retains exact colors and formats into 2 clean columns for paper printing */}
+      <article
+        className="hidden print:block mx-auto max-w-none overflow-hidden rounded-2xl border border-white/80 bg-white/25 shadow-none"
+        style={bgStyle}
+      >
+        <PosterHeader brand={brand} contact={contact} compact />
+        {groups.length ? (
+          <div className="grid grid-cols-2 gap-x-6 gap-y-4 px-4 pb-4">
+            {twoColumns.map((column, columnIndex) => (
+              <div key={columnIndex} className="space-y-4">
                 {column.map(({ category, items: categoryItems }) => (
-                  <section key={category.id} className="break-inside-avoid">
-                    <div className="mb-3 flex items-center justify-center gap-2 border-b-2 border-sky-700/70 pb-1.5">
-                      <h2 className="text-lg font-black text-sky-900 sm:text-xl">
+                  <section key={category.id} className="break-inside-avoid rounded-xl border border-white/60 bg-white/40 p-3 shadow-xs">
+                    <div className="mb-2 flex items-center justify-between border-b-2 border-sky-700/70 pb-1">
+                      <h2 className="text-sm font-black text-sky-900">
                         {category.emoji ? <span className="ml-1" aria-hidden>{category.emoji}</span> : null}
                         {category.name}
                       </h2>
                     </div>
-                    <ul className="space-y-2">
-                      {categoryItems.map((item) => {
-                        const itemDiscount = discountFor(item);
-                        const off = itemDiscount && item.oldPrice ? offerPercent(item.price, item.oldPrice) : 0;
-                        const details = [item.description?.trim(), item.weight?.trim()].filter(Boolean).join(" · ");
-                        return (
-                          <li key={item.id} className="break-inside-avoid text-[12px] leading-snug sm:text-[13px]">
-                            <div className="flex items-baseline gap-1.5">
-                              <span className="font-extrabold text-slate-900">{item.name}</span>
-                              {item.isNew ? <span className="text-[9px] font-black text-emerald-700">جديد</span> : null}
-                              <span className="min-w-3 flex-1 border-b border-dotted border-slate-400/70" />
-                              {commerce.showPrices ? (
-                                <span className="shrink-0 whitespace-nowrap font-black" style={{ color: itemDiscount ? "#dc2626" : accent }}>
-                                  {formatPrice(item.price, brand.language, commerce)}
-                                  {itemDiscount && off ? <small className="mr-1 text-[9px]">({off}%)</small> : null}
-                                </span>
-                              ) : null}
-                            </div>
-                            {details ? <p className="mt-0.5 text-[10px] text-slate-600">{details}</p> : null}
-                            {item.variants?.length ? (
-                              <div className="mt-1 space-y-0.5 border-r-2 border-sky-600/40 pr-2">
-                                {item.variants.map((variant) => {
-                                  const onOffer = isVariantOnOffer(variant);
-                                  return (
-                                    <div key={variant.id} className="flex items-baseline gap-1 text-[10.5px] font-bold text-slate-700">
-                                      <span>{variant.label}</span><span className="min-w-2 flex-1 border-b border-dotted border-slate-300" />
-                                      {commerce.showPrices ? <span className="shrink-0" style={{ color: onOffer ? "#dc2626" : accent }}>{formatPrice(variant.price, brand.language, commerce)}</span> : null}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ) : null}
-                          </li>
-                        );
-                      })}
+                    <ul className="space-y-1.5">
+                      {categoryItems.map((item) => (
+                        <MenuItemRow
+                          key={item.id}
+                          item={item}
+                          accent={accent}
+                          commerce={commerce}
+                          language={brand.language}
+                        />
+                      ))}
                     </ul>
                   </section>
                 ))}
               </div>
             ))}
           </div>
-        ) : <p className="px-6 py-16 text-center font-bold text-slate-600">لا توجد منتجات متاحة للطباعة حاليًا.</p>}
-
-        <footer className="relative mx-4 mb-5 rounded-3xl border-4 border-white/80 bg-white/30 px-5 py-5 text-center shadow-inner sm:mx-10">
-          <Snowflake className="absolute bottom-2 left-4 h-12 w-12 text-white/70" strokeWidth={1} />
-          {contact.footerNote ? <p className="text-sm font-black text-slate-800">{contact.footerNote}</p> : null}
-          <div className="mt-2 flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-xs font-bold text-slate-700">
-            {contact.phone ? <span dir="ltr">☎ {contact.phone}</span> : null}
-            {contact.whatsapp ? <span dir="ltr">WhatsApp: +{contact.whatsapp}</span> : null}
-            {contact.openingHours ? <span>{contact.openingHours}</span> : null}
-          </div>
-        </footer>
+        ) : null}
+        <PosterFooter contact={contact} />
       </article>
+
+      {/* Off-screen Capture Element for high-resolution 2-column PNG export */}
+      <div
+        style={{
+          position: "fixed",
+          left: "-99999px",
+          top: "0",
+          width: "1160px",
+          pointerEvents: "none",
+          zIndex: -100,
+        }}
+        aria-hidden="true"
+      >
+        <div
+          ref={pngCaptureRef}
+          dir="rtl"
+          className="p-6 text-[#10213a]"
+          style={bgStyle}
+        >
+          <article className="overflow-hidden rounded-[24px] border-2 border-white/90 bg-white/30 shadow-[0_20px_60px_-25px_rgba(0,92,150,.5)]">
+            <PosterHeader brand={brand} contact={contact} />
+
+            {groups.length ? (
+              <div className="grid grid-cols-2 gap-x-6 gap-y-5 px-6 pb-6">
+                {twoColumns.map((column, columnIndex) => (
+                  <div key={columnIndex} className="space-y-5">
+                    {column.map(({ category, items: categoryItems }) => (
+                      <section key={category.id} className="rounded-2xl border border-white/70 bg-white/40 p-4 shadow-sm">
+                        <div className="mb-3 flex items-center justify-between border-b-2 border-sky-700/70 pb-1.5">
+                          <h2 className="text-base font-black text-sky-900">
+                            {category.emoji ? <span className="ml-1.5" aria-hidden>{category.emoji}</span> : null}
+                            {category.name}
+                          </h2>
+                          <span className="rounded-full bg-sky-700/10 px-2 py-0.5 text-[10px] font-black text-sky-800">
+                            {categoryItems.length} {categoryItems.length === 1 ? "صنف" : "أصناف"}
+                          </span>
+                        </div>
+                        <ul className="space-y-2">
+                          {categoryItems.map((item) => (
+                            <MenuItemRow
+                              key={item.id}
+                              item={item}
+                              accent={accent}
+                              commerce={commerce}
+                              language={brand.language}
+                            />
+                          ))}
+                        </ul>
+                      </section>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            <PosterFooter contact={contact} />
+          </article>
+        </div>
+      </div>
     </main>
   );
 }

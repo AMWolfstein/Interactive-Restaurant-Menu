@@ -193,6 +193,7 @@ export function normalizeData(raw: unknown): MenuData {
   const sanitizeUrl = (url: string) => (isSafeHttpUrl(url) ? url.trim() : "");
   merged.brand.heroImage = sanitizeUrl(merged.brand.heroImage) || "/images/catalog/hero.jpg";
   merged.brand.logo = merged.brand.logo ? sanitizeUrl(merged.brand.logo) : "";
+  merged.brand.menuPdfCover = merged.brand.menuPdfCover ? sanitizeUrl(merged.brand.menuPdfCover) : "";
   merged.brand.heroImages = (merged.brand.heroImages ?? [])
     .filter((hero) => hero && typeof hero.image === "string")
     .map((hero, index) => ({ ...hero, id: hero.id || `hero-${index}`, image: sanitizeUrl(hero.image), order: Number.isFinite(hero.order) ? hero.order : index }))
