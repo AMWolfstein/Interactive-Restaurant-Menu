@@ -13,7 +13,9 @@ const nextConfig: NextConfig = {
         source: "/(.*)",
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "X-Frame-Options", value: "DENY" },
+          // The admin panel embeds the storefront in its same-origin preview iframe.
+          // SAMEORIGIN keeps framing blocked on other origins while allowing that preview.
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
           { key: "X-XSS-Protection", value: "1; mode=block" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
@@ -27,7 +29,8 @@ const nextConfig: NextConfig = {
               "font-src 'self' https://fonts.gstatic.com data:",
               "img-src 'self' data: https: blob:",
               "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.cloudinary.com",
-              "frame-ancestors 'none'",
+              // Match X-Frame-Options: allow only the same-origin admin preview iframe.
+              "frame-ancestors 'self'",
             ].join("; "),
           },
         ],
