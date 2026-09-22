@@ -59,7 +59,7 @@ export interface MenuItem {
   price: number;
   /** السعر قبل الخصم — لو موجود يظهر مشطوب مع نسبة توفير */
   oldPrice?: number | null;
-  /** تاريخ انتهاء العرض — يُدخل كاليوم والشهر والسنة */
+  /** تاريخ انتهاء العرض — محفوظ كأرقام اليوم والشهر والسنة، ويختاره الأدمن من التقويم */
   offerEndDay?: number | null;
   offerEndMonth?: number | null;
   offerEndYear?: number | null;
@@ -70,8 +70,9 @@ export interface MenuItem {
   variants?: MenuVariant[];
   available: boolean;
   isNew: boolean;
-  /** 0 = عادي (الافتراضي)، 1 = حار */
-  spicy: 0 | 1;
+  /** 0 = عادي (الافتراضي)، 1 = حار، 2 = نباتي */
+  // الاسم محفوظ للتوافق مع بيانات المتجر القديمة، ويظهر في اللوحة كـ «الصفة الغذائية».
+  spicy: 0 | 1 | 2;
 }
 
 export interface BrandSettings {

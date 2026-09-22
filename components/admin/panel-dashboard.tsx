@@ -425,6 +425,7 @@ export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: str
             <div className="grid grid-cols-2 gap-2">
               <QuickAction label="منتج جديد" hint="أضف منتج للكتالوج" onClick={() => onJump("items", "new")} />
               <QuickAction label="قسم جديد" hint="صنّف منتجاتك أحسن" onClick={() => onJump("categories", "new")} />
+              <QuickAction label="مورد جديد" hint="أضف مورد للمنتجات" onClick={() => onJump("suppliers")} />
               <QuickAction label="غيّر اللون" hint="لون الموقع كله" onClick={() => onJump("look")} />
               <QuickAction label="إعلان علوي" hint="عرض أو خصم" onClick={() => onJump("brand")} />
             </div>

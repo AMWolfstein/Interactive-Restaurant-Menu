@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { Flame, Heart, Minus, Plus } from "lucide-react";
+import { Flame, Heart, Leaf, Minus, Plus } from "lucide-react";
 import { pick, formatPrice } from "@/lib/format";
 import type { CommerceSettings, MenuItem, SiteLanguage } from "@/lib/types";
 import { cx } from "@/lib/cx";
@@ -141,11 +141,13 @@ export function ProductCard({
                 {en ? "NEW" : "جديد"}
               </span>
             ) : null}
-            {item.spicy > 0 ? (
+            {item.spicy === 1 ? (
               <span className="inline-flex items-center gap-0.5 text-red-500" title={en ? "Hot" : "حار"}>
-                {Array.from({ length: item.spicy }).map((_, index) => (
-                  <Flame key={index} className="h-3 w-3 fill-red-500/25" />
-                ))}
+                <Flame className="h-3 w-3 fill-red-500/25" />
+              </span>
+            ) : item.spicy === 2 ? (
+              <span className="inline-flex items-center gap-0.5 text-emerald-400" title={en ? "Vegetarian" : "نباتي"}>
+                <Leaf className="h-3 w-3" />
               </span>
             ) : null}
           </div>
@@ -284,7 +286,11 @@ function GridProductCard({
       <div className="flex flex-1 flex-col p-2">
         <div className="flex min-h-9 items-start gap-1">
           <h3 className="line-clamp-2 flex-1 text-[11px] font-black leading-4 sm:text-xs">{item.name}</h3>
-          {item.spicy === 1 ? <Flame className="mt-0.5 h-3.5 w-3.5 shrink-0 fill-red-500/25 text-red-500" aria-label="حار" /> : null}
+          {item.spicy === 1 ? (
+            <Flame className="mt-0.5 h-3.5 w-3.5 shrink-0 fill-red-500/25 text-red-500" aria-label="حار" />
+          ) : item.spicy === 2 ? (
+            <Leaf className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" aria-label="نباتي" />
+          ) : null}
         </div>
 
         {item.supplier ? (

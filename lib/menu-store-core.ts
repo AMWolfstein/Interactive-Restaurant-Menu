@@ -4,7 +4,7 @@ import { subscribeRealtime } from "./realtime";
 import { CATALOG_TABLE, PUBLISHED_SLUG } from "./supabase";
 import { authenticatedFetch } from "./supabase-auth-core";
 import { validateImportedMenu } from "./validation";
-import type { Category, MenuData, MenuItem } from "./types";
+import type { Category, MenuData, MenuItem, Supplier } from "./types";
 
 export type SaveState = "idle" | "dirty" | "saved" | "error";
 
@@ -206,6 +206,36 @@ export function moveCategory(id: string, dir: -1 | 1) {
     if (i >= 0 && j >= 0 && j < d.categories.length) [d.categories[i], d.categories[j]] = [d.categories[j], d.categories[i]];
   });
 }
+export function addSupplier(input: Omit<Supplier, "id">) {
+  const id = `s_${newId()}`;
+  updateMenu((d) => d.suppliers.push({ ...input, id }));
+  return id;
+}
+export function updateSupplier(id: string, patch: Partial<Supplier>) {
+  updateMenu((d) => {
+    const row = d.suppliers.find((supplier) => supplier.id === id);
+    if (!row) return;
+    const previousName = row.name;
+    Object.assign(row, patch);
+    if (patch.name !== undefined && patch.name !== previousName) {
+      d.items.forEach((item) => {
+        if (item.supplier === previousName) item.supplier = patch.name ?? "";
+      });
+    }
+  });
+}
+export function deleteSupplier(id: string) {
+  updateMenu((d) => {
+    const row = d.suppliers.find((supplier) => supplier.id === id);
+    if (!row) return;
+    d.suppliers = d.suppliers.filter((supplier) => supplier.id !== id);
+    // المنتجات لا تفضلش مربوطة باسم مورد اتحذف.
+    d.items.forEach((item) => {
+      if (item.supplier === row.name) item.supplier = "";
+    });
+  });
+}
+
 export function addItem(input: Omit<MenuItem, "id">) {
   const id = `i_${newId()}`;
   updateMenu((d) => d.items.push({ ...input, id, createdAt: input.createdAt ?? new Date().toISOString() }));
