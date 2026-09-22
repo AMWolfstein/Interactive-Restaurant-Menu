@@ -44,20 +44,20 @@ export function SiteTheme() {
     }
     meta.setAttribute("content", accent);
 
-    // Browsers use these links for the tab and iOS home-screen icon. Create
-    // them only when the owner has uploaded a logo; there is no default icon.
+    // Browsers use these links for the tab and iOS home-screen icon. The
+    // server routes /icon and /apple-icon already serve the brand logo (or
+    // the accent-colored store fallback), so we point at the logo directly
+    // when one exists — the tab updates instantly after an admin edit —
+    // and back to the generated routes otherwise. Links are never removed.
+    const fallbacks = { icon: "/icon", "apple-touch-icon": "/apple-icon" } as const;
     for (const rel of ["icon", "apple-touch-icon"] as const) {
       let link = document.querySelector<HTMLLinkElement>(`link[rel="${rel}"]`);
-      if (!brand.logo) {
-        link?.remove();
-        continue;
-      }
       if (!link) {
         link = document.createElement("link");
         link.rel = rel;
         document.head.appendChild(link);
       }
-      link.href = brand.logo;
+      link.href = brand.logo || fallbacks[rel];
     }
   }, [ready, brand, pathname]);
 

@@ -27,13 +27,18 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     // A storage outage must not make the PWA manifest unavailable.
   }
 
+  // مع وجود لوجو بنستخدمه مباشرة، ومن غيره في أيقونة متجر بلون الأكسنت
+  // بتتولد من /icon — فالتطبيق دايماً قابل للتثبيت بأيقونة على البراند.
   const icons: MetadataRoute.Manifest["icons"] = logo
     ? [
         { src: logo, sizes: "192x192", purpose: "any" },
         { src: logo, sizes: "512x512", purpose: "any" },
         { src: logo, sizes: "512x512", purpose: "maskable" },
       ]
-    : undefined;
+    : [
+        { src: "/icon", sizes: "512x512", type: "image/png", purpose: "any" },
+        { src: "/icon", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      ];
 
   return {
     name: storeName,

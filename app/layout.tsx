@@ -83,12 +83,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="stylesheet" href={GOOGLE_FONTS_HREF} />
-        {brand.logo ? (
-          <>
-            <link rel="icon" href={brand.logo} />
-            <link rel="apple-touch-icon" href={brand.logo} />
-          </>
-        ) : null}
+        {/* أيقونات التاب و iOS بتتولد تلقائياً من app/icon و app/apple-icon
+            و app/favicon.ico — كلها بترجع لوجو البراند نفسه بتاع الـ manifest. */}
         <script
           // اختيار الزائر للستايل (أسود/أبيض) محفوظ على جهازه — بنطبقه قبل أول
           // رسم للصفحة عشان ما يحصلش وميض من ستايل المحل لستايل الزائر.
