@@ -166,6 +166,10 @@ export function normalizeData(raw: unknown): MenuData {
   // الموقع عربي فقط حتى لو البيانات اتخزنت بالإنجليزية.
   merged.brand.language = "ar";
   merged.commerce.productLayout = merged.commerce.productLayout === "grid" ? "grid" : "list";
+  const mobileGridColumns = Number(merged.commerce.mobileGridColumns);
+  merged.commerce.mobileGridColumns = Number.isFinite(mobileGridColumns)
+    ? Math.min(6, Math.max(1, Math.floor(mobileGridColumns)))
+    : DEFAULT_DATA.commerce.mobileGridColumns;
 
   // أنواع الطلب: استلام من المحل أو توصيل بس — المحل مفيهوش طاولات، فنوع «من داخل المحل»
   // (القعدة جوه) اتشال نهائياً وبيتنضف من أي بيانات محفوظة قديمة، مع ضمان نوع واحد على الأقل

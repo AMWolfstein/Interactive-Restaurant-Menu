@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import {
   Clock,
   Search,
@@ -401,8 +401,9 @@ export function Storefront() {
             </div>
             <div className={cx(
               "grid",
-              commerce.productLayout === "grid" ? "grid-cols-3 gap-2 sm:gap-3" : "grid-cols-1 gap-3 md:grid-cols-2",
-            )}>
+              commerce.productLayout === "grid" ? "mobile-product-grid gap-2 sm:gap-3" : "grid-cols-1 gap-3 md:grid-cols-2",
+            )}
+            style={commerce.productLayout === "grid" ? { "--mobile-grid-columns": commerce.mobileGridColumns } as CSSProperties : undefined}>
               {pagedItems.map((item) => (
                 <ProductCard
                   key={item.id}

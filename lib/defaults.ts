@@ -67,6 +67,7 @@ export const DEFAULT_DATA: MenuData = {
     enableNotes: true,
     enableSearch: true,
     productLayout: "list",
+    mobileGridColumns: 3,
     enableFeatured: true,
     featuredLabel: "الأكثر مبيعاً ⭐",
     enableConfetti: true,

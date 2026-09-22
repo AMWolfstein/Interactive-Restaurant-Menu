@@ -152,8 +152,10 @@ export interface CommerceSettings {
   deliveryZones: DeliveryZone[];
   /** طرق الدفع المتاحة — فاضية = الخاصية مقفولة */
   paymentMethods: string[];
-  /** شكل عرض المنتجات: قائمة تفصيلية أو شبكة من 3 أعمدة */
+  /** شكل عرض المنتجات: قائمة تفصيلية أو شبكة */
   productLayout: "list" | "grid";
+  /** عدد أعمدة شبكة المنتجات على شاشات الموبايل فقط */
+  mobileGridColumns: number;
   enableFeatured: boolean;
   featuredLabel: string;
   enableConfetti: boolean;
