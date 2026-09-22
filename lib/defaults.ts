@@ -89,6 +89,13 @@ export const DEFAULT_DATA: MenuData = {
       "💰 *الإجمالي:* {total}",
     ].join("\n"),
     orderPrefix: "",
+    // نظام «كاشك»: كل ٥٠٠٠ ج مشتريات ← خصم ٥٪ على الفاتورة اللي بعدها
+    loyalty: {
+      enabled: false,
+      label: "كاشك",
+      threshold: 5000,
+      percent: 5,
+    },
   },
   categories: [],
   suppliers: [],

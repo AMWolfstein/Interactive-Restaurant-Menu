@@ -42,6 +42,8 @@ export interface InvoiceModel {
   serviceFee: number;
   /** الخصم — موجب يعني بيتخصم */
   discount: number;
+  /** اسم الخصم زي ما بيظهر في الفاتورة — «خصم كاشك ٥٪» */
+  discountLabel: string;
   total: number;
   customerName: string;
   customerPhone: string;
@@ -75,6 +77,10 @@ export function invoiceModelFromOrder(
   const total = typeof order.total === "number" ? order.total : subtotal + deliveryFee + serviceFee;
   // فرق موجب بين مجموع البنود والرسوم وبين الإجمالي المحفوظ = خصم
   const discount = Math.max(0, Math.round((subtotal + deliveryFee + serviceFee - total) * 100) / 100);
+  // لو الطلب فيه لقطة كاشك، بنستخدم اسمها ونسبتها بدل كلمة «الخصم» العامة
+  const discountLabel = order.loyalty
+    ? `خصم كاشك ${order.loyalty.percent}٪`
+    : "الخصم";
 
   const created = new Date(order.createdAt);
   const locale = options.locale ?? "ar-EG";
@@ -88,6 +94,7 @@ export function invoiceModelFromOrder(
     deliveryFee,
     serviceFee,
     discount,
+    discountLabel,
     total,
     customerName: order.customer?.name?.trim() || "",
     customerPhone: order.customer?.phone?.trim() || "",
@@ -298,7 +305,9 @@ export async function renderInvoiceCanvas(
   totalsRow("المجموع", money(model.subtotal, brand.currency));
   if (model.deliveryFee > 0) totalsRow("التوصيل", money(model.deliveryFee, brand.currency));
   if (model.serviceFee > 0) totalsRow("الخدمة", money(model.serviceFee, brand.currency));
-  if (model.discount > 0) totalsRow("الخصم", `- ${money(model.discount, brand.currency)}`, { tone: "#059669" });
+  if (model.discount > 0) {
+    totalsRow(model.discountLabel, `- ${money(model.discount, brand.currency)}`, { tone: "#059669" });
+  }
 
   y += 6;
   ctx.fillStyle = accent;

@@ -572,7 +572,11 @@ function OrderDetails({
             {delivery > 0 ? <Row label="التوصيل" value={formatPrice(delivery, "ar", commerce)} /> : null}
             {service > 0 ? <Row label="الخدمة" value={formatPrice(service, "ar", commerce)} /> : null}
             {discount > 0 ? (
-              <Row label="الخصم" value={`- ${formatPrice(discount, "ar", commerce)}`} tone="text-emerald-400" />
+              <Row
+                label={order.loyalty ? `خصم ${commerce.loyalty.label} ${order.loyalty.percent}٪` : "الخصم"}
+                value={`- ${formatPrice(discount, "ar", commerce)}`}
+                tone="text-emerald-400"
+              />
             ) : null}
             <div className="flex items-center justify-between border-t border-line pt-2 text-base font-black">
               <span>الإجمالي</span>

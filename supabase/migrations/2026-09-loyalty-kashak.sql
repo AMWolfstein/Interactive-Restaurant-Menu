@@ -1,173 +1,16 @@
--- Interactive Store Catalog — كتالوج منتجات وطلبات واتساب فقط
+-- ═══════════════════════════════════════════════════════════════════════════
+-- نظام «كاشك» — مكافأة الولاء على إجمالي مشتريات العميل
+--
+-- الفكرة: كل طلب بيزوّد رصيد العميل بقيمة الأصناف (subtotal) من غير التوصيل
+-- ورسوم الخدمة. أول ما الرصيد يوصل العتبة (٥٠٠٠ ج افتراضياً) يستحق العميل خصم
+-- (٥٪ افتراضياً) على الطلب اللي بعده، وساعتها العتبة بتتخصم من رصيده والزيادة
+-- بتترحّل للدورة الجديدة.
+--
+-- كل الحساب بيحصل هنا جوه place_order — مش في المتصفح. لو اتحسب في الفرونت
+-- أي حد يقدر يبعت خصم من عنده، فالداتابيز هي مصدر الحقيقة الوحيد.
+--
 -- نفّذ الملف في Supabase Dashboard → SQL Editor.
-
-create table if not exists public.catalog_data (
-  slug text primary key,
-  data jsonb not null,
-  updated_at timestamptz not null default now()
-);
-
-create table if not exists public.orders (
-  id text primary key,
-  created_at timestamptz not null default now(),
-  data jsonb not null
-);
-
-create index if not exists orders_created_at_idx on public.orders (created_at desc);
-
--- نسخ كاملة من الكتالوج: ينشئها الـ Cron أو الأدمن من خلال API آمن.
--- لا توجد سياسة قراءة عامة: service_role فقط يقرأها ويعيدها بعد التحقق من جلسة الأدمن.
-create table if not exists public.catalog_backups (
-  id uuid primary key default gen_random_uuid(),
-  created_at timestamptz not null default now(),
-  reason text not null check (reason in ('scheduled', 'manual')),
-  data jsonb not null
-);
-create index if not exists catalog_backups_created_at_idx on public.catalog_backups (created_at desc);
-
--- اشتراكات Web Push لا تُقرأ أو تُعدّل مباشرةً من المتصفح.
-create table if not exists public.push_subscriptions (
-  endpoint text primary key check (length(endpoint) between 20 and 2000),
-  p256dh text not null check (length(p256dh) between 20 and 400),
-  auth text not null check (length(auth) between 8 and 200),
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
--- ─────────────────────────────────────────────────────────────────────────────
--- الأدوار (Roles)
---
--- الدور بيتخزن في Supabase Auth نفسه داخل `app_metadata.role` — المستخدم
--- مش بيقدر يعدّله من المتصفح (على عكس user_metadata)، والـ JWT بيحمله معاه
--- فالـ RLS والسيرفر الاتنين بيشوفوه.
---
---   admin          → لوحة التحكم الكاملة /admin (الافتراضي لأي حساب قديم)
---   invoice_staff  → صفحة الفواتير /invoices فقط
---
--- لإنشاء موظف فواتير (من Supabase Dashboard → SQL Editor بعد إنشاء اليوزر):
---   update auth.users
---      set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb)
---                              || '{"role":"invoice_staff"}'::jsonb
---    where email = 'staff@your-store.example';
--- ─────────────────────────────────────────────────────────────────────────────
-create or replace function public.current_app_role()
-returns text
-language sql
-stable
-set search_path = public, pg_temp
-as $function$
-  select case
-    when coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb
-           #>> '{app_metadata,role}' = 'invoice_staff'
-    then 'invoice_staff'
-    else 'admin'
-  end;
-$function$;
-
-alter table public.catalog_data enable row level security;
-alter table public.orders enable row level security;
-alter table public.catalog_backups enable row level security;
-alter table public.push_subscriptions enable row level security;
-
-drop policy if exists "catalog_public_read" on public.catalog_data;
-create policy "catalog_public_read" on public.catalog_data for select using (true);
-
--- الكتابة على الكتالوج (منتجات/أسعار/إعدادات) للأدمن فقط —
--- موظف الفواتير ممنوع حتى لو نادى Supabase REST مباشرةً بالتوكن بتاعه.
-drop policy if exists "catalog_owner_write" on public.catalog_data;
-create policy "catalog_owner_write" on public.catalog_data
-  for all to authenticated
-  using (public.current_app_role() = 'admin')
-  with check (public.current_app_role() = 'admin');
-
--- قراءة الطلبات متاحة للأدمن ولموظف الفواتير (ده شغلهم الأساسي).
-drop policy if exists "orders_owner_read" on public.orders;
-create policy "orders_owner_read" on public.orders
-  for select to authenticated using (true);
-
-grant usage on schema public to anon, authenticated;
-grant select on public.catalog_data to anon, authenticated;
-grant insert, update, delete on public.catalog_data to authenticated;
-grant select on public.orders to authenticated;
--- هذان الجدولان مقفولان بـ RLS بدون policy عامة. API السيرفر فقط يستخدم service_role
--- (المفتاح لا يصل إطلاقاً للمتصفح) لإنشاء النسخ وإرسال الإشعارات.
-grant all on public.catalog_backups to service_role;
-grant all on public.push_subscriptions to service_role;
-
--- ─────────────────────────────────────────────────────────────────────────────
--- رقم الطلب القصير: BF-7K4P2
---   - بادئة من إعدادات المحل (commerce.orderPrefix) أو من أوائل حروف اسم المحل.
---   - 5 رموز عشوائية من أبجدية بدون حروف متشابهة (0/O/1/I) — سهل القراءة
---     والإملاء على التليفون، ومش تسلسلي فمش ممكن تخمين أرقام طلبات غيرك.
--- ─────────────────────────────────────────────────────────────────────────────
-create or replace function public.order_code_alphabet()
-returns text language sql immutable as $function$ select '23456789ABCDEFGHJKLMNPQRSTUVWXYZ' $function$;
-
-create or replace function public.generate_order_number(p_prefix text default 'ORD')
-returns text
-language plpgsql
-volatile
-set search_path = public, pg_temp
-as $function$
-declare
-  v_alphabet text := public.order_code_alphabet();
-  v_prefix text := upper(regexp_replace(coalesce(nullif(btrim(p_prefix), ''), 'ORD'), '[^A-Za-z0-9]', '', 'g'));
-  v_code text;
-  v_candidate text;
-  v_attempt integer := 0;
-begin
-  if v_prefix = '' then v_prefix := 'ORD'; end if;
-  v_prefix := left(v_prefix, 4);
-
-  loop
-    v_attempt := v_attempt + 1;
-    v_code := '';
-    for i in 1..5 loop
-      v_code := v_code || substr(v_alphabet, 1 + floor(random() * length(v_alphabet))::int, 1);
-    end loop;
-    v_candidate := v_prefix || '-' || v_code;
-    exit when not exists (select 1 from public.orders where id = v_candidate);
-    -- بعد 12 محاولة (احتمال ضئيل جداً) بنطوّل الكود بدل ما ندور للأبد
-    if v_attempt > 12 then
-      v_candidate := v_prefix || '-' || v_code || substr(v_alphabet, 1 + floor(random() * length(v_alphabet))::int, 1);
-      exit;
-    end if;
-  end loop;
-
-  return v_candidate;
-end;
-$function$;
-
--- بادئة رقم الطلب من إعدادات المحل: commerce.orderPrefix، وإلا أوائل حروف
--- الاسم الإنجليزي (Blue Freeze → BF)، وإلا ORD.
-create or replace function public.order_prefix_from_menu(p_menu jsonb)
-returns text
-language plpgsql
-immutable
-set search_path = public, pg_temp
-as $function$
-declare
-  v_configured text := btrim(coalesce(p_menu #>> '{commerce,orderPrefix}', ''));
-  v_name text := btrim(coalesce(p_menu #>> '{brand,storeNameEn}', ''));
-  v_initials text := '';
-  v_word text;
-begin
-  if v_configured <> '' then return v_configured; end if;
-  if v_name = '' then return 'ORD'; end if;
-  foreach v_word in array regexp_split_to_array(v_name, '\s+') loop
-    if v_word ~ '^[A-Za-z]' then v_initials := v_initials || upper(left(v_word, 1)); end if;
-  end loop;
-  if length(v_initials) < 2 then v_initials := upper(left(regexp_replace(v_name, '[^A-Za-z0-9]', '', 'g'), 3)); end if;
-  if v_initials = '' then return 'ORD'; end if;
-  return left(v_initials, 4);
-end;
-$function$;
-
--- الدوال المساعدة دي بتتنادى من جوه place_order (security definer) بس —
--- مفيش داعي إن anon يقدر يناديها مباشرةً.
-revoke all on function public.generate_order_number(text) from public, anon;
-revoke all on function public.order_prefix_from_menu(jsonb) from public, anon;
-revoke all on function public.order_code_alphabet() from public, anon;
+-- ═══════════════════════════════════════════════════════════════════════════
 
 -- ── جدول العملاء ────────────────────────────────────────────────────────────
 -- مفتاح العميل هو رقم الموبايل بصيغة موحّدة. الجدول ده كمان بيحل مشكلة
@@ -616,20 +459,25 @@ $function$;
 revoke all on function public.update_order_status(text, text) from public, anon;
 grant execute on function public.update_order_status(text, text) to authenticated;
 
+-- ── ترحيل الطلبات القديمة ───────────────────────────────────────────────────
+-- بناء أرصدة العملاء من الطلبات الموجودة أصلاً، عشان العملاء القدام ميبدأوش
+-- من الصفر. الطلبات الملغية مش بتتحسب.
+insert into public.customers (phone, name, spent, lifetime, orders_count, created_at, updated_at)
+select
+  public.normalize_phone(data #>> '{customer,phone}') as phone,
+  coalesce((array_agg(data #>> '{customer,name}' order by created_at desc))[1], '') as name,
+  sum(greatest(0, coalesce((data ->> 'subtotal')::numeric, (data ->> 'total')::numeric, 0))) as spent,
+  sum(greatest(0, coalesce((data ->> 'subtotal')::numeric, (data ->> 'total')::numeric, 0))) as lifetime,
+  count(*)::integer as orders_count,
+  min(created_at), max(created_at)
+from public.orders
+where length(public.normalize_phone(data #>> '{customer,phone}')) >= 8
+  and coalesce(data ->> 'status', 'new') <> 'cancelled'
+group by 1
+on conflict (phone) do nothing;
 
-do $$
-begin
-  if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
-    create publication supabase_realtime;
-  end if;
-  if not exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='catalog_data') then
-    alter publication supabase_realtime add table public.catalog_data;
-  end if;
-  if not exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='orders') then
-    alter publication supabase_realtime add table public.orders;
-  end if;
-end $$;
+-- ملاحظة: الأرصدة المرحّلة ممكن تكون أكبر من العتبة، يعني أول طلب لعميل قديم
+-- كبير هياخد الخصم على طول. ده مقصود — العميل فعلاً اشترى القيمة دي.
+-- لو مش عايز ده، نفّذ: update public.customers set spent = 0;
 
-alter table public.catalog_data replica identity full;
-alter table public.orders replica identity full;
 alter table public.customers replica identity full;

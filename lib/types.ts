@@ -175,6 +175,52 @@ export interface CommerceSettings {
   orderTemplate: string;
   /** بادئة رقم الطلب — مثال: BF ← BF-7K4P2. فاضية = تتحسب من اسم المحل */
   orderPrefix: string;
+  /** نظام «كاشك» — مكافأة الولاء على إجمالي مشتريات العميل */
+  loyalty: LoyaltySettings;
+}
+
+/**
+ * إعدادات نظام «كاشك»: لما مشتريات العميل توصل `threshold` ياخد خصم
+ * `percent`٪ على الفاتورة اللي بعدها، والرصيد يتخصم منه الحد (الزيادة تترحّل).
+ */
+export interface LoyaltySettings {
+  enabled: boolean;
+  /** اسم النظام زي ما بيظهر للعميل — «كاشك» */
+  label: string;
+  /** العتبة بالجنيه (٥٠٠٠) — الرصيد بيتجمّع من قيمة الأصناف فقط */
+  threshold: number;
+  /** نسبة الخصم (٥٪) */
+  percent: number;
+}
+
+/** لقطة مكافأة كاشك المسجّلة داخل الطلب — ثابتة زي باقي أسعار الفاتورة */
+export interface LoyaltySnapshot {
+  /** قيمة الخصم بالجنيه على الطلب ده */
+  discount: number;
+  percent: number;
+  threshold: number;
+  /** رصيد العميل قبل الطلب */
+  balanceBefore: number;
+  /** رصيده بعده (المرحّل + قيمة الطلب ده) */
+  balanceAfter: number;
+}
+
+/** ملف عميل في نظام كاشك — مفتاحه رقم الموبايل بصيغة موحّدة */
+export interface CustomerRecord {
+  /** رقم الموبايل منسّق: 01012345678 */
+  phone: string;
+  name: string;
+  /** الرصيد الجاري ناحية العتبة */
+  spent: number;
+  /** إجمالي كل المشتريات على طول (مش بيتصفّر) */
+  lifetime: number;
+  ordersCount: number;
+  /** عدد مرات استخدام المكافأة */
+  rewardsUsed: number;
+  /** إجمالي الخصومات اللي اتصرفت */
+  discountTotal: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface MenuData {
@@ -209,6 +255,8 @@ export interface SavedOrder {
   zoneName?: string;
   /** طريقة الدفع اللي اختارها العميل */
   paymentMethod?: string;
+  /** لقطة خصم «كاشك» لو العميل كان مستحق وقت الطلب */
+  loyalty?: LoyaltySnapshot;
 }
 
 export interface AdminOverview {

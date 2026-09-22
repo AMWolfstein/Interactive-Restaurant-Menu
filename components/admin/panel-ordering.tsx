@@ -11,6 +11,7 @@ import {
   Plus,
   Receipt,
   Save,
+  Sparkles,
   Trash2,
   Wallet,
 } from "lucide-react";
@@ -262,6 +263,67 @@ export function OrderingPanel() {
             <Toggle label="إظهار الأسعار" checked={commerce.showPrices} onChange={(v) => patchCommerce({ showPrices: v })} />
             <Toggle label="تفعيل السلة" checked={commerce.enableCart} onChange={(v) => patchCommerce({ enableCart: v })} />
           </div>
+        </div>
+      </Panel>
+
+      {/* ── نظام «كاشك» ─────────────────────────────────────────────────── */}
+      <Panel title="نظام كاشك (مكافأة العملاء)" icon={<Sparkles className="h-4 w-4" />}>
+        <p className="mb-3 rounded-xl border border-line bg-surface-2/40 p-3 text-[11px] leading-relaxed text-muted">
+          لما مشتريات العميل توصل <b className="text-ink">{commerce.loyalty.threshold.toLocaleString("en-US")} {commerce.currency}</b>{" "}
+          ياخد خصم <b className="text-ink">{commerce.loyalty.percent}٪</b> على الفاتورة اللي بعدها، وبعدها الرصيد
+          يتخصم منه المبلغ ده ويبدأ دورة جديدة (الزيادة بتترحّل للعميل مش بتضيع).
+          <br />
+          العميل بيتعرّف برقم الموبايل، والرصيد بيتجمّع من قيمة المنتجات بس —
+          التوصيل ورسوم الخدمة مش بيتحسبوا ولا بياخدوا خصم. الطلبات الملغية بترجع
+          تتشال من الرصيد تلقائياً.
+        </p>
+
+        <div className="space-y-3">
+          <Toggle
+            label="تفعيل نظام كاشك"
+            description="لو مقفول، الرصيد بيفضل متسجّل بس مفيش خصم بيتطبّق على أي طلب"
+            checked={commerce.loyalty.enabled}
+            onChange={(v) => patchCommerce({ loyalty: { ...commerce.loyalty, enabled: v } })}
+          />
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="اسم النظام" hint="الاسم اللي العميل بيشوفه في السلة والفاتورة">
+              <TextInput
+                value={commerce.loyalty.label}
+                onChange={(event) =>
+                  patchCommerce({ loyalty: { ...commerce.loyalty, label: event.target.value.slice(0, 30) } })
+                }
+                placeholder="كاشك"
+              />
+            </Field>
+            <Field label="المبلغ المطلوب" hint="إجمالي المشتريات اللي بعده العميل يستحق الخصم">
+              <NumberInput
+                value={commerce.loyalty.threshold}
+                onValueChange={(value) =>
+                  patchCommerce({ loyalty: { ...commerce.loyalty, threshold: Math.max(1, value) } })
+                }
+                suffix={commerce.currency}
+              />
+            </Field>
+            <Field label="نسبة الخصم %" hint="الحد الأقصى 50٪">
+              <NumberInput
+                value={commerce.loyalty.percent}
+                onValueChange={(value) =>
+                  patchCommerce({ loyalty: { ...commerce.loyalty, percent: Math.min(50, Math.max(0, value)) } })
+                }
+                suffix="%"
+              />
+            </Field>
+          </div>
+
+          {commerce.loyalty.enabled ? (
+            <p className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-[11px] font-bold text-emerald-500">
+              مثال: عميل اشترى بـ {commerce.loyalty.threshold.toLocaleString("en-US")} {commerce.currency} → طلبه الجاي
+              بـ 1,000 {commerce.currency} هيتخصم منه{" "}
+              {Math.round((1000 * commerce.loyalty.percent) / 100).toLocaleString("en-US")} {commerce.currency} ويدفع{" "}
+              {(1000 - Math.round((1000 * commerce.loyalty.percent) / 100)).toLocaleString("en-US")} {commerce.currency}.
+            </p>
+          ) : null}
         </div>
       </Panel>
 

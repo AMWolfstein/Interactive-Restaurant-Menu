@@ -21,6 +21,7 @@ import {
   RefreshCw,
   Store,
   Truck,
+  Users,
   Smartphone,
   Tablet,
   TriangleAlert,
@@ -45,12 +46,14 @@ import { OrderingPanel } from "./panel-ordering";
 import { OrdersPanel } from "./panel-orders";
 import { DataPanel } from "./panel-data";
 import { SuppliersPanel } from "./panel-suppliers";
+import { CustomersPanel } from "./panel-customers";
 
-type TabKey = "dashboard" | "brand" | "look" | "categories" | "suppliers" | "items" | "ordering" | "orders" | "data" | "preview";
+type TabKey = "dashboard" | "brand" | "look" | "categories" | "suppliers" | "items" | "ordering" | "orders" | "customers" | "data" | "preview";
 
 const TABS: { key: TabKey; label: string; icon: typeof LayoutDashboard }[] = [
   { key: "dashboard", label: "نظرة عامة", icon: LayoutDashboard },
   { key: "orders", label: "الطلبات", icon: ClipboardList },
+  { key: "customers", label: "العملاء", icon: Users },
   { key: "brand", label: "الهوية", icon: Store },
   { key: "look", label: "المظهر", icon: Palette },
   { key: "categories", label: "الأقسام", icon: FolderTree },
@@ -247,6 +250,7 @@ export function AdminApp() {
           {tab === "items" ? <ItemsPanel intent={jump.intent} nonce={jump.nonce} /> : null}
           {tab === "ordering" ? <OrderingPanel /> : null}
           {tab === "orders" ? <OrdersPanel /> : null}
+          {tab === "customers" ? <CustomersPanel /> : null}
           {tab === "preview" ? <PreviewPanel /> : null}
           {tab === "data" ? <DataPanel /> : null}
         </main>
