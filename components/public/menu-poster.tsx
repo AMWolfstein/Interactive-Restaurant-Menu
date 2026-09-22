@@ -250,12 +250,13 @@ function PosterHeader({
 
   return (
     <header className="relative overflow-hidden text-center">
-      {/* عرض الصورة كاملة داخل مساحة البانر من غير قص. */}
+      {/* الصورة بتتشد على مقاس البانر بالظبط (fill) — تملأ المساحة كلها من
+          غير قصّ فيها، مع تمدّد بسيط في الأبعاد لو النسب مختلفة. */}
       {headerImage ? (
         <ProductImage
           src={headerImage}
           alt=""
-          className={`w-full bg-white/50 object-contain! ${imageHeightClass ?? (compact ? "h-36" : "h-56 sm:h-72")} ${compact ? "rounded-b-2xl" : "rounded-b-[24px]"}`}
+          className={`w-full bg-white/50 object-fill! ${imageHeightClass ?? (compact ? "h-36" : "h-56 sm:h-72")} ${compact ? "rounded-b-2xl" : "rounded-b-[24px]"}`}
         />
       ) : null}
       {/* اسم المحل والشعار اتشالوا من صفحة المنيو بأمر صاحب المحل —
