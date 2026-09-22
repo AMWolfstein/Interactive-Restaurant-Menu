@@ -12,6 +12,7 @@ import {
   MapPin,
   ChevronLeft,
   ChevronRight,
+  BookOpenText,
 } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
 import { useCart } from "@/lib/use-cart";
@@ -275,6 +276,14 @@ export function Storefront() {
               onOpenCart={() => setCartOpen(true)}
             />
             <PwaInstallButton language={lang} />
+            <a
+              href="/menu"
+              title={en ? "Open the menu" : "فتح صفحة المنيو"}
+              aria-label={en ? "Open the menu" : "فتح صفحة المنيو"}
+              className="grid h-9 w-9 place-items-center rounded-full border border-line bg-surface text-accent transition hover:border-accent/60"
+            >
+              <BookOpenText className="h-4.5 w-4.5" />
+            </a>
             <PushNotificationButton language={lang} />
             <ThemeToggle fallback={brand.theme} language={lang} />
             <a
