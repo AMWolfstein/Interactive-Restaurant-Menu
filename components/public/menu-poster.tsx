@@ -84,17 +84,9 @@ type PosterPage = {
   columns: [PosterGroup[], PosterGroup[]];
 };
 
-// بنبني كل صفحة بنصف أبعاد الصورة المطلوبة ثم نصورها بكثافة 2x؛ وبكده
-// يفضل الـ DOM خفيفاً على الموبايل بينما ملف PNG النهائي يخرج 1920×1080 بالضبط.
-const EXPORT_CAPTURE_WIDTH = 960;
-const EXPORT_CAPTURE_HEIGHT = 540;
-const EXPORT_PIXEL_RATIO = 2;
-const EXPORT_WIDTH = EXPORT_CAPTURE_WIDTH * EXPORT_PIXEL_RATIO;
-const EXPORT_HEIGHT = EXPORT_CAPTURE_HEIGHT * EXPORT_PIXEL_RATIO;
-
-// الصفحة الأفقية أقصر من التصميم القديم ذي الارتفاع التلقائي، لذلك نقلل سعة
-// العمود حتى تنتقل المنتجات الزائدة إلى صفحة جديدة بدلاً من قصها أسفل الصورة.
-const EXPORT_COLUMN_UNITS = 15;
+// كل صفحة PNG بتتصور لوحدها. الحد ده يمنع تكوين Canvas طويل جداً يفشل
+// على الموبايل، مع احتساب المنتجات متعددة الأوزان ووصف العروض كسطور إضافية.
+const EXPORT_COLUMN_UNITS = 36;
 const EXPORT_SECTION_UNITS = 2.5;
 
 function itemExportUnits(item: MenuItem, category: Category) {
@@ -236,10 +228,13 @@ function PosterHeader({
   brand,
   contact,
   compact = false,
+  imageHeightClass,
 }: {
   brand: { storeName: string; tagline?: string; logo?: string; heroImage?: string; heroImages?: HeroImage[] };
   contact: { address?: string; phone?: string };
   compact?: boolean;
+  /** ارتفاع ثابت للبانر — بنستخدمه في تصدير PNG عشان الناتج ما يعتمدش على مقاس شاشة الجهاز. */
+  imageHeightClass?: string;
 }) {
   // صورة الهيدر بتيجي من أول صورة فعّالة في سلايدر الصفحة الرئيسية وبنفس
   // ترتيبه. لو مفيش صور سلايدر بنرجع لصورة الهيرو القديمة (heroImage)،
@@ -250,27 +245,36 @@ function PosterHeader({
     || brand.logo;
 
   return (
-    <header className={`relative overflow-hidden text-center ${compact ? "pb-2" : "pb-3"}`}>
+    <header className="relative overflow-hidden text-center">
+      {/* بانر عريض أطول من الأول + object-top عشان الصورة ما تتاكلش من فوق. */}
       {headerImage ? (
         <ProductImage
           src={headerImage}
           alt=""
-          className={`w-full bg-white/50 object-cover ${compact ? "h-24" : "h-36 sm:h-48"}`}
+          className={`w-full bg-white/50 object-cover object-top ${imageHeightClass ?? (compact ? "h-36" : "h-56 sm:h-72")}`}
         />
       ) : null}
-      <div className="relative mx-auto mt-2 flex max-w-2xl flex-wrap items-center justify-center gap-x-4 gap-y-1 px-4 text-[11px] font-bold text-slate-700">
-        {contact.address ? (
-          <span className="inline-flex items-center gap-1">
-            <MapPin className="h-3 w-3 text-sky-700" />
-            {contact.address}
-          </span>
-        ) : null}
-        {contact.phone ? (
-          <a href={`tel:${contact.phone.replace(/\D/g, "")}`} className="inline-flex items-center gap-1" dir="ltr">
-            <Phone className="h-3 w-3 text-sky-700" />
-            {contact.phone}
-          </a>
-        ) : null}
+      <div className={`relative ${compact ? "px-4 pt-4 pb-3" : "px-5 pt-5 pb-4 sm:px-10 sm:pt-6"}`}>
+        <Snowflake className="absolute left-6 top-2 h-10 w-10 rotate-12 text-white/70 sm:h-14 sm:w-14" strokeWidth={1} />
+        <Snowflake className="absolute right-6 top-4 h-9 w-9 -rotate-12 text-white/65 sm:h-12 sm:w-12" strokeWidth={1} />
+        <h1 className="relative text-2xl font-black tracking-tight text-sky-600 drop-shadow-[0_1px_0_rgba(255,255,255,.8)] sm:text-3xl">
+          {brand.storeName}
+        </h1>
+        {brand.tagline ? <p className="relative mt-1 text-xs font-bold text-slate-700 sm:text-sm">{brand.tagline}</p> : null}
+        <div className="relative mx-auto mt-2 flex max-w-2xl flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] font-bold text-slate-700">
+          {contact.address ? (
+            <span className="inline-flex items-center gap-1">
+              <MapPin className="h-3 w-3 text-sky-700" />
+              {contact.address}
+            </span>
+          ) : null}
+          {contact.phone ? (
+            <a href={`tel:${contact.phone.replace(/\D/g, "")}`} className="inline-flex items-center gap-1" dir="ltr">
+              <Phone className="h-3 w-3 text-sky-700" />
+              {contact.phone}
+            </a>
+          ) : null}
+        </div>
       </div>
     </header>
   );
@@ -362,8 +366,6 @@ export function MenuPoster() {
 
     const baseOptions = {
       backgroundColor: "#dff5ff",
-      width: EXPORT_CAPTURE_WIDTH,
-      height: EXPORT_CAPTURE_HEIGHT,
       imagePlaceholder: TRANSPARENT_PIXEL,
       // onImageErrorHandler يمنع رفض الوعد لو صورة داخل النسخة فشلت.
       onImageErrorHandler: () => undefined,
@@ -383,18 +385,18 @@ export function MenuPoster() {
 
     const fontOptions = fontEmbedCSS ? { fontEmbedCSS } : { skipFonts: true };
 
-    /** كل المحاولات تحافظ على نفس المقاس النهائي؛ الاختلاف فقط في تضمين الخطوط وطريقة الإنشاء. */
+    /** سلّم محاولات: جودة عالية ← أخف ← أبسط صيغة. أول نجاح بيوقف السلّم. */
     const capturePage = async (capture: HTMLDivElement): Promise<string | null> => {
       const attempts: Array<() => Promise<string | null>> = [
         async () => {
-          const blob = await toBlob(capture, { ...baseOptions, ...fontOptions, pixelRatio: EXPORT_PIXEL_RATIO });
+          const blob = await toBlob(capture, { ...baseOptions, ...fontOptions, pixelRatio: 1.5 });
           return blob ? URL.createObjectURL(blob) : null;
         },
         async () => {
-          const blob = await toBlob(capture, { ...baseOptions, pixelRatio: EXPORT_PIXEL_RATIO, skipFonts: true });
+          const blob = await toBlob(capture, { ...baseOptions, ...fontOptions, pixelRatio: 1 });
           return blob ? URL.createObjectURL(blob) : null;
         },
-        async () => toPng(capture, { ...baseOptions, pixelRatio: EXPORT_PIXEL_RATIO, skipFonts: true }),
+        async () => toPng(capture, { ...baseOptions, pixelRatio: 1, skipFonts: true }),
       ];
 
       for (const attempt of attempts) {
@@ -435,7 +437,7 @@ export function MenuPoster() {
       }
 
       if (savedPages === exportPageCount) {
-        setExportMessage(`تم تحميل المنيو بالكامل في ${exportPageCount} ${exportPageCount === 1 ? "صورة" : "صور"} PNG بمقاس ${EXPORT_WIDTH}×${EXPORT_HEIGHT} ✅`);
+        setExportMessage(`تم تحميل المنيو بالكامل في ${exportPageCount} ${exportPageCount === 1 ? "صورة" : "صور"} PNG ✅`);
       } else if (savedPages > 0) {
         setExportMessage(
           `تم تحميل ${savedPages} من ${exportPageCount}. تعذّر تصوير الصفحات: ${failedPages.join("، ")} — جرّب مرة أخرى أو استخدم زر الطباعة.`,
@@ -491,8 +493,8 @@ export function MenuPoster() {
               {isExporting
                 ? `جاري تحميل الصورة ${exportProgress} من ${exportPageCount}...`
                 : exportPageCount > 1
-                  ? `تحميل المنيو — ${exportPageCount} صور PNG (1920×1080)`
-                  : "تحميل المنيو PNG (1920×1080)"}
+                  ? `تحميل المنيو — ${exportPageCount} صور PNG`
+                  : "تحميل المنيو PNG"}
             </button>
           </div>
         </div>
@@ -593,7 +595,7 @@ export function MenuPoster() {
           position: "fixed",
           left: "-99999px",
           top: "0",
-          width: `${EXPORT_CAPTURE_WIDTH}px`,
+          width: "960px",
           pointerEvents: "none",
           zIndex: -100,
         }}
@@ -606,13 +608,13 @@ export function MenuPoster() {
               pngCaptureRefs.current[pageIndex] = node;
             }}
             dir="rtl"
-            className="flex flex-col overflow-hidden p-3 text-[#10213a]"
-            style={{ ...bgStyle, width: EXPORT_CAPTURE_WIDTH, height: EXPORT_CAPTURE_HEIGHT }}
+            className="p-6 text-[#10213a]"
+            style={bgStyle}
           >
-            <article className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[20px] border-2 border-white/90 bg-white/30 shadow-[0_20px_60px_-25px_rgba(0,92,150,.5)]">
-              <PosterHeader brand={brand} contact={contact} compact />
+            <article className="overflow-hidden rounded-[24px] border-2 border-white/90 bg-white/30 shadow-[0_20px_60px_-25px_rgba(0,92,150,.5)]">
+              <PosterHeader brand={brand} contact={contact} imageHeightClass="h-72" />
 
-              <div className="grid min-h-0 flex-1 grid-cols-2 gap-x-4 px-4 pb-2">
+              <div className="grid grid-cols-2 gap-x-6 gap-y-5 px-6 pb-6">
                 {posterPage.columns.map((column, columnIndex) => (
                   <div key={columnIndex} className="space-y-5">
                     {column.map(({ category, items: categoryItems, continuation }, sectionIndex) => (
