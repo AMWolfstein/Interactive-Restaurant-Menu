@@ -162,6 +162,8 @@ export interface CommerceSettings {
   enableCart: boolean;
   /** قالب رسالة واتساب */
   orderTemplate: string;
+  /** بادئة رقم الطلب — مثال: BF ← BF-7K4P2. فاضية = تتحسب من اسم المحل */
+  orderPrefix: string;
 }
 
 export interface MenuData {
@@ -183,6 +185,12 @@ export interface SavedOrder {
   orderType: OrderType;
   lines: Array<{ itemId: string; name: string; quantity: number; unitPrice: number }>;
   total: number;
+  /** لقطة الحساب وقت الطلب — الفاتورة بتستخدمها بدل إعادة الحساب من الأسعار الحالية */
+  subtotal?: number;
+  deliveryFee?: number;
+  serviceFee?: number;
+  /** عملة المحل وقت الطلب */
+  currency?: string;
   /** حالة الطلب — الطلبات القديمة (قبل الميزة) بتتعامل كـ "new" */
   status?: OrderStatus;
   statusUpdatedAt?: string;

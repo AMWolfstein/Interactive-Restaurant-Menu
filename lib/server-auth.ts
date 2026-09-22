@@ -18,18 +18,32 @@ export function isSupabaseAuthConfigured(): boolean {
   return Boolean(supabaseUrl() && supabaseKey());
 }
 
+/**
+ * أدوار المستخدمين:
+ *   admin         → كل صلاحيات لوحة التحكم /admin
+ *   invoice_staff → صفحة الفواتير /invoices فقط (قراءة الطلبات + تغيير حالتها)
+ *
+ * الدور مصدره الوحيد هو `app_metadata.role` في Supabase Auth — دي بيانات
+ * السيرفر اللي المستخدم ما يقدرش يعدّلها من المتصفح (على عكس user_metadata).
+ * أي حساب قديم من غير الحقل ده بيتعامل كـ admin عشان ما نكسرش الموجود.
+ */
+export type { AppRole } from "./server-auth-types";
+import type { AppRole } from "./server-auth-types";
+
 export interface AdminUser {
   id: string;
   email: string;
+  role: AppRole;
 }
 
 /** نتيجة التحقق: يوزر صالح، أو null، أو سبب الرفض */
 export type AdminCheck =
   | { ok: true; user: AdminUser }
-  | { ok: false; status: 401 | 503; error: string };
+  | { ok: false; status: 401 | 403 | 503; error: string };
 
 export const MISSING_SERVER_ENV = "إعدادات Supabase ناقصة على السيرفر";
 export const UNAUTHORIZED = "غير مصرّح — سجّل الدخول من لوحة التحكم";
+export const FORBIDDEN = "الحساب ده مالوش صلاحية على الجزء ده";
 
 /** كاش قصير للتحقق عشان منضربش Supabase مع كل طلب - 15 ثانية فقط لتقليل نافذة التوكن الملغي */
 const TOKEN_CACHE_TTL = 15_000;
@@ -58,8 +72,14 @@ async function verifyToken(token: string): Promise<AdminUser | null> {
       cache: "no-store",
     });
     if (response.ok) {
-      const payload = (await response.json()) as { id?: string; email?: string };
-      if (payload.id && payload.email) user = { id: payload.id, email: payload.email };
+      const payload = (await response.json()) as {
+        id?: string;
+        email?: string;
+        app_metadata?: { role?: string } | null;
+      };
+      if (payload.id && payload.email) {
+        user = { id: payload.id, email: payload.email, role: roleOf(payload.app_metadata?.role) };
+      }
     }
   } catch {
     // فشل الشبكة = رفض الطلب (fail closed)
@@ -75,11 +95,32 @@ async function verifyToken(token: string): Promise<AdminUser | null> {
   return user;
 }
 
-/** التحقق الكامل من توكن الأدمن */
-export async function checkAdmin(token: string | null): Promise<AdminCheck> {
+/** أي قيمة غير معروفة = admin (توافق مع الحسابات القديمة قبل نظام الأدوار) */
+function roleOf(value: unknown): AppRole {
+  return value === "invoice_staff" ? "invoice_staff" : "admin";
+}
+
+/** تحقق من التوكن من غير أي شرط على الدور */
+export async function checkSession(token: string | null): Promise<AdminCheck> {
   if (!isSupabaseAuthConfigured()) return { ok: false, status: 503, error: MISSING_SERVER_ENV };
   if (!token) return { ok: false, status: 401, error: UNAUTHORIZED };
   const user = await verifyToken(token);
   if (!user) return { ok: false, status: 401, error: UNAUTHORIZED };
   return { ok: true, user };
+}
+
+/** التحقق الكامل من توكن الأدمن — موظف الفواتير بيترفض بـ403 */
+export async function checkAdmin(token: string | null): Promise<AdminCheck> {
+  const check = await checkSession(token);
+  if (!check.ok) return check;
+  if (check.user.role !== "admin") return { ok: false, status: 403, error: FORBIDDEN };
+  return check;
+}
+
+/**
+ * صلاحية شاشة الفواتير: الأدمن أو موظف الفواتير.
+ * بتُستخدم في /api/invoices/* بس — مش بتفتح أي وظيفة إدارية.
+ */
+export async function checkInvoiceStaff(token: string | null): Promise<AdminCheck> {
+  return checkSession(token);
 }

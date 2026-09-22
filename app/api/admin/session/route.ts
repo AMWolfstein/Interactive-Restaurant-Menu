@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ authenticated: false, error: check.error }, { status: check.status });
   }
   return NextResponse.json(
-    { authenticated: true, email: check.user.email, userId: check.user.id },
+    { authenticated: true, email: check.user.email, userId: check.user.id, role: check.user.role },
     { headers: { "cache-control": "no-store" } },
   );
 }

@@ -9,12 +9,14 @@ import {
   MessageCircle,
   Phone,
   Plus,
+  Receipt,
   Save,
   Trash2,
   Wallet,
 } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
 import { buildOrderMessage, computeTotals, TEMPLATE_TOKENS } from "@/lib/format";
+import { orderPrefixFrom } from "@/lib/order-number";
 import { describeNextOpening, isStoreOpenBySchedule, WEEK_DAYS_AR } from "@/lib/schedule";
 import type { ContactSettings, MenuItem, OrderType } from "@/lib/types";
 import type { DetailedLine } from "@/lib/use-cart";
@@ -74,6 +76,16 @@ export function OrderingPanel() {
       paymentMethod: commerce.paymentMethods[0],
     },
     { lang: brand.language, brand, contact, commerce },
+  );
+
+  const orderPrefixPreview = useMemo(
+    () =>
+      orderPrefixFrom({
+        orderPrefix: commerce.orderPrefix,
+        storeNameEn: brand.storeNameEn,
+        storeName: brand.storeName,
+      }),
+    [commerce.orderPrefix, brand.storeNameEn, brand.storeName],
   );
 
   const scheduleOpen = useMemo(
@@ -409,7 +421,37 @@ export function OrderingPanel() {
         </p>
       </Panel>
 
-      <Panel title="قالب رسالة واتساب" description="اضغط على أي متغيّر يتحط في مكان الكيرسر — وكل حاجة بتتبدل أوتوماتيك" icon={<Bell className="h-4 w-4" />}>
+      <Panel
+        title="رقم الطلب"
+        description="الرقم اللي العميل بيبعته على واتساب والموظف بيدوّر بيه في صفحة الفواتير"
+        icon={<Receipt className="h-4 w-4" />}
+      >
+        <Field
+          label="بادئة رقم الطلب"
+          hint={
+            <>
+              حروف إنجليزية أو أرقام (٤ خانات كحد أقصى). فاضية = بتتحسب من اسم المحل الإنجليزي.
+              الشكل النهائي: <span dir="ltr" className="font-mono text-accent">{`${orderPrefixPreview}-7K4P2`}</span>
+            </>
+          }
+        >
+          <TextInput
+            value={commerce.orderPrefix}
+            onChange={(event) => patchCommerce({ orderPrefix: event.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 4) })}
+            placeholder="BF"
+            dir="ltr"
+            className="text-start font-mono uppercase"
+          />
+        </Field>
+        <p className="mt-3 rounded-xl border border-line bg-surface-2 p-3 text-[11px] leading-relaxed text-muted">
+          العميل بعد ما يأكد الطلب بيتفتحله واتساب برسالة فيها <b>رقم الطلب بس</b> — من غير المنتجات
+          أو الأسعار. التفاصيل الكاملة والفاتورة بتتعمل من
+          <a href="/invoices" target="_blank" rel="noopener" className="mx-1 font-bold text-accent hover:underline">صفحة الفواتير</a>
+          أو من تبويب الطلبات هنا.
+        </p>
+      </Panel>
+
+      <Panel title="قالب رسالة واتساب (الأرشيف)" description="القالب ده مابقاش بيتبعت للعميل — رسالة العميل بقت رقم الطلب فقط. سايبينه لو حبيت ترجّعه لاحقاً" icon={<Bell className="h-4 w-4" />}>
         <div className="mb-2 flex flex-wrap gap-1.5">
           {TEMPLATE_TOKENS.map((token) => (
             <button

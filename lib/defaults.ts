@@ -86,6 +86,7 @@ export const DEFAULT_DATA: MenuData = {
       "📝 *ملاحظات:* {notes}",
       "💰 *الإجمالي:* {total}",
     ].join("\n"),
+    orderPrefix: "",
   },
   categories: [],
   suppliers: [],

@@ -224,6 +224,12 @@ export function normalizeData(raw: unknown): MenuData {
     .filter((method, index, list) => list.indexOf(method) === index)
     .slice(0, 10);
 
+  // بادئة رقم الطلب: حروف وأرقام إنجليزية بس، 4 خانات كحد أقصى (BF-7K4P2)
+  merged.commerce.orderPrefix = String(merged.commerce.orderPrefix ?? "")
+    .replace(/[^A-Za-z0-9]/g, "")
+    .toUpperCase()
+    .slice(0, 4);
+
   // ضمان أسعار وحدود منطقية (مكافحة حقن أسعار سالبة أو كبيرة)
   for (const item of merged.items) {
     if (typeof item.price !== "number" || !Number.isFinite(item.price) || item.price < 0) item.price = 0;

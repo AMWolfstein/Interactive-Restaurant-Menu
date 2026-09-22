@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { useMenu } from "@/lib/use-menu";
-import { buildOrderMessage, computeTotals, formatPrice, ORDER_TYPE_LABEL, pick, toWhatsappNumber } from "@/lib/format";
+import { computeTotals, formatPrice, ORDER_TYPE_LABEL, pick, toWhatsappNumber } from "@/lib/format";
 import { useStoreOpen } from "@/lib/use-store-open";
 import type { OrderType } from "@/lib/types";
 import type { DetailedLine } from "@/lib/use-cart";
@@ -114,10 +114,6 @@ export function CartSheet({
       setErrors({ total: en ? "The shop did not set a WhatsApp number" : "صاحب المحل لسه ما حددش رقم واتساب" });
       return;
     }
-    const message = buildOrderMessage(
-      { name, phone, address, notes, orderType, lines, totals, zoneName: zone?.name, paymentMethod },
-      { lang, brand, contact, commerce },
-    );
     const whatsappWindow = window.open("about:blank", "_blank");
     setSending(true);
     try {
@@ -135,7 +131,28 @@ export function CartSheet({
       if (commerce.enableConfetti) {
         confetti({ particleCount: 130, spread: 75, origin: { y: 0.65 }, colors: [brand.accent, "#22c55e", "#ffffff"] });
       }
-      const url = `https://wa.me/${number}?text=${encodeURIComponent(`${message}\n\nرقم الطلب: ${result.order.id}`)}`;
+      // الطلب اتسجّل في قاعدة البيانات بالفعل — رسالة واتساب فيها رقم الطلب بس.
+      // تفاصيل المنتجات والأسعار المحل بيشوفها في /invoices و /admin،
+      // والفاتورة الرسمية بيبعتها الموظف من هناك.
+      const orderNumber = result.order.id as string;
+      const message = en
+        ? [
+            "Your order has been created successfully.",
+            "",
+            "Order number:",
+            orderNumber,
+            "",
+            `Please send this message to ${brand.storeNameEn || brand.storeName} to confirm your order.`,
+          ].join("\n")
+        : [
+            "تم إنشاء طلبك بنجاح.",
+            "",
+            "رقم الطلب:",
+            orderNumber,
+            "",
+            "يرجى إرسال هذه الرسالة للمحل لإتمام الطلب.",
+          ].join("\n");
+      const url = `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
       if (whatsappWindow) whatsappWindow.location.href = url;
       else window.location.href = url;
       try {
