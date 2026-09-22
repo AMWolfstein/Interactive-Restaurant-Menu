@@ -3,7 +3,7 @@
 import { LayoutGrid, List, Moon, Palette, Sun } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
 import { FONT_OPTIONS } from "@/lib/fonts";
-import { ColorField, Field, Panel, RangeField, Select, Segmented, TextInput, Toggle } from "@/components/ui";
+import { ColorField, Field, NumberInput, Panel, RangeField, Select, Segmented, TextInput, Toggle } from "@/components/ui";
 
 export function LookPanel() {
   const { data, patchBrand, patchCommerce } = useMenu();
@@ -62,17 +62,28 @@ export function LookPanel() {
 
       <Panel title="عناصر الواجهة" description="تتحكم في شكل عرض المنتجات والعناصر الظاهرة">
         <div className="mb-3">
-          <Field label="شكل عرض المنتجات" hint="الشبكة تعرض 3 منتجات بجانب بعض بدون الوصف">
+          <Field label="شكل عرض المنتجات" hint="الشبكة تعرض المنتجات بدون الوصف">
             <Segmented
               className="w-full [&>button]:flex-1"
               value={commerce.productLayout}
               onChange={(value) => patchCommerce({ productLayout: value })}
               options={[
                 { value: "list", label: <span className="inline-flex items-center gap-1.5"><List className="h-3.5 w-3.5" /> العرض الحالي</span> },
-                { value: "grid", label: <span className="inline-flex items-center gap-1.5"><LayoutGrid className="h-3.5 w-3.5" /> شبكة 3 منتجات</span> },
+                { value: "grid", label: <span className="inline-flex items-center gap-1.5"><LayoutGrid className="h-3.5 w-3.5" /> شبكة</span> },
               ]}
             />
           </Field>
+          {commerce.productLayout === "grid" ? (
+            <Field label="عدد المنتجات في الصف على الموبايل" hint="اكتب من ١ إلى ٦. عدد المنتجات في الصفحة ثابت: ١٥ منتج، والكمبيوتر يفضل ٣ أعمدة.">
+              <NumberInput
+                value={commerce.mobileGridColumns}
+                min={1}
+                step={1}
+                suffix="منتج"
+                onValueChange={(value) => patchCommerce({ mobileGridColumns: Math.min(6, Math.max(1, Math.floor(value))) })}
+              />
+            </Field>
+          ) : null}
         </div>
         <div className="grid gap-2.5 sm:grid-cols-2">
           <Toggle

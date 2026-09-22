@@ -114,6 +114,17 @@ body {
   }
 }
 
+/* عدد أعمدة شبكة المنتجات قابل للتعديل من لوحة التحكم على الموبايل فقط. */
+.mobile-product-grid {
+  grid-template-columns: repeat(var(--mobile-grid-columns, 3), minmax(0, 1fr));
+}
+
+@media (min-width: 640px) {
+  .mobile-product-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 /* دخول سلة الطلبات */
 @keyframes slide-in-start {
   from {
