@@ -7,7 +7,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * تحديث حالة طلب (جديد / مؤكد / تم التسليم / ملغي) — للأدمن فقط.
+ * تحديث حالة طلب (جديد / ملغي) — للأدمن فقط.
+ * أي طلب جه من الموقع هيتنفذ، فالإجراء الوحيد هو الإلغاء (أو الإرجاع جديد).
  * محمي بـ Supabase access token + Rate limiting.
  */
 export async function PATCH(request: NextRequest) {

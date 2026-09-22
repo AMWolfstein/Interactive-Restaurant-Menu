@@ -16,14 +16,17 @@ export const ORDER_TYPE_LABEL: Record<OrderType, { ar: string; en: string }> = {
 
 export const ORDER_STATUS_LABEL: Record<OrderStatus, { ar: string; en: string }> = {
   new: { ar: "جديد", en: "New" },
-  confirmed: { ar: "مؤكد", en: "Confirmed" },
-  delivered: { ar: "تم التسليم", en: "Delivered" },
   cancelled: { ar: "ملغي", en: "Cancelled" },
 };
 
-/** حالة الطلب مع التوافق مع الطلبات القديمة اللي ملهاش status */
-export function orderStatusOf(order: { status?: OrderStatus }): OrderStatus {
-  return order.status ?? "new";
+/**
+ * حالة الطلب مع التوافق مع الطلبات القديمة:
+ * اللي ملهاش status (قبل ميزة الحالات) أو محفوظة بحالة قديمة
+ * (confirmed/delivered اللي اتشالوا) بتتعامل كـ «new» — طالما الطلب
+ * مش ملغي يبقى شغال، لأن أي طلب جه من الموقع هيتنفذ.
+ */
+export function orderStatusOf(order: { status?: string }): OrderStatus {
+  return order.status === "cancelled" ? "cancelled" : "new";
 }
 
 /** يرجّع النص المناسب للغة الحالية مع رجوع للغة التانية لو فاضية */

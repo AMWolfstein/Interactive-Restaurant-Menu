@@ -10,8 +10,15 @@ export type ThemeMode = "dark" | "light";
  */
 export type OrderType = "delivery" | "pickup";
 
-/** حالة الطلب — بتتحدث من لوحة التحكم */
-export type OrderStatus = "new" | "confirmed" | "delivered" | "cancelled";
+/**
+ * حالة الطلب — بتتحدث من لوحة التحكم.
+ * أي طلب جه من الموقع هيتنفذ (توصيل أو استلام من المحل)، فمفيش «مؤكد»
+ * ولا «تم التسليم» — الحالة الوحيدة اللي الأدمن بيغيّرها هي «ملغي» لما
+ * يلغي الطلب بنفسه (وممكن يرجّعه جديد).
+ * الطلبات القديمة المحفوظة بحالة confirmed/delivered بتتعامل كـ «new»
+ * تلقائياً عند القراءة (شوف orderStatusOf في lib/format.ts).
+ */
+export type OrderStatus = "new" | "cancelled";
 
 export interface Category {
   id: string;

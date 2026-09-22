@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
-  CircleCheck,
   CircleX,
   Clock,
   KeyRound,
@@ -41,23 +40,15 @@ import { InvoicePreview } from "./invoice-preview";
 
 const STATUS_STYLE: Record<OrderStatus, string> = {
   new: "bg-accent/15 text-accent",
-  confirmed: "bg-sky-500/15 text-sky-400",
-  delivered: "bg-emerald-500/15 text-emerald-400",
   cancelled: "bg-red-500/15 text-red-400",
 };
 
-// نفس انتقالات الحالة الموجودة في لوحة الأدمن — الموظف مش بياخد صلاحيات زيادة
+// نفس منطق لوحة الأدمن: الطلب من الموقع هيتنفذ (توصيل أو استلام)، فالإجراء
+// الوحيد هو الإلغاء — والموظف مش بياخد صلاحيات زيادة (مفيش إرجاع للملغي).
 const NEXT_ACTIONS: Record<OrderStatus, { status: OrderStatus; label: string; tone: string }[]> = {
   new: [
-    { status: "confirmed", label: "تأكيد", tone: "border-sky-500/40 bg-sky-500/10 text-sky-400" },
-    { status: "delivered", label: "تم التسليم", tone: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400" },
     { status: "cancelled", label: "إلغاء", tone: "border-red-500/40 bg-red-500/10 text-red-400" },
   ],
-  confirmed: [
-    { status: "delivered", label: "تم التسليم", tone: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400" },
-    { status: "cancelled", label: "إلغاء", tone: "border-red-500/40 bg-red-500/10 text-red-400" },
-  ],
-  delivered: [],
   cancelled: [],
 };
 
@@ -293,7 +284,7 @@ function InvoicesWorkspace({
   };
 
   const counts = useMemo(() => {
-    const base = { new: 0, confirmed: 0, delivered: 0, cancelled: 0 };
+    const base = { new: 0, cancelled: 0 };
     for (const order of orders) base[orderStatusOf(order)] += 1;
     return base;
   }, [orders]);
@@ -380,8 +371,6 @@ function InvoicesWorkspace({
               [
                 { value: "all", label: `الكل (${orders.length})` },
                 { value: "new", label: `جديد (${counts.new})` },
-                { value: "confirmed", label: `مؤكد (${counts.confirmed})` },
-                { value: "delivered", label: `تم التسليم (${counts.delivered})` },
                 { value: "cancelled", label: `ملغي (${counts.cancelled})` },
               ] as const
             ).map((option) => (
@@ -610,13 +599,7 @@ function OrderDetails({
                     action.tone,
                   )}
                 >
-                  {busy ? (
-                    <LoaderCircle className="h-3 w-3 animate-spin" />
-                  ) : action.status === "cancelled" ? (
-                    <CircleX className="h-3 w-3" />
-                  ) : (
-                    <CircleCheck className="h-3 w-3" />
-                  )}
+                  {busy ? <LoaderCircle className="h-3 w-3 animate-spin" /> : <CircleX className="h-3 w-3" />}
                   {action.label}
                 </button>
               ))}
