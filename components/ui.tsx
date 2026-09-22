@@ -122,6 +122,7 @@ export function NumberInput({
   step = 1,
   suffix,
   className,
+  disabled,
 }: {
   value: number;
   onValueChange: (value: number) => void;
@@ -129,15 +130,23 @@ export function NumberInput({
   step?: number;
   suffix?: string;
   className?: string;
+  disabled?: boolean;
 }) {
   return (
-    <div className={cx("flex items-center rounded-xl border border-line bg-surface-2 focus-within:border-accent", className)}>
+    <div
+      className={cx(
+        "flex items-center rounded-xl border border-line bg-surface-2 focus-within:border-accent",
+        disabled ? "opacity-40" : null,
+        className,
+      )}
+    >
       <input
         type="number"
         inputMode="decimal"
         value={Number.isFinite(value) ? value : 0}
         min={min}
         step={step}
+        disabled={disabled}
         onChange={(e) => {
           const next = Number(e.target.value);
           onValueChange(Number.isFinite(next) ? Math.max(min, next) : min);
