@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useId,
   useRef,
@@ -423,11 +424,14 @@ export function Toast({ message, tone = "success" }: { message: string; tone?: "
 export function useToast() {
   const [message, setMessage] = useState<{ text: string; tone: "success" | "error" } | null>(null);
   const timer = useRef<number | null>(null);
-  const show = (text: string, tone: "success" | "error" = "success") => {
+  // لازم يكون مستقر (useCallback) — لو اتولّد من جديد مع كل render، أي
+  // useEffect واخد `show` ضمن dependencies هيشتغل في حلقة لا نهائية
+  // (زي بحث العملاء في تبويب كاشك).
+  const show = useCallback((text: string, tone: "success" | "error" = "success") => {
     setMessage({ text, tone });
     if (timer.current) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => setMessage(null), 2400);
-  };
+  }, []);
   useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
   return { toast: message, show };
 }
