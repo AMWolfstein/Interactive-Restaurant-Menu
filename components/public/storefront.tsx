@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   Clock,
   Search,
@@ -11,6 +11,7 @@ import {
   Phone,
   MapPin,
   ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
 import { useCart } from "@/lib/use-cart";
@@ -33,7 +34,9 @@ import { PushNotificationButton } from "@/components/public/push-notification-bu
 const ALL = "all";
 const FAVORITES = "favorites";
 const OFFERS = "offers";
-type SortBy = "default" | "newest" | "priceAsc" | "priceDesc";
+type SortBy = "newest" | "priceAsc" | "priceDesc";
+/** عدد المنتجات المعروضة في الصفحة الواحدة من الكتالوج. */
+const PAGE_SIZE = 15;
 
 function safeHref(url?: string): string | undefined {
   if (!url) return undefined;
@@ -59,7 +62,8 @@ export function Storefront() {
   const [activeCategory, setActiveCategory] = useState<string>(ALL);
   const [query, setQuery] = useState("");
   const [supplierFilter, setSupplierFilter] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<SortBy>("default");
+  const [sortBy, setSortBy] = useState<SortBy>("newest");
+  const [page, setPage] = useState(1);
   const [cartOpen, setCartOpen] = useState(false);
   const online = useOnlineStatus();
 
@@ -69,15 +73,15 @@ export function Storefront() {
 
   const visibleCategories = useMemo(() => categories.filter((category) => category.visible), [categories]);
   const sortItems = useCallback((source: typeof items) => {
-    if (sortBy === "default") return source;
+    if (sortBy === "priceAsc") return [...source].sort((a, b) => a.price - b.price);
+    if (sortBy === "priceDesc") return [...source].sort((a, b) => b.price - a.price);
+    // الترتيب الافتراضي: الأحدث في تاريخ الإضافة الأول. المنتجات المعلّمة «جديد»
+    // بتتقدم بس بين اللي مالهمش تاريخ إنشاء (بيانات قديمة منسوخة من نسخ سابقة).
     return [...source].sort((a, b) => {
-      if (sortBy === "priceAsc") return a.price - b.price;
-      if (sortBy === "priceDesc") return b.price - a.price;
       const aDate = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const bDate = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      // المنتجات المعلّمة «جديد» لها الأولوية في النسخ القديمة التي لا تحمل createdAt.
-      if (Boolean(b.isNew) !== Boolean(a.isNew)) return Number(b.isNew) - Number(a.isNew);
-      return bDate - aDate;
+      if (aDate !== bDate) return bDate - aDate;
+      return Number(b.isNew) - Number(a.isNew);
     });
   }, [sortBy]);
   const nameOf = (value: { name: string; nameEn?: string }) => pick(lang, value.name, value.nameEn);
@@ -98,27 +102,75 @@ export function Storefront() {
     [commerce.enableFeatured, activeCategory, query, items],
   );
 
-  const sections = useMemo(() => {
+  // كل المنتجات في قائمة واحدة تحت بعض — من غير تقسيم أقسام — بعد تطبيق
+  // الفلاتر (البحث/القسم/المورد/المفضلة/العروض) والترتيب المختار.
+  const listItems = useMemo(() => {
     const pool = searched.filter((item) => item.available || query);
-    if (supplierFilter) {
-      return [{ category: undefined, items: sortItems(pool.filter((item) => item.supplier?.trim() === supplierFilter)) }];
-    }
-    if (activeCategory === FAVORITES) {
-      return [{ category: undefined, items: sortItems(pool.filter((item) => favoriteIds.includes(item.id))) }];
-    }
-    if (activeCategory === OFFERS) {
-      return [{ category: undefined, items: sortItems(pool.filter((item) => isItemOnOffer(item))) }];
-    }
-    if (activeCategory !== ALL) {
-      const category = categories.find((c) => c.id === activeCategory);
-      return category ? [{ category, items: sortItems(pool.filter((item) => item.categoryId === category.id)) }] : [];
-    }
-    return visibleCategories
-      .map((category) => ({ category, items: sortItems(pool.filter((item) => item.categoryId === category.id)) }))
-      .filter((section) => section.items.length > 0);
-  }, [searched, activeCategory, categories, visibleCategories, query, favoriteIds, supplierFilter, sortItems]);
+    if (supplierFilter) return sortItems(pool.filter((item) => item.supplier?.trim() === supplierFilter));
+    if (activeCategory === FAVORITES) return sortItems(pool.filter((item) => favoriteIds.includes(item.id)));
+    if (activeCategory === OFFERS) return sortItems(pool.filter((item) => isItemOnOffer(item)));
+    if (activeCategory !== ALL) return sortItems(pool.filter((item) => item.categoryId === activeCategory));
+    return sortItems(pool);
+  }, [searched, activeCategory, query, favoriteIds, supplierFilter, sortItems]);
 
-  const isEmpty = sections.every((section) => section.items.length === 0);
+  const isEmpty = listItems.length === 0;
+
+  // ترقيم الصفحات: ١٥ منتج في الصفحة، مع رجوع تلقائي للصفحة الأولى عند أي تغيير فلتر.
+  const totalPages = Math.max(1, Math.ceil(listItems.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pagedItems = useMemo(
+    () => listItems.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [listItems, currentPage],
+  );
+
+  // أي تغيير في الفلترة أو الترتيب بيرجّع المستخدم للصفحة الأولى — بنحدّثها
+  // جوه الـ handlers نفسها بدل effect.
+  const selectCategory = useCallback((next: string) => {
+    setActiveCategory(next);
+    setSupplierFilter(null);
+    setPage(1);
+  }, []);
+  const selectSupplier = useCallback((supplier: string) => {
+    setSupplierFilter(supplier);
+    setActiveCategory(ALL);
+    setPage(1);
+  }, []);
+  const updateQuery = useCallback((value: string) => {
+    setQuery(value);
+    setPage(1);
+  }, []);
+  const updateSort = useCallback((value: SortBy) => {
+    setSortBy(value);
+    setPage(1);
+  }, []);
+
+  // بعد تغيير الصفحة بنرجّع المستخدم لأول القائمة عشان يشوف المنتجات الجديدة.
+  const listTopRef = useRef<HTMLDivElement | null>(null);
+  const goToPage = useCallback((next: number) => {
+    setPage(next);
+    listTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
+  const selectedCategory = activeCategory !== ALL ? categories.find((c) => c.id === activeCategory) : undefined;
+  const listTitle = supplierFilter
+    ? `${en ? "Supplier" : "منتجات المورد"}: ${supplierFilter}`
+    : activeCategory === FAVORITES
+      ? en ? "Favorites" : "المفضلة"
+      : activeCategory === OFFERS
+        ? en ? "Available offers" : "العروض المتاحة"
+        : selectedCategory
+          ? nameOf(selectedCategory)
+          : en ? "All products" : "كل المنتجات";
+  const listEmoji = supplierFilter
+    ? "🏷️"
+    : activeCategory === FAVORITES
+      ? "❤️"
+      : activeCategory === OFFERS
+        ? "🔥"
+        : selectedCategory?.emoji ?? "🛍️";
+  // في العربي «التالية» بتشاور شمال، وفي الإنجليزي العكس.
+  const PrevIcon = en ? ChevronLeft : ChevronRight;
+  const NextIcon = en ? ChevronRight : ChevronLeft;
 
   return (
     <div className="min-h-screen bg-bg pb-28 text-ink" dir={en ? "ltr" : "rtl"}>
@@ -241,12 +293,12 @@ export function Storefront() {
               <Search className="h-4 w-4 shrink-0 text-muted" />
               <input
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => updateQuery(event.target.value)}
                 placeholder={en ? "Search for a product…" : "دوّر على أي منتج… أرز، شاي، مناديل"}
                 className="w-full bg-transparent text-sm outline-none placeholder:text-muted/70"
               />
               {query ? (
-                <button onClick={() => setQuery("")} className="text-[11px] font-bold text-muted hover:text-ink">
+                <button onClick={() => updateQuery("")} className="text-[11px] font-bold text-muted hover:text-ink">
                   ✕
                 </button>
               ) : null}
@@ -256,19 +308,19 @@ export function Storefront() {
           <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
             <CategoryChip
               active={activeCategory === ALL}
-              onClick={() => { setActiveCategory(ALL); setSupplierFilter(null); }}
+              onClick={() => selectCategory(ALL)}
               label={en ? "All" : "الكل"}
               emoji="🛍️"
             />
             <CategoryChip
               active={activeCategory === FAVORITES}
-              onClick={() => { setActiveCategory(FAVORITES); setSupplierFilter(null); }}
+              onClick={() => selectCategory(FAVORITES)}
               label={en ? "Favorites" : "المفضلة"}
               emoji="❤️"
             />
             <CategoryChip
               active={activeCategory === OFFERS}
-              onClick={() => { setActiveCategory(OFFERS); setSupplierFilter(null); }}
+              onClick={() => selectCategory(OFFERS)}
               label={en ? "Offers" : "العروض"}
               emoji="🔥"
             />
@@ -276,7 +328,7 @@ export function Storefront() {
               <CategoryChip
                 key={category.id}
                 active={activeCategory === category.id}
-                onClick={() => { setActiveCategory(category.id); setSupplierFilter(null); }}
+                onClick={() => selectCategory(category.id)}
                 label={nameOf(category)}
                 emoji={category.emoji}
               />
@@ -285,7 +337,7 @@ export function Storefront() {
               <CategoryChip
                 key={`supplier-${supplier.id}`}
                 active={supplierFilter === supplier.name}
-                onClick={() => { setSupplierFilter(supplier.name); setActiveCategory(ALL); }}
+                onClick={() => selectSupplier(supplier.name)}
                 label={supplier.name}
                 emoji="🏷️"
               />
@@ -295,12 +347,11 @@ export function Storefront() {
             <span className="text-[11px] font-bold text-muted">{en ? "Sort" : "ترتيب"}</span>
             <select
               value={sortBy}
-              onChange={(event) => setSortBy(event.target.value as SortBy)}
+              onChange={(event) => updateSort(event.target.value as SortBy)}
               className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[11px] font-bold text-ink outline-none transition focus:border-accent"
               aria-label={en ? "Sort products" : "ترتيب المنتجات"}
             >
-              <option value="default">{en ? "Recommended" : "الترتيب الافتراضي"}</option>
-              <option value="newest">{en ? "Newest" : "الأحدث"}</option>
+              <option value="newest">{en ? "Newest first" : "الأحدث أولاً"}</option>
               <option value="priceAsc">{en ? "Price: low to high" : "السعر: من الأقل للأعلى"}</option>
               <option value="priceDesc">{en ? "Price: high to low" : "السعر: من الأعلى للأقل"}</option>
             </select>
@@ -331,57 +382,43 @@ export function Storefront() {
           </section>
         ) : null}
 
-        {/* شبكة المنتجات */}
-        <div className="mt-5 space-y-7">
-          {sections.map((section) => (
-            <section key={section.category?.id ?? "none"}>
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="flex items-center gap-2 text-base font-black">
-                  <span aria-hidden>{section.category?.emoji}</span>
-                  {supplierFilter
-                    ? `منتجات المورد: ${supplierFilter}`
-                    : section.category
-                      ? nameOf(section.category)
-                      : activeCategory === FAVORITES
-                        ? "المفضلة"
-                        : activeCategory === OFFERS
-                          ? "العروض المتاحة"
-                          : "الكتالوج"}
-                  <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-bold text-muted">
-                    {section.items.length}
-                  </span>
-                </h3>
-                {activeCategory === ALL && section.category ? (
-                  <button
-                    onClick={() => setActiveCategory(section.category!.id)}
-                    className="flex items-center gap-0.5 text-[11px] font-bold text-muted transition hover:text-accent"
-                  >
-                    {en ? "See all" : "عرض الكل"}
-                    <ChevronLeft className={cx("h-3.5 w-3.5", en && "rotate-180")} />
-                  </button>
-                ) : null}
-              </div>
-              <div className={cx(
-                "grid",
-                commerce.productLayout === "grid" ? "grid-cols-3 gap-2 sm:gap-3" : "grid-cols-1 gap-3 md:grid-cols-2",
-              )}>
-                {section.items.map((item) => (
-                  <ProductCard
-                    key={item.id}
-                    item={item}
-                    lang={lang}
-                    commerce={commerce}
-                    getQuantity={(variantId) => cart.quantityOf(item.id, variantId)}
-                    onAdd={(variantId) => cart.add(item.id, variantId)}
-                    onRemoveOne={(variantId) => cart.setQuantity(item.id, cart.quantityOf(item.id, variantId) - 1, variantId)}
-                    onSupplierClick={(supplier) => { setSupplierFilter(supplier.trim()); setActiveCategory(ALL); }}
-                    layout={commerce.productLayout}
-                    disabled={!storeOpen || !commerce.enableCart}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
+        {/* شبكة المنتجات — كل المنتجات تحت بعض في قائمة واحدة */}
+        <div ref={listTopRef} className="mt-5 scroll-mt-52 space-y-7">
+          <section>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="flex items-center gap-2 text-base font-black">
+                <span aria-hidden>{listEmoji}</span>
+                {listTitle}
+                <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-bold text-muted">
+                  {listItems.length}
+                </span>
+              </h3>
+              {totalPages > 1 ? (
+                <span className="shrink-0 text-[11px] font-bold text-muted">
+                  {en ? `Page ${currentPage} of ${totalPages}` : `صفحة ${currentPage} من ${totalPages}`}
+                </span>
+              ) : null}
+            </div>
+            <div className={cx(
+              "grid",
+              commerce.productLayout === "grid" ? "grid-cols-3 gap-2 sm:gap-3" : "grid-cols-1 gap-3 md:grid-cols-2",
+            )}>
+              {pagedItems.map((item) => (
+                <ProductCard
+                  key={item.id}
+                  item={item}
+                  lang={lang}
+                  commerce={commerce}
+                  getQuantity={(variantId) => cart.quantityOf(item.id, variantId)}
+                  onAdd={(variantId) => cart.add(item.id, variantId)}
+                  onRemoveOne={(variantId) => cart.setQuantity(item.id, cart.quantityOf(item.id, variantId) - 1, variantId)}
+                  onSupplierClick={(supplier) => selectSupplier(supplier.trim())}
+                  layout={commerce.productLayout}
+                  disabled={!storeOpen || !commerce.enableCart}
+                />
+              ))}
+            </div>
+          </section>
 
           {isEmpty ? (
             <div className="rounded-xl2 border border-dashed border-line py-14 text-center">
@@ -390,6 +427,52 @@ export function Storefront() {
                 {en ? "Try another word or pick another category" : "جرّب كلمة تانية أو اختار قسم تاني"}
               </p>
             </div>
+          ) : null}
+
+          {/* عداد الصفحات + التالية والسابقة */}
+          {totalPages > 1 ? (
+            <nav
+              className="flex flex-col items-center gap-2.5 pt-1"
+              aria-label={en ? "Products pagination" : "تصفح صفحات المنتجات"}
+            >
+              <div className="flex flex-wrap items-center justify-center gap-1.5">
+                <PagerButton onClick={() => goToPage(currentPage - 1)} disabled={currentPage <= 1}>
+                  <PrevIcon className="h-4 w-4" />
+                  {en ? "Previous" : "السابقة"}
+                </PagerButton>
+                {pageSequence(currentPage, totalPages).map((entry, index) =>
+                  entry === "gap" ? (
+                    <span key={`gap-${index}`} className="px-0.5 text-xs font-black text-muted">
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={entry}
+                      type="button"
+                      onClick={() => goToPage(entry)}
+                      aria-current={entry === currentPage ? "page" : undefined}
+                      className={cx(
+                        "grid h-9 w-9 place-items-center rounded-full border text-xs font-black transition",
+                        entry === currentPage
+                          ? "border-accent bg-accent text-accent-contrast"
+                          : "border-line bg-surface text-muted hover:border-accent/50 hover:text-ink",
+                      )}
+                    >
+                      {entry}
+                    </button>
+                  ),
+                )}
+                <PagerButton onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= totalPages}>
+                  {en ? "Next" : "التالية"}
+                  <NextIcon className="h-4 w-4" />
+                </PagerButton>
+              </div>
+              <span className="text-[11px] font-bold text-muted">
+                {en
+                  ? `Page ${currentPage} of ${totalPages} — ${listItems.length} products`
+                  : `صفحة ${currentPage} من ${totalPages} — ${listItems.length} منتج`}
+              </span>
+            </nav>
           ) : null}
         </div>
 
@@ -479,6 +562,45 @@ export function Storefront() {
         clear={cart.clear}
       />
     </div>
+  );
+}
+
+/** أرقام الصفحات المعروضة في العداد — مع اختصار «…» لو الصفحات كتير. */
+function pageSequence(current: number, total: number): (number | "gap")[] {
+  if (total <= 7) return Array.from({ length: total }, (_, index) => index + 1);
+  const wanted = new Set([1, total, current - 1, current, current + 1]);
+  const sorted = [...wanted].filter((page) => page >= 1 && page <= total).sort((a, b) => a - b);
+  const sequence: (number | "gap")[] = [];
+  let previous = 0;
+  for (const entry of sorted) {
+    if (entry - previous > 1) sequence.push("gap");
+    sequence.push(entry);
+    previous = entry;
+  }
+  return sequence;
+}
+
+function PagerButton({
+  children,
+  onClick,
+  disabled,
+}: {
+  children: ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={cx(
+        "inline-flex items-center gap-1 rounded-full border border-line bg-surface px-3.5 py-2 text-xs font-bold text-muted transition",
+        "hover:border-accent/50 hover:text-ink disabled:cursor-not-allowed disabled:opacity-40",
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
