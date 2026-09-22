@@ -1,50 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Clock, MapPin, Phone, Printer, QrCode } from "lucide-react";
+import { ArrowRight, MapPin, Phone, Printer, QrCode, Snowflake } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
 import { formatPrice } from "@/lib/format";
 import { isDiscountActive, isVariantOnOffer, offerPercent } from "@/lib/offers";
 import { safeAccent } from "@/lib/color";
 import { ProductImage } from "@/components/public/product-card";
-
-/** ألوان «الورقة» — ثابتة دايماً زي ورق الطباعة الحقيقي حتى لو الموقع بوضع ليلي. */
-const PAPER = {
-  ink: "#191c22",
-  muted: "#5f6672",
-  faint: "#8a919e",
-  line: "#dfe3ea",
-  leader: "#c7cdd8",
-};
+import type { MenuItem } from "@/lib/types";
 
 /**
- * نسخة أغمق من لون البراند عشان يفضل مقروء على الورق الأبيض
- * (الألوان الفاتحة زي الأصفر باهتة على الأبيض كنص).
+ * صفحة المنيو مصممة كفلاير مطبوع: خلفية ثلجية، عنوان كبير، وثلاثة أعمدة
+ * صغيرة حتى تظل البيانات قابلة للقراءة وتشبه المنيو المرفق.
  */
-function accentInk(accent: string): string {
-  const hex = safeAccent(accent).replace("#", "");
-  const mix = (channel: number) => Math.round(channel * 0.74 + 17 * 0.26);
-  const r = mix(parseInt(hex.slice(0, 2), 16));
-  const g = mix(parseInt(hex.slice(2, 4), 16));
-  const b = mix(parseInt(hex.slice(4, 6), 16));
-  return `#${[r, g, b].map((value) => value.toString(16).padStart(2, "0")).join("")}`;
-}
-
-/** زخرفة فاصلة: خط — معيّن — خط (لمسة منيو كافيه). */
-function Ornament({ diamond, wide = false }: { diamond: string; wide?: boolean }) {
-  return (
-    <div className="flex items-center justify-center gap-2" aria-hidden>
-      <span className={`h-px ${wide ? "w-24" : "w-14"} bg-[var(--paper-line)]`} />
-      <span className="h-1.5 w-1.5 rotate-45 rounded-[1px]" style={{ backgroundColor: diamond }} />
-      <span className={`h-px ${wide ? "w-24" : "w-14"} bg-[var(--paper-line)]`} />
-    </div>
-  );
+function discountFor(item: MenuItem) {
+  return isDiscountActive(item.price, item.oldPrice, {
+    day: item.offerEndDay,
+    month: item.offerEndMonth,
+    year: item.offerEndYear,
+  });
 }
 
 export function MenuPoster() {
   const { data } = useMenu();
   const { brand, contact, commerce, categories, items } = data;
-  const accent = accentInk(brand.accent);
+  const accent = safeAccent(brand.accent);
   const groups = categories
     .filter((category) => category.visible)
     .map((category) => ({
@@ -53,190 +33,111 @@ export function MenuPoster() {
     }))
     .filter((group) => group.items.length);
 
+  const columns = [0, 1, 2].map((column) => groups.filter((_, index) => index % 3 === column));
+
   return (
-    <main className="min-h-screen bg-bg px-3 py-6 text-ink print:bg-white print:p-0" dir="rtl">
-      {/* شريط الأدوات — على الشاشة فقط */}
-      <div className="print:hidden mx-auto mb-5 flex max-w-4xl items-center justify-between gap-3">
-        <Link href="/" className="inline-flex items-center gap-1.5 text-xs font-bold text-muted transition hover:text-accent">
+    <main
+      className="min-h-screen bg-bg px-2 py-4 text-[#10213a] sm:px-5 sm:py-7 print:bg-white print:p-0"
+      dir="rtl"
+      style={{
+        backgroundColor: "#dff5ff",
+        backgroundImage:
+          "radial-gradient(circle at 8% 12%, rgba(255,255,255,.95) 0 1px, transparent 2px), radial-gradient(circle at 88% 20%, rgba(255,255,255,.8) 0 2px, transparent 3px), radial-gradient(ellipse at 50% 0%, #ffffff 0%, #d9f3ff 42%, #b8e6fb 100%)",
+      }}
+    >
+      <div className="print:hidden mx-auto mb-4 flex max-w-[1120px] items-center justify-between gap-3">
+        <Link href="/" className="inline-flex items-center gap-1.5 text-xs font-bold text-sky-900/70 transition hover:text-sky-950">
           <ArrowRight className="h-3.5 w-3.5" /> العودة للكتالوج
         </Link>
         <div className="flex gap-2">
-          <a href="/qr" className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface px-3 py-2 text-xs font-bold text-muted transition hover:border-accent/60 hover:text-accent">
+          <a href="/qr" className="inline-flex items-center gap-1.5 rounded-xl border border-sky-900/15 bg-white/60 px-3 py-2 text-xs font-bold text-sky-900 transition hover:bg-white">
             <QrCode className="h-3.5 w-3.5" /> QR للطباعة
           </a>
-          <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-3 py-2 text-xs font-black text-accent-contrast transition hover:brightness-110">
+          <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-1.5 rounded-xl bg-sky-700 px-3 py-2 text-xs font-black text-white transition hover:bg-sky-800">
             <Printer className="h-3.5 w-3.5" /> طباعة / حفظ PDF
           </button>
         </div>
       </div>
 
-      {/* الورقة — أبيض دايماً زي نسخة الطباعة */}
-      <article
-        className="print:shadow-none mx-auto max-w-4xl overflow-hidden rounded-xl2 border border-black/10 bg-white shadow-[0_30px_80px_-40px_rgba(0,0,0,.5)] print:max-w-none print:rounded-none print:border-0"
-        style={{ "--paper-line": PAPER.line, color: PAPER.ink } as React.CSSProperties}
-      >
-        {/* ═══ الهيدر ═══ */}
-        <header
-          className="break-after-avoid px-6 pb-7 pt-9 text-center sm:px-10 print:px-6 print:pt-2"
-          style={{
-            background: `color-mix(in oklab, ${accent} 5%, #ffffff)`,
-            borderBottom: `1px solid color-mix(in oklab, ${accent} 22%, #ffffff)`,
-          }}
-        >
-          <Ornament diamond={accent} />
+      <article className="mx-auto max-w-[1120px] overflow-hidden rounded-[28px] border border-white/80 bg-white/25 shadow-[0_24px_80px_-35px_rgba(0,92,150,.65)] backdrop-blur-[2px] print:max-w-none print:rounded-none print:border-0 print:shadow-none">
+        <header className="relative overflow-hidden px-5 pb-7 pt-8 text-center sm:px-12 sm:pt-10">
+          <Snowflake className="absolute left-8 top-6 h-14 w-14 rotate-12 text-white/75 sm:h-24 sm:w-24" strokeWidth={1} />
+          <Snowflake className="absolute right-8 top-10 h-12 w-12 -rotate-12 text-white/70 sm:h-20 sm:w-20" strokeWidth={1} />
           {brand.logo ? (
-            <ProductImage
-              src={brand.logo}
-              alt=""
-              className="mx-auto mt-5 h-16 w-16 rounded-full border border-[var(--paper-line)] object-cover print:border-black/20"
-            />
-          ) : (
-            <div className="mt-5" />
-          )}
-          <h1 className="mt-3 text-3xl font-black leading-tight sm:text-4xl">{brand.storeName}</h1>
-          {brand.tagline ? (
-            <div className="mt-2.5 flex items-center justify-center gap-3">
-              <span className="h-px w-8 bg-[var(--paper-line)]" />
-              <p className="text-[13px] font-bold" style={{ color: PAPER.muted }}>{brand.tagline}</p>
-              <span className="h-px w-8 bg-[var(--paper-line)]" />
-            </div>
+            <ProductImage src={brand.logo} alt="" className="relative mx-auto mb-2 h-20 w-20 rounded-2xl border-4 border-white/70 bg-white/50 object-cover shadow-lg sm:h-24 sm:w-24" />
           ) : null}
-
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5 text-[11.5px] font-bold" style={{ color: PAPER.muted }}>
-            {contact.openingHours ? (
-              <span className="inline-flex items-center gap-1.5">
-                <Clock className="h-3.5 w-3.5" style={{ color: accent }} /> {contact.openingHours}
-              </span>
-            ) : null}
-            {contact.phone ? (
-              <a href={`tel:${contact.phone.replace(/\D/g, "")}`} className="inline-flex items-center gap-1.5 transition hover:opacity-70">
-                <Phone className="h-3.5 w-3.5" style={{ color: accent }} /> <span dir="ltr">{contact.phone}</span>
-              </a>
-            ) : null}
-            {contact.address ? (
-              <span className="inline-flex items-center gap-1.5">
-                <MapPin className="h-3.5 w-3.5" style={{ color: accent }} /> {contact.address}
-              </span>
-            ) : null}
+          <h1 className="relative text-5xl font-black tracking-tight text-sky-600 drop-shadow-[0_2px_0_rgba(255,255,255,.8)] sm:text-7xl">
+            {brand.storeName}
+          </h1>
+          {brand.tagline ? <p className="relative mt-2 text-base font-bold text-slate-700 sm:text-xl">{brand.tagline}</p> : null}
+          <div className="relative mx-auto mt-4 flex max-w-2xl flex-wrap items-center justify-center gap-x-5 gap-y-1.5 text-[11px] font-bold text-slate-700 sm:text-xs">
+            {contact.address ? <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5 text-sky-700" />{contact.address}</span> : null}
+            {contact.phone ? <a href={`tel:${contact.phone.replace(/\D/g, "")}`} className="inline-flex items-center gap-1" dir="ltr"><Phone className="h-3.5 w-3.5 text-sky-700" />{contact.phone}</a> : null}
           </div>
         </header>
 
-        {/* ═══ الأقسام ═══ */}
         {groups.length ? (
-          <div className="grid gap-x-10 gap-y-8 px-6 py-8 sm:grid-cols-2 sm:px-10 print:grid-cols-2 print:gap-x-8 print:px-6 print:py-6">
-            {groups.map(({ category, items: categoryItems }) => (
-              <section key={category.id} className="break-inside-avoid">
-                <div className="mb-4 flex items-center gap-3 break-after-avoid">
-                  <span className="h-px flex-1 bg-[var(--paper-line)]" />
-                  <h2 className="flex items-center gap-1.5 text-[15px] font-black" style={{ color: accent }}>
-                    {category.emoji ? <span aria-hidden>{category.emoji}</span> : null}
-                    {category.name}
-                  </h2>
-                  <span className="h-px flex-1 bg-[var(--paper-line)]" />
-                </div>
-
-                <ul className="space-y-3.5">
-                  {categoryItems.map((item) => {
-                    // خصم مستوى المنتج نفسه — منفصل عن خصم الحجم/العبوة
-                    const itemDiscount = isDiscountActive(item.price, item.oldPrice, {
-                      day: item.offerEndDay,
-                      month: item.offerEndMonth,
-                      year: item.offerEndYear,
-                    });
-                    const off = itemDiscount && item.oldPrice ? offerPercent(item.price, item.oldPrice) : 0;
-                    const details = [item.description?.trim(), item.weight?.trim()].filter(Boolean).join(" · ");
-                    return (
-                      <li key={item.id} className="break-inside-avoid">
-                        <div className="flex items-baseline gap-2">
-                          <h3 className="text-[13.5px] font-extrabold leading-6">{item.name}</h3>
-                          {item.isNew ? (
-                            <span
-                              className="rounded-full border px-1.5 py-px text-[9px] font-black leading-4"
-                              style={{ borderColor: "#10b981", color: "#047857" }}
-                            >
-                              جديد
-                            </span>
-                          ) : null}
-                          {itemDiscount ? (
-                            <span
-                              className="rounded-full border px-1.5 py-px text-[9px] font-black leading-4"
-                              style={{ borderColor: accent, color: accent }}
-                            >
-                              خصم {off}%
-                            </span>
-                          ) : null}
-                          <span className="mx-1 flex-1 border-b border-dotted" style={{ borderColor: PAPER.leader }} />
-                          {commerce.showPrices ? (
-                            <span className="flex shrink-0 items-baseline gap-1.5">
-                              <span className="text-[14px] font-black" style={itemDiscount ? { color: accent } : undefined}>
-                                {formatPrice(item.price, brand.language, commerce)}
-                              </span>
-                              {itemDiscount && item.oldPrice ? (
-                                <span className="text-[10px] line-through" style={{ color: PAPER.faint }}>
-                                  {formatPrice(item.oldPrice, brand.language, commerce)}
+          <div className="grid grid-cols-1 gap-x-5 gap-y-7 px-4 pb-8 sm:px-8 md:grid-cols-3 md:gap-x-8 md:gap-y-0">
+            {columns.map((column, columnIndex) => (
+              <div key={columnIndex} className="space-y-7">
+                {column.map(({ category, items: categoryItems }) => (
+                  <section key={category.id} className="break-inside-avoid">
+                    <div className="mb-3 flex items-center justify-center gap-2 border-b-2 border-sky-700/70 pb-1.5">
+                      <h2 className="text-lg font-black text-sky-900 sm:text-xl">
+                        {category.emoji ? <span className="ml-1" aria-hidden>{category.emoji}</span> : null}
+                        {category.name}
+                      </h2>
+                    </div>
+                    <ul className="space-y-2">
+                      {categoryItems.map((item) => {
+                        const itemDiscount = discountFor(item);
+                        const off = itemDiscount && item.oldPrice ? offerPercent(item.price, item.oldPrice) : 0;
+                        const details = [item.description?.trim(), item.weight?.trim()].filter(Boolean).join(" · ");
+                        return (
+                          <li key={item.id} className="break-inside-avoid text-[12px] leading-snug sm:text-[13px]">
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="font-extrabold text-slate-900">{item.name}</span>
+                              {item.isNew ? <span className="text-[9px] font-black text-emerald-700">جديد</span> : null}
+                              <span className="min-w-3 flex-1 border-b border-dotted border-slate-400/70" />
+                              {commerce.showPrices ? (
+                                <span className="shrink-0 whitespace-nowrap font-black" style={{ color: itemDiscount ? "#dc2626" : accent }}>
+                                  {formatPrice(item.price, brand.language, commerce)}
+                                  {itemDiscount && off ? <small className="mr-1 text-[9px]">({off}%)</small> : null}
                                 </span>
                               ) : null}
-                            </span>
-                          ) : null}
-                        </div>
-
-                        {details ? (
-                          <p className="mt-0.5 text-[10.5px] leading-relaxed" style={{ color: PAPER.muted }}>{details}</p>
-                        ) : null}
-
-                        {item.variants?.length ? (
-                          <div className="mt-1.5 space-y-1 border-r-2 pr-2.5" style={{ borderColor: `color-mix(in oklab, ${accent} 35%, #ffffff)` }}>
-                            {item.variants.map((variant) => {
-                              const variantOnOffer = isVariantOnOffer(variant);
-                              return (
-                                <div key={variant.id} className="flex items-baseline gap-2 text-[11.5px] font-bold" style={{ color: PAPER.muted }}>
-                                  <span>{variant.label}</span>
-                                  <span className="mx-1 flex-1 border-b border-dotted" style={{ borderColor: PAPER.leader }} />
-                                  {commerce.showPrices ? (
-                                    <span className="flex shrink-0 items-baseline gap-1.5">
-                                      <span className="font-black" style={variantOnOffer ? { color: accent } : { color: PAPER.ink }}>
-                                        {formatPrice(variant.price, brand.language, commerce)}
-                                      </span>
-                                      {variantOnOffer && variant.oldPrice ? (
-                                        <span className="text-[9px] line-through" style={{ color: PAPER.faint }}>
-                                          {formatPrice(variant.oldPrice, brand.language, commerce)}
-                                        </span>
-                                      ) : null}
-                                    </span>
-                                  ) : null}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : null}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
+                            </div>
+                            {details ? <p className="mt-0.5 text-[10px] text-slate-600">{details}</p> : null}
+                            {item.variants?.length ? (
+                              <div className="mt-1 space-y-0.5 border-r-2 border-sky-600/40 pr-2">
+                                {item.variants.map((variant) => {
+                                  const onOffer = isVariantOnOffer(variant);
+                                  return (
+                                    <div key={variant.id} className="flex items-baseline gap-1 text-[10.5px] font-bold text-slate-700">
+                                      <span>{variant.label}</span><span className="min-w-2 flex-1 border-b border-dotted border-slate-300" />
+                                      {commerce.showPrices ? <span className="shrink-0" style={{ color: onOffer ? "#dc2626" : accent }}>{formatPrice(variant.price, brand.language, commerce)}</span> : null}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : null}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </section>
+                ))}
+              </div>
             ))}
           </div>
-        ) : (
-          <p className="px-6 py-16 text-center text-sm font-bold" style={{ color: PAPER.muted }}>
-            لا توجد منتجات متاحة للطباعة حاليًا.
-          </p>
-        )}
+        ) : <p className="px-6 py-16 text-center font-bold text-slate-600">لا توجد منتجات متاحة للطباعة حاليًا.</p>}
 
-        {/* ═══ الفوتر ═══ */}
-        <footer
-          className="px-6 py-5 text-center sm:px-10 print:px-6 print:py-4"
-          style={{
-            background: `color-mix(in oklab, ${accent} 5%, #ffffff)`,
-            borderTop: `1px solid color-mix(in oklab, ${accent} 22%, #ffffff)`,
-          }}
-        >
-          <Ornament diamond={accent} />
-          {contact.footerNote ? (
-            <p className="mt-3 text-[11.5px] font-bold" style={{ color: PAPER.muted }}>{contact.footerNote}</p>
-          ) : null}
-          <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[10.5px]" style={{ color: PAPER.faint }}>
+        <footer className="relative mx-4 mb-5 rounded-3xl border-4 border-white/80 bg-white/30 px-5 py-5 text-center shadow-inner sm:mx-10">
+          <Snowflake className="absolute bottom-2 left-4 h-12 w-12 text-white/70" strokeWidth={1} />
+          {contact.footerNote ? <p className="text-sm font-black text-slate-800">{contact.footerNote}</p> : null}
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-xs font-bold text-slate-700">
             {contact.phone ? <span dir="ltr">☎ {contact.phone}</span> : null}
             {contact.whatsapp ? <span dir="ltr">WhatsApp: +{contact.whatsapp}</span> : null}
+            {contact.openingHours ? <span>{contact.openingHours}</span> : null}
           </div>
         </footer>
       </article>
