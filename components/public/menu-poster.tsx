@@ -57,6 +57,11 @@ function MenuItemRow({ item, accent, commerce, language }: MenuItemRowProps) {
               <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
                 <span className="font-extrabold text-slate-900">{item.name}</span>
                 {item.isNew && index === 0 ? <span className="rounded bg-emerald-500/15 px-1 text-[9px] font-black text-emerald-700">جديد</span> : null}
+                {item.spicy === 1 ? (
+                  <span className="text-[11px] font-black text-red-600">- حار</span>
+                ) : item.spicy === 2 ? (
+                  <span className="text-[11px] font-black text-emerald-600">- نباتي</span>
+                ) : null}
                 {metaParts.length > 0 ? (
                   <span className="text-[11px] font-semibold text-slate-600">- {metaParts.join(" - ")}</span>
                 ) : null}
