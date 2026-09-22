@@ -43,7 +43,10 @@ interface SocialLink {
   className: string;
 }
 /** عدد المنتجات المعروضة في الصفحة الواحدة من الكتالوج. */
-const PAGE_SIZE = 15;
+// عدد المنتجات في الصفحة بيتماشى مع أعمدة شبكة الموبايل: عمودين ← ١٦ منتج (٨ صفوف)،
+// ٣ أعمدة ← ١٥ منتج (٥ صفوف).
+const PAGE_SIZE_BY_COLUMNS: Record<number, number> = { 2: 16, 3: 15 };
+const DEFAULT_PAGE_SIZE = 15;
 
 function safeHref(url?: string): string | undefined {
   if (!url) return undefined;
@@ -122,12 +125,15 @@ export function Storefront() {
 
   const isEmpty = listItems.length === 0;
 
-  // ترقيم الصفحات: ١٥ منتج في الصفحة، مع رجوع تلقائي للصفحة الأولى عند أي تغيير فلتر.
-  const totalPages = Math.max(1, Math.ceil(listItems.length / PAGE_SIZE));
+  // ترقيم الصفحات: ١٥ أو ١٦ منتج في الصفحة حسب أعمدة الشبكة، مع رجوع تلقائي للصفحة الأولى عند أي تغيير فلتر.
+  const pageSize = commerce.productLayout === "grid"
+    ? PAGE_SIZE_BY_COLUMNS[commerce.mobileGridColumns] ?? DEFAULT_PAGE_SIZE
+    : DEFAULT_PAGE_SIZE;
+  const totalPages = Math.max(1, Math.ceil(listItems.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const pagedItems = useMemo(
-    () => listItems.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
-    [listItems, currentPage],
+    () => listItems.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [listItems, currentPage, pageSize],
   );
 
   // أي تغيير في الفلترة أو الترتيب بيرجّع المستخدم للصفحة الأولى — بنحدّثها
