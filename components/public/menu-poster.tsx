@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Download, Loader2, MapPin, Phone, QrCode, Snowflake } from "lucide-react";
+import { ArrowRight, Download, Loader2, MapPin, QrCode, Snowflake } from "lucide-react";
 import { getFontEmbedCSS, toBlob, toPng } from "html-to-image";
 import { useMenu } from "@/lib/use-menu";
 import { formatPrice } from "@/lib/format";
@@ -86,8 +86,12 @@ type PosterPage = {
 
 // كل صفحة PNG بتتصور لوحدها. الحد ده يمنع تكوين Canvas طويل جداً يفشل
 // على الموبايل، مع احتساب المنتجات متعددة الأوزان ووصف العروض كسطور إضافية.
-const EXPORT_COLUMN_UNITS = 36;
+// (44 وحدة ≈ صفحة 1440×2100 تقريباً بعد التصوير بـ pixelRatio 1.5)
+const EXPORT_COLUMN_UNITS = 44;
 const EXPORT_SECTION_UNITS = 2.5;
+/** أقل ارتفاع لصفحة PNG المصدَّرة (قبل الـ padding) — يضمن صفحات أطول
+ *  وموحّدة الطول حتى لو الأقسام خلصت قبل ما العمود يتملأ. */
+const EXPORT_MIN_PAGE_HEIGHT = 1350;
 
 function itemExportUnits(item: MenuItem, category: Category) {
   const priceRows = Math.max(1, item.variants?.length ?? 0);
@@ -254,28 +258,21 @@ function PosterHeader({
           className={`w-full bg-white/50 object-cover object-top ${imageHeightClass ?? (compact ? "h-36" : "h-56 sm:h-72")}`}
         />
       ) : null}
-      <div className={`relative ${compact ? "px-4 pt-4 pb-3" : "px-5 pt-5 pb-4 sm:px-10 sm:pt-6"}`}>
-        <Snowflake className="absolute left-6 top-2 h-10 w-10 rotate-12 text-white/70 sm:h-14 sm:w-14" strokeWidth={1} />
-        <Snowflake className="absolute right-6 top-4 h-9 w-9 -rotate-12 text-white/65 sm:h-12 sm:w-12" strokeWidth={1} />
-        <h1 className="relative text-2xl font-black tracking-tight text-sky-600 drop-shadow-[0_1px_0_rgba(255,255,255,.8)] sm:text-3xl">
-          {brand.storeName}
-        </h1>
-        {brand.tagline ? <p className="relative mt-1 text-xs font-bold text-slate-700 sm:text-sm">{brand.tagline}</p> : null}
-        <div className="relative mx-auto mt-2 flex max-w-2xl flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] font-bold text-slate-700">
-          {contact.address ? (
+      {/* اسم المحل والشعار اتشالوا من صفحة المنيو بأمر صاحب المحل —
+          البانر وصور السلايدر بتبقى هي اللي تظهر فوق. */}
+      {contact.address ? (
+        <div className={`relative ${compact ? "px-4 pt-4 pb-3" : "px-5 pt-5 pb-4 sm:px-10 sm:pt-6"}`}>
+          <Snowflake className="absolute left-6 top-2 h-10 w-10 rotate-12 text-white/70 sm:h-14 sm:w-14" strokeWidth={1} />
+          <Snowflake className="absolute right-6 top-4 h-9 w-9 -rotate-12 text-white/65 sm:h-12 sm:w-12" strokeWidth={1} />
+          {/* العنوان لوحده في نص السطر بالظبط — رقم التليفون اتشال من صفحة المنيو. */}
+          <p className="relative mx-auto flex max-w-2xl flex-wrap items-center justify-center text-[11px] font-bold text-slate-700">
             <span className="inline-flex items-center gap-1">
-              <MapPin className="h-3 w-3 text-sky-700" />
+              <MapPin className="h-3 w-3 shrink-0 text-sky-700" />
               {contact.address}
             </span>
-          ) : null}
-          {contact.phone ? (
-            <a href={`tel:${contact.phone.replace(/\D/g, "")}`} className="inline-flex items-center gap-1" dir="ltr">
-              <Phone className="h-3 w-3 text-sky-700" />
-              {contact.phone}
-            </a>
-          ) : null}
+          </p>
         </div>
-      </div>
+      ) : null}
     </header>
   );
 }
@@ -611,10 +608,15 @@ export function MenuPoster() {
             className="p-6 text-[#10213a]"
             style={bgStyle}
           >
-            <article className="overflow-hidden rounded-[24px] border-2 border-white/90 bg-white/30 shadow-[0_20px_60px_-25px_rgba(0,92,150,.5)]">
+            <article
+              className="flex flex-col overflow-hidden rounded-[24px] border-2 border-white/90 bg-white/30 shadow-[0_20px_60px_-25px_rgba(0,92,150,.5)]"
+              style={{ minHeight: EXPORT_MIN_PAGE_HEIGHT }}
+            >
               <PosterHeader brand={brand} contact={contact} imageHeightClass="h-72" />
 
-              <div className="grid grid-cols-2 gap-x-6 gap-y-5 px-6 pb-6">
+              {/* flex-1 يمدّد منطقة الأقسام لحد ما الفوتر يقعد في آخر الصفحة،
+                  فالصفحة تطلع بطول موحّد حتى لو المحتوى أقصر من الحد الأدنى. */}
+              <div className="grid flex-1 grid-cols-2 content-start gap-x-6 gap-y-5 px-6 pb-6">
                 {posterPage.columns.map((column, columnIndex) => (
                   <div key={columnIndex} className="space-y-5">
                     {column.map(({ category, items: categoryItems, continuation }, sectionIndex) => (
