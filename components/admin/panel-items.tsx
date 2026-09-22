@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import {
   Copy,
   Flame,
@@ -125,11 +125,15 @@ export function ItemsPanel({ intent, nonce }: { intent?: string; nonce: number }
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const { toast, show } = useToast();
 
-  useEffect(() => {
+  // الفتح مربوط بتغيّر nonce فقط — intent وopenNew بيتقروا كأحدث قيمة وقت التنفيذ.
+  const handleIntent = useEffectEvent(() => {
     if (intent === "new") {
       openNew();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  });
+
+  useEffect(() => {
+    handleIntent();
   }, [nonce]);
 
   const visible = useMemo(() => {

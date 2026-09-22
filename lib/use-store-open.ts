@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { effectiveStoreOpen } from "./schedule";
 import type { ContactSettings } from "./types";
 
@@ -22,9 +22,6 @@ export function useStoreOpen(contact: ContactSettings): boolean {
     };
   }, []);
 
-  return useMemo(
-    () => effectiveStoreOpen(contact, now ?? new Date()),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [contact.autoSchedule, contact.isOpen, contact.weeklySchedule, now],
-  );
+  // الحساب رخيص (مقارنة وقت بجدول) — مفيش داعي لـ useMemo مع dependency object.
+  return effectiveStoreOpen(contact, now ?? new Date());
 }
