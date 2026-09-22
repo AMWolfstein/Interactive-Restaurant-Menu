@@ -250,12 +250,12 @@ function PosterHeader({
 
   return (
     <header className="relative overflow-hidden text-center">
-      {/* بانر عريض أطول من الأول + object-top عشان الصورة ما تتاكلش من فوق. */}
+      {/* عرض الصورة كاملة داخل مساحة البانر من غير قص. */}
       {headerImage ? (
         <ProductImage
           src={headerImage}
           alt=""
-          className={`w-full bg-white/50 object-cover object-top ${imageHeightClass ?? (compact ? "h-36" : "h-56 sm:h-72")}`}
+          className={`w-full bg-white/50 object-contain! ${imageHeightClass ?? (compact ? "h-36" : "h-56 sm:h-72")} ${compact ? "rounded-b-2xl" : "rounded-b-[24px]"}`}
         />
       ) : null}
       {/* اسم المحل والشعار اتشالوا من صفحة المنيو بأمر صاحب المحل —
