@@ -34,6 +34,7 @@ export const DEFAULT_DATA: MenuData = {
     mapUrl: "https://maps.google.com/?q=Tasheen+St+Cairo",
     instagram: "https://instagram.com/",
     facebook: "",
+    tiktok: "",
     openingHours: "يومياً من ١٠ صباحاً حتى ١٢ منتصف الليل",
     isOpen: true,
     autoSchedule: false,

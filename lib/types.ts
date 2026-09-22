@@ -104,6 +104,7 @@ export interface ContactSettings {
   mapUrl: string;
   instagram: string;
   facebook: string;
+  tiktok: string;
   openingHours: string;
   /** فتح/قفل المحل يدوياً من الأدمين */
   isOpen: boolean;
