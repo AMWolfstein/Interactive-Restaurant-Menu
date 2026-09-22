@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Download, Loader2, MapPin, Phone, QrCode, Snowflake } from "lucide-react";
-import { toBlob, toPng } from "html-to-image";
+import { toBlob } from "html-to-image";
 import { useMenu } from "@/lib/use-menu";
 import { formatPrice } from "@/lib/format";
 import { isDiscountActive, isVariantOnOffer, offerPercent } from "@/lib/offers";
@@ -289,6 +289,68 @@ function PosterFooter({
   );
 }
 
+const MENU_EXPORT_BACKGROUND = "#dff5ff";
+const EMPTY_IMAGE = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+
+type MenuExportQuality = "full" | "reduced" | "textOnly";
+
+/** يرمي خطأ واضحاً بدل تمرير Blob فارغ إلى رابط التنزيل. */
+async function renderMenuPage(
+  capture: HTMLDivElement,
+  options: Parameters<typeof toBlob>[1],
+): Promise<Blob> {
+  const blob = await toBlob(capture, options);
+  if (!blob || blob.size === 0) throw new Error("PNG generation returned an empty file");
+  return blob;
+}
+
+/**
+ * بعض روابط اللوجو أو الخطوط الخارجية تمنع المتصفح من تحويل الصفحة إلى Canvas.
+ * لذلك نبدأ بأعلى جودة، ثم نخفّف التحويل، وآخر حل يصدر المنيو من غير الصور
+ * الخارجية بدلاً من إيقاف كل التحميلات برسالة خطأ عامة.
+ */
+async function renderMenuPageWithFallback(capture: HTMLDivElement): Promise<{ blob: Blob; quality: MenuExportQuality }> {
+  try {
+    return {
+      blob: await renderMenuPage(capture, {
+        pixelRatio: 1.5,
+        backgroundColor: MENU_EXPORT_BACKGROUND,
+        imagePlaceholder: EMPTY_IMAGE,
+      }),
+      quality: "full",
+    };
+  } catch (fullError) {
+    console.warn("PNG menu export: retrying without embedded fonts.", fullError);
+  }
+
+  try {
+    return {
+      blob: await renderMenuPage(capture, {
+        pixelRatio: 1,
+        backgroundColor: MENU_EXPORT_BACKGROUND,
+        imagePlaceholder: EMPTY_IMAGE,
+        skipFonts: true,
+      }),
+      quality: "reduced",
+    };
+  } catch (reducedError) {
+    console.warn("PNG menu export: retrying without external images.", reducedError);
+  }
+
+  return {
+    blob: await renderMenuPage(capture, {
+      // أقل استهلاكاً للذاكرة، ومناسب للموبايلات التي تفشل مع Canvas كبير.
+      pixelRatio: 0.85,
+      backgroundColor: MENU_EXPORT_BACKGROUND,
+      skipFonts: true,
+      // الصور هي أكثر سبب شائع لفشل Canvas بسبب رابط لا يدعم CORS. بيانات
+      // المنيو نفسها لا تعتمد عليها، لذلك نحتفظ بالنص والأسعار في هذه المحاولة.
+      filter: (node) => node.tagName !== "IMG",
+    }),
+    quality: "textOnly",
+  };
+}
+
 export function MenuPoster() {
   const { data } = useMenu();
   const { brand, contact, commerce, categories, items } = data;
@@ -341,42 +403,56 @@ export function MenuPoster() {
     try {
       // الخطوط تتجهّز مرة واحدة، وبعدها كل صفحة تتصور وتتحمل قبل بدء التالية.
       await document.fonts?.ready;
+      let reducedPageCount = 0;
+      let textOnlyPageCount = 0;
+      const failedPages: number[] = [];
+
       for (let pageIndex = 0; pageIndex < exportPageCount; pageIndex += 1) {
         const capture = pngCaptureRefs.current[pageIndex];
-        if (!capture) throw new Error(`PNG page ${pageIndex + 1} is not ready`);
         const pageNumber = pageIndex + 1;
         setExportProgress(pageNumber);
-        await waitForAssets(capture);
+
+        if (!capture) {
+          console.error(`PNG page ${pageNumber} export error: capture is not ready`);
+          failedPages.push(pageNumber);
+          continue;
+        }
 
         try {
-          const blob = await toBlob(capture, {
-            // بنحتفظ بصورة واضحة لكن خفيفة؛ الـ Canvas بيتعمل لصفحة واحدة فقط كل مرة.
-            pixelRatio: 1.5,
-            backgroundColor: "#dff5ff",
-            cacheBust: true,
-          });
-          if (!blob) throw new Error("PNG generation returned an empty file");
+          await waitForAssets(capture);
+          const { blob, quality } = await renderMenuPageWithFallback(capture);
           const objectUrl = URL.createObjectURL(blob);
           download(objectUrl, pageNumber);
           window.setTimeout(() => URL.revokeObjectURL(objectUrl), 10_000);
+          savedPages += 1;
+          if (quality === "reduced") reducedPageCount += 1;
+          if (quality === "textOnly") textOnlyPageCount += 1;
         } catch (pageError) {
+          // فشل صفحة لا يمنع استكمال باقي المنيو. وده مهم مع المنيوهات الكبيرة
+          // أو لو صفحة واحدة فيها عنصر لا يدعمه المتصفح.
           console.error(`PNG page ${pageNumber} export error:`, pageError);
-          // محاولة أخف لنفس الصفحة على الأجهزة ذات الذاكرة المحدودة، ثم نكمل باقي الصفحات.
-          const fallbackUrl = await toPng(capture, {
-            pixelRatio: 1,
-            backgroundColor: "#dff5ff",
-            skipFonts: true,
-            cacheBust: true,
-          });
-          download(fallbackUrl, pageNumber);
+          failedPages.push(pageNumber);
         }
 
-        savedPages += 1;
         // مهلة قصيرة تفصل تنزيلات المتصفح المتتالية من غير تحميل كل الصور في الذاكرة.
         await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
       }
 
-      setExportMessage(`تم تحميل المنيو بالكامل في ${exportPageCount} ${exportPageCount === 1 ? "صورة" : "صور"} PNG ✅`);
+      if (failedPages.length === 0) {
+        const simplifiedHint = textOnlyPageCount
+          ? ` تم حفظ ${textOnlyPageCount} ${textOnlyPageCount === 1 ? "صفحة" : "صفحات"} بدون اللوجو أو الصور الخارجية لضمان التحميل.`
+          : reducedPageCount
+            ? ` تم استخدام وضع متوافق لبعض الصفحات لضمان التحميل.`
+            : "";
+        setExportMessage(
+          `تم تحميل المنيو بالكامل في ${exportPageCount} ${exportPageCount === 1 ? "صورة" : "صور"} PNG ✅${simplifiedHint}`,
+        );
+      } else if (savedPages > 0) {
+        const failedList = failedPages.join("، ");
+        setExportMessage(`تم تحميل ${savedPages} من ${exportPageCount} صور. تعذّر إنشاء صفحة ${failedList} فقط — حاول تحميلها مرة أخرى.`);
+      } else {
+        throw new Error("No menu pages could be exported");
+      }
     } catch (error) {
       console.error("PNG menu export error:", error);
       const savedHint = savedPages > 0 ? ` تم تحميل ${savedPages} من ${exportPageCount}.` : "";
