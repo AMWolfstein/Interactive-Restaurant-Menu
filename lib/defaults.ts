@@ -26,7 +26,6 @@ export const DEFAULT_DATA: MenuData = {
     heroSubtitle: "اختار منتجاتك واطلبها في دقيقتين — تستلم من المحل وتمشي، أو نوصّلها لباب البيت",
     announcementEnabled: true,
     announcementText: "🚚 توصيل مجاني للطلبات فوق ٣٠٠ ج.م — الكود: BARAKA",
-    menuPdfCover: "",
   },
   contact: {
     whatsapp: "201000000000",

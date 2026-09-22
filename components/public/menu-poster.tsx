@@ -64,6 +64,16 @@ function visibleDescription(item: MenuItem) {
   return textWithoutWeightLabels ? description : "";
 }
 
+/**
+ * الوصف في المنيو مخصص للعروض فقط: منتجات قسم العروض، أو منتج اسمه
+ * «عرض» حتى لو اتحط داخل قسم تاني (زي عروض الجبن المجمعة).
+ */
+function itemShowsDescription(item: MenuItem, category: Category) {
+  return [category.id, category.name, category.nameEn, item.name, item.nameEn]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .some((value) => /عرض|عروض|offers?/i.test(value));
+}
+
 type PosterGroup = {
   category: Category;
   items: MenuItem[];
@@ -75,13 +85,13 @@ type PosterPage = {
 };
 
 // كل صفحة PNG بتتصور لوحدها. الحد ده يمنع تكوين Canvas طويل جداً يفشل
-// على الموبايل، مع احتساب المنتجات متعددة الأوزان والوصف كسطور إضافية.
+// على الموبايل، مع احتساب المنتجات متعددة الأوزان ووصف العروض كسطور إضافية.
 const EXPORT_COLUMN_UNITS = 36;
 const EXPORT_SECTION_UNITS = 2.5;
 
-function itemExportUnits(item: MenuItem) {
+function itemExportUnits(item: MenuItem, category: Category) {
   const priceRows = Math.max(1, item.variants?.length ?? 0);
-  const description = visibleDescription(item);
+  const description = itemShowsDescription(item, category) ? visibleDescription(item) : "";
   const descriptionRows = description
     ? Math.max(0.75, Math.ceil(description.length / 70) * 0.75)
     : 0;
@@ -113,7 +123,7 @@ function paginateForExport(groups: PosterGroup[]): PosterPage[] {
     let continuation = false;
 
     while (itemIndex < group.items.length) {
-      const firstItemUnits = itemExportUnits(group.items[itemIndex]);
+      const firstItemUnits = itemExportUnits(group.items[itemIndex], group.category);
       if (usedUnits > 0 && usedUnits + EXPORT_SECTION_UNITS + firstItemUnits > EXPORT_COLUMN_UNITS) {
         advanceColumn();
       }
@@ -122,7 +132,7 @@ function paginateForExport(groups: PosterGroup[]): PosterPage[] {
       let sectionUnits = EXPORT_SECTION_UNITS;
       while (itemIndex < group.items.length) {
         const nextItem = group.items[itemIndex];
-        const nextUnits = itemExportUnits(nextItem);
+        const nextUnits = itemExportUnits(nextItem, group.category);
         if (chunk.length > 0 && usedUnits + sectionUnits + nextUnits > EXPORT_COLUMN_UNITS) break;
         chunk.push(nextItem);
         sectionUnits += nextUnits;
@@ -152,9 +162,10 @@ interface MenuItemRowProps {
   accent: string;
   commerce: CommerceSettings;
   language: "ar" | "en";
+  showDescription: boolean;
 }
 
-function MenuItemRow({ item, accent, commerce, language }: MenuItemRowProps) {
+function MenuItemRow({ item, accent, commerce, language, showDescription }: MenuItemRowProps) {
   const rows = item.variants?.length
     ? item.variants.map((variant) => ({
         id: variant.id,
@@ -170,7 +181,7 @@ function MenuItemRow({ item, accent, commerce, language }: MenuItemRowProps) {
         discounted: discountFor(item),
         discountPercent: item.oldPrice ? offerPercent(item.price, item.oldPrice) : 0,
       }];
-  const description = visibleDescription(item);
+  const description = showDescription ? visibleDescription(item) : "";
 
   return (
     <li className="break-inside-avoid text-[12px] leading-snug sm:text-[13px]">
@@ -218,39 +229,10 @@ function PosterHeader({
   contact,
   compact = false,
 }: {
-  brand: { storeName: string; tagline?: string; logo?: string; menuPdfCover?: string };
+  brand: { storeName: string; tagline?: string; logo?: string };
   contact: { address?: string; phone?: string };
   compact?: boolean;
 }) {
-  if (brand.menuPdfCover) {
-    return (
-      <header className="relative overflow-hidden px-4 pt-4 pb-3 text-center sm:px-8">
-        <div className="relative mx-auto max-w-full overflow-hidden rounded-2xl border-2 border-white/80 bg-white/40 shadow-sm">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={brand.menuPdfCover}
-            alt={brand.storeName}
-            className="h-28 sm:h-36 w-full object-cover"
-          />
-        </div>
-        <div className="relative mx-auto mt-2 flex max-w-2xl flex-wrap items-center justify-center gap-x-5 gap-y-1 text-[11px] font-bold text-slate-700">
-          {contact.address ? (
-            <span className="inline-flex items-center gap-1">
-              <MapPin className="h-3.5 w-3.5 text-sky-700" />
-              {contact.address}
-            </span>
-          ) : null}
-          {contact.phone ? (
-            <a href={`tel:${contact.phone.replace(/\D/g, "")}`} className="inline-flex items-center gap-1" dir="ltr">
-              <Phone className="h-3.5 w-3.5 text-sky-700" />
-              {contact.phone}
-            </a>
-          ) : null}
-        </div>
-      </header>
-    );
-  }
-
   return (
     <header className={`relative overflow-hidden text-center ${compact ? "px-4 pt-5 pb-3" : "px-5 pt-6 pb-4 sm:px-10 sm:pt-7"}`}>
       <Snowflake className="absolute left-6 top-4 h-10 w-10 rotate-12 text-white/70 sm:h-14 sm:w-14" strokeWidth={1} />
@@ -487,6 +469,7 @@ export function MenuPoster() {
                       accent={accent}
                       commerce={commerce}
                       language={brand.language}
+                      showDescription={itemShowsDescription(item, category)}
                     />
                   ))}
                 </ul>
@@ -526,6 +509,7 @@ export function MenuPoster() {
                           accent={accent}
                           commerce={commerce}
                           language={brand.language}
+                          showDescription={itemShowsDescription(item, category)}
                         />
                       ))}
                     </ul>
@@ -585,6 +569,7 @@ export function MenuPoster() {
                               accent={accent}
                               commerce={commerce}
                               language={brand.language}
+                              showDescription={itemShowsDescription(item, category)}
                             />
                           ))}
                         </ul>
