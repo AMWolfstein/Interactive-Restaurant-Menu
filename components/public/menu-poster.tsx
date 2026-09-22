@@ -2,8 +2,8 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Download, Loader2, MapPin, Phone, Printer, QrCode, Snowflake } from "lucide-react";
-import { toPng } from "html-to-image";
+import { ArrowRight, Download, Loader2, MapPin, Phone, QrCode, Snowflake } from "lucide-react";
+import { toBlob, toPng } from "html-to-image";
 import { useMenu } from "@/lib/use-menu";
 import { formatPrice } from "@/lib/format";
 import { isDiscountActive, isVariantOnOffer, offerPercent } from "@/lib/offers";
@@ -31,75 +31,58 @@ interface MenuItemRowProps {
 }
 
 function MenuItemRow({ item, accent, commerce, language }: MenuItemRowProps) {
-  const itemDiscount = discountFor(item);
-  const off = itemDiscount && item.oldPrice ? offerPercent(item.price, item.oldPrice) : 0;
-
-  const metaParts: string[] = [];
-  if (item.supplier?.trim()) {
-    metaParts.push(item.supplier.trim());
-  }
-  if (item.weight?.trim()) {
-    metaParts.push(item.weight.trim());
-  }
+  const rows = item.variants?.length
+    ? item.variants.map((variant) => ({
+        id: variant.id,
+        weight: variant.label,
+        price: variant.price,
+        discounted: isVariantOnOffer(variant),
+        discountPercent: variant.oldPrice ? offerPercent(variant.price, variant.oldPrice) : 0,
+      }))
+    : [{
+        id: item.id,
+        weight: item.weight?.trim() || "",
+        price: item.price,
+        discounted: discountFor(item),
+        discountPercent: item.oldPrice ? offerPercent(item.price, item.oldPrice) : 0,
+      }];
 
   return (
     <li className="break-inside-avoid text-[12px] leading-snug sm:text-[13px]">
-      <div className="flex items-baseline justify-between gap-1.5 sm:gap-2">
-        <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-          <span className="font-extrabold text-slate-900">{item.name}</span>
-          {item.isNew ? <span className="rounded bg-emerald-500/15 px-1 text-[9px] font-black text-emerald-700">جديد</span> : null}
-          {metaParts.length > 0 ? (
-            <span className="text-[11px] font-semibold text-slate-600">
-              - {metaParts.join(" - ")}
-            </span>
-          ) : null}
-        </div>
-
-        <span className="mx-1 min-w-3 flex-1 border-b border-dotted border-slate-400/70 shrink-0 self-center" />
-
-        {commerce.showPrices ? (
-          <div className="shrink-0 whitespace-nowrap text-end font-black flex items-baseline gap-1">
-            {itemDiscount && off ? (
-              <span className="rounded bg-red-100/90 px-1 py-0.2 text-[10px] font-black text-red-600">
-                خصم {off}%
-              </span>
-            ) : null}
-            <span style={{ color: itemDiscount ? "#dc2626" : accent }}>
-              {formatPrice(item.price, language, commerce)}
-            </span>
-          </div>
-        ) : null}
-      </div>
-
-      {item.description?.trim() ? (
-        <p className="mt-0.5 text-[10.5px] text-slate-600 leading-tight">{item.description.trim()}</p>
-      ) : null}
-
-      {item.variants?.length ? (
-        <div className="mt-1 space-y-0.5 border-r-2 border-sky-600/40 pr-2">
-          {item.variants.map((variant) => {
-            const onOffer = isVariantOnOffer(variant);
-            const varOff = onOffer && variant.oldPrice ? offerPercent(variant.price, variant.oldPrice) : 0;
-            return (
-              <div key={variant.id} className="flex items-baseline justify-between gap-1 text-[11px] font-bold text-slate-700">
-                <span>{variant.label}</span>
-                <span className="mx-1 min-w-2 flex-1 border-b border-dotted border-slate-300 shrink-0 self-center" />
-                {commerce.showPrices ? (
-                  <div className="shrink-0 whitespace-nowrap text-end font-black flex items-baseline gap-1">
-                    {onOffer && varOff ? (
-                      <span className="rounded bg-red-100/90 px-1 text-[9px] font-black text-red-600">
-                        خصم {varOff}%
-                      </span>
-                    ) : null}
-                    <span style={{ color: onOffer ? "#dc2626" : accent }}>
-                      {formatPrice(variant.price, language, commerce)}
-                    </span>
-                  </div>
+      <div className="space-y-1">
+        {rows.map((row, index) => {
+          const metaParts = [item.supplier?.trim(), row.weight.trim()].filter(Boolean);
+          return (
+            <div key={row.id} className="flex items-baseline justify-between gap-1.5 sm:gap-2">
+              <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                <span className="font-extrabold text-slate-900">{item.name}</span>
+                {item.isNew && index === 0 ? <span className="rounded bg-emerald-500/15 px-1 text-[9px] font-black text-emerald-700">جديد</span> : null}
+                {item.spicy === 1 ? (
+                  <span className="text-[11px] font-black text-red-600">- حار</span>
+                ) : item.spicy === 2 ? (
+                  <span className="text-[11px] font-black text-emerald-600">- نباتي</span>
+                ) : null}
+                {metaParts.length > 0 ? (
+                  <span className="text-[11px] font-semibold text-slate-600">- {metaParts.join(" - ")}</span>
                 ) : null}
               </div>
-            );
-          })}
-        </div>
+              <span className="mx-1 min-w-3 flex-1 shrink-0 self-center border-b border-dotted border-slate-400/70" />
+              {commerce.showPrices ? (
+                <div className="flex shrink-0 items-baseline gap-1 whitespace-nowrap text-end font-black">
+                  {row.discounted && row.discountPercent ? (
+                    <span className="rounded bg-red-100/90 px-1 text-[9px] font-black text-red-600">خصم {row.discountPercent}%</span>
+                  ) : null}
+                  <span style={{ color: row.discounted ? "#dc2626" : accent }}>
+                    {formatPrice(row.price, language, commerce)}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+      {item.description?.trim() ? (
+        <p className="mt-0.5 text-[10.5px] leading-tight text-slate-600">{item.description.trim()}</p>
       ) : null}
     </li>
   );
@@ -213,28 +196,51 @@ export function MenuPoster() {
   const twoColumns = [0, 1].map((colIndex) => groups.filter((_, index) => index % 2 === colIndex));
 
   const handleSavePng = async () => {
-    if (!pngCaptureRef.current || isExporting) return;
+    const capture = pngCaptureRef.current;
+    if (!capture || isExporting) return;
     setIsExporting(true);
+
+    const download = (href: string) => {
+      const link = document.createElement("a");
+      link.href = href;
+      link.download = `${filePart(brand.storeName)}-menu.png`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    };
+
     try {
-      const dataUrl = await toPng(pngCaptureRef.current, {
+      // انتظر الخطوط والصور قبل التصوير؛ التصوير المبكر كان يفشل خصوصًا على الموبايل.
+      await document.fonts?.ready;
+      await Promise.all(
+        Array.from(capture.querySelectorAll("img")).map((image) =>
+          image.complete ? image.decode?.().catch(() => undefined) : new Promise<void>((resolve) => {
+            image.addEventListener("load", () => resolve(), { once: true });
+            image.addEventListener("error", () => resolve(), { once: true });
+          }),
+        ),
+      );
+
+      const blob = await toBlob(capture, {
         pixelRatio: 2,
-        cacheBust: true,
         backgroundColor: "#dff5ff",
       });
-      const link = document.createElement("a");
-      link.href = dataUrl;
-      link.download = `${filePart(brand.storeName)}-menu.png`;
-      link.click();
+      if (!blob) throw new Error("PNG generation returned an empty file");
+      const objectUrl = URL.createObjectURL(blob);
+      download(objectUrl);
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 10_000);
     } catch (err) {
       console.error("PNG export error:", err);
-      // Fallback attempt
       try {
-        const fallbackUrl = await toPng(pngCaptureRef.current, { pixelRatio: 1.5 });
-        const link = document.createElement("a");
-        link.href = fallbackUrl;
-        link.download = `${filePart(brand.storeName)}-menu.png`;
-        link.click();
-      } catch {
+        // نسخة أخف للأجهزة ذات الذاكرة المحدودة.
+        const fallbackUrl = await toPng(capture, {
+          pixelRatio: 1,
+          backgroundColor: "#dff5ff",
+          skipFonts: true,
+        });
+        download(fallbackUrl);
+      } catch (fallbackError) {
+        console.error("PNG fallback error:", fallbackError);
         alert("تعذّر حفظ الصورة، يُرجى المحاولة مرة أخرى.");
       }
     } finally {
@@ -277,14 +283,6 @@ export function MenuPoster() {
           >
             {isExporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
             {isExporting ? "جاري الحفظ..." : "حفظ PNG"}
-          </button>
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-sky-900/20 bg-white/70 px-3 py-2 text-xs font-bold text-sky-900 transition hover:bg-white"
-            title="طباعة أو حفظ PDF"
-          >
-            <Printer className="h-3.5 w-3.5" /> طباعة
           </button>
         </div>
       </div>
