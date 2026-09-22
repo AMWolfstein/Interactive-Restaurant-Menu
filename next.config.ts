@@ -26,7 +26,17 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com data:",
               "img-src 'self' data: https: blob:",
-              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.cloudinary.com",
+              // تصدير المنيو PNG بيقرا الصور والخطوط بـ fetch قبل ما يحوّلها data:
+              // فلازم تكون مصادر الصور/الخطوط مسموحة هنا كمان مش في img-src/font-src بس.
+              [
+                "connect-src 'self' data: blob:",
+                "https://*.supabase.co",
+                "wss://*.supabase.co",
+                "https://api.cloudinary.com",
+                "https://res.cloudinary.com",
+                "https://fonts.googleapis.com",
+                "https://fonts.gstatic.com",
+              ].join(" "),
               "frame-ancestors 'none'",
             ].join("; "),
           },

@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Download, Loader2, MapPin, Phone, QrCode, Snowflake } from "lucide-react";
-import { toBlob, toPng } from "html-to-image";
+import { getFontEmbedCSS, toBlob, toPng } from "html-to-image";
 import { useMenu } from "@/lib/use-menu";
 import { formatPrice } from "@/lib/format";
 import { isDiscountActive, isVariantOnOffer, offerPercent } from "@/lib/offers";
@@ -317,16 +317,24 @@ export function MenuPoster() {
     setExportProgress(1);
     setExportMessage("");
     let savedPages = 0;
+    const failedPages: number[] = [];
 
+    /** ننتظر تحميل صور الصفحة (لوجو/صور المنتجات) قبل التصوير، وبمهلة قصوى
+     *  عشان صورة واحدة بطيئة أو مقطوعة ما توقفش التصدير كله. */
     const waitForAssets = async (capture: HTMLDivElement) => {
-      await Promise.all(
-        Array.from(capture.querySelectorAll("img")).map((image) =>
-          image.complete ? image.decode?.().catch(() => undefined) : new Promise<void>((resolve) => {
+      const images = Array.from(capture.querySelectorAll("img"));
+      const settle = images.map(
+        (image) =>
+          new Promise<void>((resolve) => {
+            if (image.complete && image.naturalWidth > 0) return resolve();
             image.addEventListener("load", () => resolve(), { once: true });
             image.addEventListener("error", () => resolve(), { once: true });
           }),
-        ),
       );
+      await Promise.race([
+        Promise.all(settle),
+        new Promise<void>((resolve) => window.setTimeout(resolve, 4000)),
+      ]);
     };
 
     const download = (href: string, pageNumber: number) => {
@@ -338,50 +346,95 @@ export function MenuPoster() {
       link.remove();
     };
 
+    // لو صورة فشلت (CORS أو رابط قديم) بنحط بيكسل شفاف بدل ما التصدير يقع كله.
+    const TRANSPARENT_PIXEL =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+
+    const baseOptions = {
+      backgroundColor: "#dff5ff",
+      imagePlaceholder: TRANSPARENT_PIXEL,
+      // onImageErrorHandler يمنع رفض الوعد لو صورة داخل النسخة فشلت.
+      onImageErrorHandler: () => undefined,
+    } as const;
+
+    // نجهّز CSS الخطوط مرة واحدة بدل ما كل صفحة تعيد تحميلها من Google Fonts.
+    // لو فشل (إنترنت/CSP) بنكمل بخطوط النظام بدل ما نوقف التصدير.
+    let fontEmbedCSS: string | undefined;
     try {
-      // الخطوط تتجهّز مرة واحدة، وبعدها كل صفحة تتصور وتتحمل قبل بدء التالية.
       await document.fonts?.ready;
+      const firstCapture = pngCaptureRefs.current.find(Boolean);
+      if (firstCapture) fontEmbedCSS = await getFontEmbedCSS(firstCapture, baseOptions);
+    } catch (fontError) {
+      console.warn("Font embedding skipped:", fontError);
+      fontEmbedCSS = "";
+    }
+
+    const fontOptions = fontEmbedCSS ? { fontEmbedCSS } : { skipFonts: true };
+
+    /** سلّم محاولات: جودة عالية ← أخف ← أبسط صيغة. أول نجاح بيوقف السلّم. */
+    const capturePage = async (capture: HTMLDivElement): Promise<string | null> => {
+      const attempts: Array<() => Promise<string | null>> = [
+        async () => {
+          const blob = await toBlob(capture, { ...baseOptions, ...fontOptions, pixelRatio: 1.5 });
+          return blob ? URL.createObjectURL(blob) : null;
+        },
+        async () => {
+          const blob = await toBlob(capture, { ...baseOptions, ...fontOptions, pixelRatio: 1 });
+          return blob ? URL.createObjectURL(blob) : null;
+        },
+        async () => toPng(capture, { ...baseOptions, pixelRatio: 1, skipFonts: true }),
+      ];
+
+      for (const attempt of attempts) {
+        try {
+          const href = await attempt();
+          if (href) return href;
+        } catch (attemptError) {
+          console.error("PNG attempt failed:", attemptError);
+        }
+      }
+      return null;
+    };
+
+    try {
       for (let pageIndex = 0; pageIndex < exportPageCount; pageIndex += 1) {
-        const capture = pngCaptureRefs.current[pageIndex];
-        if (!capture) throw new Error(`PNG page ${pageIndex + 1} is not ready`);
         const pageNumber = pageIndex + 1;
         setExportProgress(pageNumber);
-        await waitForAssets(capture);
-
-        try {
-          const blob = await toBlob(capture, {
-            // بنحتفظ بصورة واضحة لكن خفيفة؛ الـ Canvas بيتعمل لصفحة واحدة فقط كل مرة.
-            pixelRatio: 1.5,
-            backgroundColor: "#dff5ff",
-            cacheBust: true,
-          });
-          if (!blob) throw new Error("PNG generation returned an empty file");
-          const objectUrl = URL.createObjectURL(blob);
-          download(objectUrl, pageNumber);
-          window.setTimeout(() => URL.revokeObjectURL(objectUrl), 10_000);
-        } catch (pageError) {
-          console.error(`PNG page ${pageNumber} export error:`, pageError);
-          // محاولة أخف لنفس الصفحة على الأجهزة ذات الذاكرة المحدودة، ثم نكمل باقي الصفحات.
-          const fallbackUrl = await toPng(capture, {
-            pixelRatio: 1,
-            backgroundColor: "#dff5ff",
-            skipFonts: true,
-            cacheBust: true,
-          });
-          download(fallbackUrl, pageNumber);
+        const capture = pngCaptureRefs.current[pageIndex];
+        if (!capture) {
+          failedPages.push(pageNumber);
+          continue;
         }
 
+        await waitForAssets(capture);
+        const href = await capturePage(capture);
+        if (!href) {
+          failedPages.push(pageNumber);
+          continue;
+        }
+
+        download(href, pageNumber);
+        if (href.startsWith("blob:")) {
+          window.setTimeout(() => URL.revokeObjectURL(href), 20_000);
+        }
         savedPages += 1;
         // مهلة قصيرة تفصل تنزيلات المتصفح المتتالية من غير تحميل كل الصور في الذاكرة.
-        await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 300));
       }
 
-      setExportMessage(`تم تحميل المنيو بالكامل في ${exportPageCount} ${exportPageCount === 1 ? "صورة" : "صور"} PNG ✅`);
+      if (savedPages === exportPageCount) {
+        setExportMessage(`تم تحميل المنيو بالكامل في ${exportPageCount} ${exportPageCount === 1 ? "صورة" : "صور"} PNG ✅`);
+      } else if (savedPages > 0) {
+        setExportMessage(
+          `تم تحميل ${savedPages} من ${exportPageCount}. تعذّر تصوير الصفحات: ${failedPages.join("، ")} — جرّب مرة أخرى أو استخدم زر الطباعة.`,
+        );
+      } else {
+        setExportMessage("تعذّر إكمال تحميل المنيو. جرّب تحديث الصفحة أو استخدم طباعة / حفظ PDF من المتصفح.");
+      }
     } catch (error) {
       console.error("PNG menu export error:", error);
       const savedHint = savedPages > 0 ? ` تم تحميل ${savedPages} من ${exportPageCount}.` : "";
       setExportMessage(`تعذّر إكمال تحميل المنيو.${savedHint} حاول مرة أخرى.`);
-      alert(`تعذّر إكمال تحميل المنيو.${savedHint}`);
     } finally {
       setIsExporting(false);
       setExportProgress(0);
