@@ -174,9 +174,9 @@ export function ProductCard({
               {pick(lang, item.description, item.descriptionEn)}
             </p>
           ) : null}
-          {item.weight ? (
+          {(selectedVariant?.label ?? item.weight) ? (
             <p className="mt-1 flex flex-wrap gap-1.5 text-[10px] font-bold text-muted">
-              <span className="rounded-md bg-surface-2 px-1.5 py-0.5">⚖️ {item.weight}</span>
+              <span className="rounded-md bg-surface-2 px-1.5 py-0.5">⚖️ {selectedVariant?.label ?? item.weight}</span>
             </p>
           ) : null}
           {hasDiscount && discountEnd.day && discountEnd.month && discountEnd.year ? (
