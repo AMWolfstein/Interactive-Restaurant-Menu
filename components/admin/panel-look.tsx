@@ -3,7 +3,7 @@
 import { LayoutGrid, List, Moon, Palette, Sun } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
 import { FONT_OPTIONS } from "@/lib/fonts";
-import { ColorField, Field, NumberInput, Panel, RangeField, Select, Segmented, TextInput, Toggle } from "@/components/ui";
+import { ColorField, Field, Panel, RangeField, Select, Segmented, TextInput, Toggle } from "@/components/ui";
 
 export function LookPanel() {
   const { data, patchBrand, patchCommerce } = useMenu();
@@ -74,14 +74,14 @@ export function LookPanel() {
             />
           </Field>
           {commerce.productLayout === "grid" ? (
-            <Field label="عدد المنتجات في الصف على الموبايل" hint="اكتب من ١ إلى ٦. عدد المنتجات في الصفحة ثابت: ١٥ منتج، والكمبيوتر يفضل ٣ أعمدة.">
-              <NumberInput
-                value={commerce.mobileGridColumns}
-                min={1}
-                step={1}
-                suffix="منتج"
-                onValueChange={(value) => patchCommerce({ mobileGridColumns: Math.min(6, Math.max(1, Math.floor(value))) })}
-              />
+            <Field label="عدد المنتجات في الصف على الموبايل" hint="٢ في الصف = ١٦ منتج في الصفحة، و٣ في الصف = ١٥ منتج. الكمبيوتر يفضل ٣ أعمدة.">
+              <Select
+                value={String(commerce.mobileGridColumns)}
+                onChange={(event) => patchCommerce({ mobileGridColumns: event.target.value === "2" ? 2 : 3 })}
+              >
+                <option value="2">٢ في الصف (١٦ منتج في الصفحة)</option>
+                <option value="3">٣ في الصف (١٥ منتج في الصفحة)</option>
+              </Select>
             </Field>
           ) : null}
         </div>

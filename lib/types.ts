@@ -156,8 +156,8 @@ export interface CommerceSettings {
   paymentMethods: string[];
   /** شكل عرض المنتجات: قائمة تفصيلية أو شبكة */
   productLayout: "list" | "grid";
-  /** عدد أعمدة شبكة المنتجات على شاشات الموبايل فقط */
-  mobileGridColumns: number;
+  /** عدد أعمدة شبكة المنتجات على شاشات الموبايل: ٢ أو ٣ فقط */
+  mobileGridColumns: 2 | 3;
   enableFeatured: boolean;
   featuredLabel: string;
   enableConfetti: boolean;

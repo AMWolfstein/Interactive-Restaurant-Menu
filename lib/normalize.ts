@@ -167,10 +167,9 @@ export function normalizeData(raw: unknown): MenuData {
   // الموقع عربي فقط حتى لو البيانات اتخزنت بالإنجليزية.
   merged.brand.language = "ar";
   merged.commerce.productLayout = merged.commerce.productLayout === "grid" ? "grid" : "list";
+  // أعمدة شبكة الموبايل: عمودين أو ٣ أعمدة بس (٢ ← ١٦ منتج في الصفحة، ٣ ← ١٥ منتج)
   const mobileGridColumns = Number(merged.commerce.mobileGridColumns);
-  merged.commerce.mobileGridColumns = Number.isFinite(mobileGridColumns)
-    ? Math.min(6, Math.max(1, Math.floor(mobileGridColumns)))
-    : DEFAULT_DATA.commerce.mobileGridColumns;
+  merged.commerce.mobileGridColumns = mobileGridColumns === 2 ? 2 : 3;
 
   // أنواع الطلب: استلام من المحل أو توصيل بس — المحل مفيهوش طاولات، فنوع «من داخل المحل»
   // (القعدة جوه) اتشال نهائياً وبيتنضف من أي بيانات محفوظة قديمة، مع ضمان نوع واحد على الأقل
