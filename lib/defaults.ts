@@ -74,20 +74,6 @@ export const DEFAULT_DATA: MenuData = {
     enableConfetti: true,
     showPrices: true,
     enableCart: true,
-    orderTemplate: [
-      "*طلب جديد — {storeName}* 🛍️",
-      "",
-      "👤 *العميل:* {name}",
-      "📞 *الموبايل:* {phone}",
-      "🧾 *نوع الطلب:* {orderType}",
-      "{addressLine}",
-      "",
-      "*تفاصيل الطلب:*",
-      "{items}",
-      "",
-      "📝 *ملاحظات:* {notes}",
-      "💰 *الإجمالي:* {total}",
-    ].join("\n"),
     orderPrefix: "",
     // نظام «كاشك»: كل ٥٠٠٠ ج مشتريات ← خصم ٥٪ على الفاتورة اللي بعدها
     loyalty: {

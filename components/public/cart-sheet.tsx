@@ -19,7 +19,7 @@ import confetti from "canvas-confetti";
 import { useMenu } from "@/lib/use-menu";
 import { computeTotals, formatPrice, ORDER_TYPE_LABEL, pick, toWhatsappNumber } from "@/lib/format";
 import { useStoreOpen } from "@/lib/use-store-open";
-import { previewDiscount, useLoyalty } from "@/lib/use-loyalty";
+import { loyaltyProgress, previewDiscount, useLoyalty } from "@/lib/use-loyalty";
 import type { OrderType } from "@/lib/types";
 import type { DetailedLine } from "@/lib/use-cart";
 import { cx } from "@/lib/cx";
@@ -84,6 +84,9 @@ export function CartSheet({
     () => previewDiscount(loyalty, commerce.loyalty, rawSubtotal),
     [loyalty, commerce.loyalty, rawSubtotal],
   );
+  // الباقي على المكافأة محسوب بالطلب اللي في السلة دلوقتي — رصيد السيرفر
+  // بيخص الطلبات القديمة بس، فمن غير ده العميل يقرا «فاضل ٥٠٠٠» وهو حاطط بـ ٢٠٠
+  const progress = useMemo(() => loyaltyProgress(loyalty, rawSubtotal), [loyalty, rawSubtotal]);
 
   const totals = useMemo(
     () => computeTotals(lines, commerce, orderType, zone, reward?.discount ?? 0),
@@ -448,21 +451,31 @@ export function CartSheet({
                 <span>{en ? "Total" : "الإجمالي"}</span>
                 <span className="text-accent">{formatPrice(totals.total, lang, commerce)}</span>
               </div>
-              {/* شريط تقدّم كاشك — بيظهر بعد ما العميل يكتب رقمه */}
-              {loyalty.show && !loyalty.eligible && loyalty.remaining > 0 ? (
+              {/* شريط تقدّم كاشك — بيظهر بعد ما العميل يكتب رقمه.
+                  الباقي والنسبة محسوبين شاملين الطلب اللي في السلة. */}
+              {loyalty.show && !loyalty.eligible && progress.remaining > 0 ? (
                 <div className="pt-1">
                   <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
                     <div
                       className="h-full rounded-full bg-emerald-500 transition-all"
-                      style={{ width: `${loyalty.progress}%` }}
+                      style={{ width: `${progress.progress}%` }}
                     />
                   </div>
                   <p className="mt-1 text-[11px] text-muted">
                     {en
-                      ? `Spend ${formatPrice(loyalty.remaining, lang, commerce)} more to unlock ${loyalty.percent}% off (${commerce.loyalty.label})`
-                      : `فاضل ${formatPrice(loyalty.remaining, lang, commerce)} وتاخد خصم ${loyalty.percent}٪ — ${commerce.loyalty.label} 🎁`}
+                      ? `Spend ${formatPrice(progress.remaining, lang, commerce)} more to unlock ${loyalty.percent}% off (${commerce.loyalty.label})`
+                      : `فاضل ${formatPrice(progress.remaining, lang, commerce)} وتاخد خصم ${loyalty.percent}٪ — ${commerce.loyalty.label} 🎁`}
                   </p>
                 </div>
+              ) : null}
+              {/* الطلب ده بالذات هو اللي بيكمّل العتبة — المكافأة تتصرف في الطلب الجاي */}
+              {loyalty.show && !loyalty.eligible && progress.unlocksReward ? (
+                <p className="flex items-center gap-1 rounded-lg bg-emerald-500/10 p-2 text-[11px] font-bold text-emerald-400">
+                  <Sparkles className="h-3 w-3 shrink-0" />
+                  {en
+                    ? `This order completes ${formatPrice(loyalty.threshold, lang, commerce)} — your next order gets ${loyalty.percent}% off!`
+                    : `الطلب ده بيكمّل ${formatPrice(loyalty.threshold, lang, commerce)} — طلبك الجاي عليه خصم ${loyalty.percent}٪ 🎉`}
+                </p>
               ) : null}
               {loyalty.show && loyalty.eligible ? (
                 <p className="flex items-center gap-1 rounded-lg bg-emerald-500/10 p-2 text-[11px] font-bold text-emerald-400">

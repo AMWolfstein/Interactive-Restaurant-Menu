@@ -171,8 +171,6 @@ export interface CommerceSettings {
   showPrices: boolean;
   /** يقفل السلة خالص (معرض فقط بدون طلب) */
   enableCart: boolean;
-  /** قالب رسالة واتساب */
-  orderTemplate: string;
   /** بادئة رقم الطلب — مثال: BF ← BF-7K4P2. فاضية = تتحسب من اسم المحل */
   orderPrefix: string;
   /** نظام «كاشك» — مكافأة الولاء على إجمالي مشتريات العميل */

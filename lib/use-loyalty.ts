@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { computeLoyaltyDiscount, isUsablePhone, normalizePhone } from "./loyalty";
+import { computeLoyaltyDiscount, isUsablePhone, normalizePhone, projectLoyalty } from "./loyalty";
 import type { LoyaltySettings, LoyaltySnapshot } from "./types";
 
 /**
@@ -111,4 +111,29 @@ export function previewDiscount(
 ): LoyaltySnapshot | null {
   if (!view.show || !view.eligible) return null;
   return computeLoyaltyDiscount(settings, subtotal, view.balance);
+}
+
+export interface LoyaltyProgress {
+  /** الباقي على المكافأة بعد احتساب اللي في السلة دلوقتي */
+  remaining: number;
+  progress: number;
+  /** الطلب اللي في السلة هو اللي هيوصّل العميل للعتبة */
+  unlocksReward: boolean;
+}
+
+/**
+ * تقدّم العميل ناحية المكافأة **شامل الطلب اللي في السلة**.
+ *
+ * `view.remaining` الجاي من السيرفر محسوب على الطلبات القديمة بس، فلو عرضناه
+ * زي ما هو العميل اللي حاطط بـ ٢٠٠ في السلة هيقرا «فاضل ٥٠٠٠» بدل «٤٨٠٠».
+ *
+ * @param subtotal قيمة الأصناف في السلة قبل التوصيل والخدمة — دي اللي بتتضاف
+ *                 لرصيد العميل في place_order.
+ */
+export function loyaltyProgress(view: LoyaltyView, subtotal: number): LoyaltyProgress {
+  const { remaining, progress, unlocksReward } = projectLoyalty(
+    { threshold: view.threshold, balance: view.balance },
+    subtotal,
+  );
+  return { remaining, progress, unlocksReward };
 }

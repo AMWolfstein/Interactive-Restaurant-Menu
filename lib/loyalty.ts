@@ -79,6 +79,44 @@ export function loyaltyStatus(settings: LoyaltySettings, balance: number): Loyal
   };
 }
 
+export interface LoyaltyProjection {
+  /** الرصيد المتوقّع بعد ما الطلب اللي في السلة دلوقتي يتسجّل */
+  balanceAfter: number;
+  /** الباقي على المكافأة بعد حساب الطلب الحالي (٠ = الطلب ده بيكمّل العتبة) */
+  remaining: number;
+  /** نسبة التقدّم 0–100 شاملة الطلب الحالي */
+  progress: number;
+  /** الطلب اللي في السلة هو اللي بيوصّل العميل للعتبة */
+  unlocksReward: boolean;
+}
+
+/**
+ * موقف العميل من المكافأة **بعد احتساب الطلب اللي في السلة دلوقتي**.
+ *
+ * الرصيد الجاي من السيرفر بيخص الطلبات المسجّلة قبل كده بس، فلو عرضناه زي ما هو
+ * العميل اللي رصيده ٠ وحاطط بـ ٢٠٠ في السلة هيقرا «فاضل ٥٠٠٠» — وده غلط، لأن
+ * الطلب ده نفسه هيتضاف لرصيده أول ما يتسجّل. الصح إن يقرا «فاضل ٤٨٠٠».
+ *
+ * الرصيد بيتجمّع من قيمة الأصناف قبل الخصم (نفس ما بيحصل في place_order)،
+ * فالتوصيل ورسوم الخدمة مش داخلين في الحساب ده.
+ */
+export function projectLoyalty(
+  status: { threshold: number; balance: number },
+  cartSubtotal: number,
+): LoyaltyProjection {
+  const threshold = Math.max(1, Number(status.threshold) || 0);
+  const balance = Math.max(0, Number(status.balance) || 0);
+  const cart = Math.max(0, Number(cartSubtotal) || 0);
+  const balanceAfter = balance + cart;
+  return {
+    balanceAfter,
+    remaining: Math.max(0, threshold - balanceAfter),
+    progress: Math.min(100, Math.round((balanceAfter / threshold) * 100)),
+    // «بيفتح المكافأة» يعني الطلب ده بالذات هو اللي عدّى بالعميل العتبة
+    unlocksReward: balance < threshold && balanceAfter >= threshold,
+  };
+}
+
 /**
  * حساب خصم كاشك لطلب واحد — نفس المنطق الموجود في دالة place_order بالظبط.
  * بيرجّع null لو النظام مقفول أو العميل مش مستحق.
