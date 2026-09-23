@@ -94,13 +94,21 @@ export async function rest<T>(path: string, options: RestOptions = {}): Promise<
     const error = parsed as { message?: string; code?: string } | null;
     // لا تسرب تفاصيل داخلية للعميل - سجلها في السيرفر فقط
     const isNotReady = NOT_READY_CODES.has(error?.code ?? "");
+    // `22023` هو الكود اللي بنرفعه عن قصد من دوال SQL برسايل عربية جاهزة
+    // للعرض («المحل مقفل حالياً»، «أقل طلب ١٠٠ ج»…). أي كود تاني رسالته
+    // بتبقى تفاصيل داخلية (أسماء أعمدة، قيود، كويري) — دي بتتسجّل في
+    // السيرفر بس وبيوصل للعميل رد عام.
+    const isIntentional = error?.code === "22023";
     const safeMessage = isNotReady
       ? "قاعدة البيانات غير جاهزة"
       : response.status >= 500
         ? "خطأ في الخادم - حاول مرة أخرى"
-        : error?.message && response.status < 500
+        : isIntentional && error?.message
           ? error.message
           : `تعذّر تنفيذ العملية (${response.status})`;
+    if (!isIntentional && !isNotReady && response.status < 500 && error?.message) {
+      console.error(`[supabase] ${path} rejected:`, error.code, error.message);
+    }
     if (response.status >= 500 || isNotReady) {
       console.error(`[supabase] ${path} failed:`, error?.code, error?.message);
     }

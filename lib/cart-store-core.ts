@@ -61,6 +61,13 @@ function write(next: CartLine[]) {
   emit();
 }
 
+/**
+ * تهيئة مرة واحدة لكل تحميل صفحة.
+ *
+ * المستمع ده عن قصد ما بيتشالش: المخزن ده singleton على مستوى الموديول
+ * وبيعيش طول عمر الصفحة، فمفيش تراكم — مستمع واحد بس مهما كان عدد
+ * الكمبوننتات المشتركة. `initialized` بتضمن كده.
+ */
 function ensureInit() {
   if (initialized || typeof window === "undefined") return;
   initialized = true;

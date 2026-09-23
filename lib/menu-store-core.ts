@@ -42,7 +42,19 @@ function set(patch: Partial<MenuState>) {
   state = { ...state, ...patch };
   emit();
 }
-const sizeOf = (data: MenuData) => Math.round(new Blob([JSON.stringify(data)]).size / 1024);
+/**
+ * حجم الكتالوج بالكيلوبايت — عدّاد بيتعرض في تبويب «البيانات» بس.
+ *
+ * `new Blob([...])` كانت بتعمل نسخة تانية كاملة من الـ JSON في الذاكرة عشان
+ * رقم تقريبي. TextEncoder بيعدّ البايتات من غير ما يبني Blob، وبيدّي نفس
+ * النتيجة بالظبط لأن الاتنين UTF-8.
+ */
+const encoder = typeof TextEncoder === "undefined" ? null : new TextEncoder();
+const sizeOf = (data: MenuData) => {
+  const json = JSON.stringify(data);
+  const bytes = encoder ? encoder.encode(json).length : json.length;
+  return Math.round(bytes / 1024);
+};
 const clone = (value: MenuData): MenuData => structuredClone(value);
 const newId = () => crypto.randomUUID().slice(0, 8);
 

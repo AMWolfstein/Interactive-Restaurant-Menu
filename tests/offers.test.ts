@@ -53,7 +53,7 @@ describe("isItemOnOffer", () => {
 
   it("بيشوف عرض في أي variant", () => {
     const withVariant = item({
-      variants: [{ id: "v1", name: "كبير", price: 90, oldPrice: 120 }],
+      variants: [{ id: "v1", label: "كبير", price: 90, oldPrice: 120 }],
     } as Partial<MenuItem>);
     expect(isItemOnOffer(withVariant)).toBe(true);
   });

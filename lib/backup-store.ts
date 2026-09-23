@@ -58,9 +58,37 @@ export async function createCatalogBackup(menu: MenuData, reason: BackupReason):
   return summarize(result.data[0]);
 }
 
+/** صف الملخّص الجاي من دالة list_catalog_backups */
+interface BackupSummaryRow {
+  id: string;
+  created_at: string;
+  reason: BackupReason;
+  item_count: number;
+  category_count: number;
+}
+
 export async function listCatalogBackups(limit = 15): Promise<CatalogBackupSummary[]> {
   if (!configured()) throw new Error("SUPABASE_SERVICE_ROLE_KEY غير مضبوط");
   const safeLimit = Math.min(Math.max(1, limit), RETENTION_COUNT);
+
+  // العدّ بيحصل في قاعدة البيانات — من غير كده كنا بننزّل كتالوج كامل لكل
+  // نسخة من الـ 15 (ممكن يوصل لميجابايتات) عشان نعرض رقمين بس.
+  const summary = await rest<BackupSummaryRow[]>(`rpc/list_catalog_backups`, {
+    method: "POST",
+    body: { p_limit: safeLimit },
+    ...serviceOptions(),
+  });
+  if (summary.ok && Array.isArray(summary.data)) {
+    return summary.data.map((row) => ({
+      id: row.id,
+      createdAt: row.created_at,
+      reason: row.reason,
+      itemCount: Number(row.item_count) || 0,
+      categoryCount: Number(row.category_count) || 0,
+    }));
+  }
+
+  // احتياطي: قواعد البيانات اللي لسه ما اتعملها migration مفيهاش الدالة
   const result = await rest<BackupRow[]>(`${BACKUPS_TABLE}?select=id,created_at,reason,data&order=created_at.desc&limit=${safeLimit}`, serviceOptions());
   if (!result.ok) throw new Error(result.message || "تعذّر قراءة النسخ الاحتياطية");
   return (result.data ?? []).map(summarize);

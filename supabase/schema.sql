@@ -240,6 +240,37 @@ begin
 end;
 $function$;
 
+-- ── ملخّص النسخ الاحتياطية من غير تنزيل الكتالوج كامل ───────────────────────
+-- قائمة النسخ كانت بتجيب عمود `data` بالكامل لكل نسخة (كتالوج كامل، ممكن
+-- يبقى ميجابايتات) عشان تعرض عدد المنتجات والأقسام بس. العدّ بيحصل في
+-- قاعدة البيانات دلوقتي، والرد بقى أرقام صغيرة.
+create or replace function public.list_catalog_backups(p_limit integer default 15)
+returns table (
+  id uuid,
+  created_at timestamptz,
+  reason text,
+  item_count integer,
+  category_count integer
+)
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $function$
+  select
+    b.id,
+    b.created_at,
+    b.reason,
+    coalesce(jsonb_array_length(b.data -> 'items'), 0)::integer,
+    coalesce(jsonb_array_length(b.data -> 'categories'), 0)::integer
+  from public.catalog_backups b
+  order by b.created_at desc
+  limit least(greatest(coalesce(p_limit, 15), 1), 100);
+$function$;
+
+revoke all on function public.list_catalog_backups(integer) from public, anon, authenticated;
+grant execute on function public.list_catalog_backups(integer) to service_role;
+
 -- ── هل المحل بيستقبل طلبات دلوقتي؟ ──────────────────────────────────────────
 -- نفس منطق `effectiveStoreOpen` في lib/schedule.ts بالظبط:
 --   - autoSchedule = false → المفتاح اليدوي isOpen
@@ -375,6 +406,12 @@ $function$;
 revoke all on function public.search_customers(text, integer) from public, anon;
 grant execute on function public.search_customers(text, integer) to authenticated;
 
+-- فهرس على رقم موبايل العميل المُوحّد داخل الطلب.
+-- من غيره `customer_orders` بتعمل sequential scan على كل الطلبات وبتنادي
+-- normalize_phone على كل صف — يبقى أبطأ وأبطأ كل ما الطلبات تزيد.
+create index if not exists orders_customer_phone_idx
+  on public.orders (public.normalize_phone(data #>> '{customer,phone}'));
+
 -- ── كل طلبات عميل واحد ──────────────────────────────────────────────────────
 create or replace function public.customer_orders(p_phone text, p_limit integer default 100)
 returns setof public.orders
@@ -416,6 +453,8 @@ declare
   v_item_name text;
   v_item_price numeric;
   v_quantity integer;
+  /** خريطة {itemId: الكمية} بتتجمّع في اللوب وبتتطبّق مرة واحدة بعده */
+  v_sales jsonb := '{}'::jsonb;
   v_order_lines jsonb := '[]'::jsonb;
   v_order jsonb;
   v_order_id text;
@@ -492,18 +531,31 @@ begin
       'quantity', v_quantity, 'unitPrice', v_item_price
     );
 
-    -- الأكثر مبيعاً يُحسب تلقائياً من الكميات الموجودة في الطلبات المكتملة.
+    -- بنجمّع الكميات في خريطة بس، والتطبيق على الكتالوج بيحصل مرة واحدة بعد
+    -- اللوب. قبل كده كان كل سطر في الطلب بيعيد بناء مصفوفة المنتجات كلها —
+    -- يعني ١٠ أصناف × ٣٠٠ منتج = ٣٠٠٠ عملية، وكل ده والصف متقفول بـ
+    -- `for update` فباقي الطلبات مستنية.
+    v_sales := jsonb_set(
+      v_sales,
+      array[v_item_id],
+      to_jsonb(coalesce((v_sales ->> v_item_id)::integer, 0) + v_quantity)
+    );
+  end loop;
+
+  -- تطبيق عدّادات المبيعات في تمريرة واحدة على الكتالوج
+  if v_sales <> '{}'::jsonb then
     select jsonb_agg(
-      case when elem ->> 'id' = v_item_id
+      case when v_sales ? (elem ->> 'id')
         then elem || jsonb_build_object(
-          'salesCount', greatest(0, coalesce((elem ->> 'salesCount')::integer, 0)) + v_quantity
+          'salesCount', greatest(0, coalesce((elem ->> 'salesCount')::integer, 0))
+                        + (v_sales ->> (elem ->> 'id'))::integer
         )
         else elem end
       order by ordinality
     ) into v_items
     from jsonb_array_elements(v_menu -> 'items') with ordinality as t(elem, ordinality);
     v_menu := jsonb_set(v_menu, '{items}', v_items);
-  end loop;
+  end if;
 
   v_commerce := v_menu -> 'commerce';
   v_contact := v_menu -> 'contact';

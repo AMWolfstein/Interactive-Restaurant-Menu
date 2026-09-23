@@ -133,7 +133,12 @@ create policy "customers_staff_read" on public.customers
   using (public.current_app_role() in ('admin', 'invoice_staff'));
 
 
--- (4) تسجيل الطلب مع فرض كل قواعد المحل على السيرفر
+-- (4) فهرس رقم موبايل العميل داخل الطلبات (بيسرّع customer_orders)
+create index if not exists orders_customer_phone_idx
+  on public.orders (public.normalize_phone(data #>> '{customer,phone}'));
+
+
+-- (5) تسجيل الطلب مع فرض كل قواعد المحل على السيرفر + عدّ المبيعات في تمريرة واحدة
 create or replace function public.place_order(payload jsonb)
 returns jsonb
 language plpgsql
@@ -151,6 +156,8 @@ declare
   v_item_name text;
   v_item_price numeric;
   v_quantity integer;
+  /** خريطة {itemId: الكمية} بتتجمّع في اللوب وبتتطبّق مرة واحدة بعده */
+  v_sales jsonb := '{}'::jsonb;
   v_order_lines jsonb := '[]'::jsonb;
   v_order jsonb;
   v_order_id text;
@@ -227,18 +234,31 @@ begin
       'quantity', v_quantity, 'unitPrice', v_item_price
     );
 
-    -- الأكثر مبيعاً يُحسب تلقائياً من الكميات الموجودة في الطلبات المكتملة.
+    -- بنجمّع الكميات في خريطة بس، والتطبيق على الكتالوج بيحصل مرة واحدة بعد
+    -- اللوب. قبل كده كان كل سطر في الطلب بيعيد بناء مصفوفة المنتجات كلها —
+    -- يعني ١٠ أصناف × ٣٠٠ منتج = ٣٠٠٠ عملية، وكل ده والصف متقفول بـ
+    -- `for update` فباقي الطلبات مستنية.
+    v_sales := jsonb_set(
+      v_sales,
+      array[v_item_id],
+      to_jsonb(coalesce((v_sales ->> v_item_id)::integer, 0) + v_quantity)
+    );
+  end loop;
+
+  -- تطبيق عدّادات المبيعات في تمريرة واحدة على الكتالوج
+  if v_sales <> '{}'::jsonb then
     select jsonb_agg(
-      case when elem ->> 'id' = v_item_id
+      case when v_sales ? (elem ->> 'id')
         then elem || jsonb_build_object(
-          'salesCount', greatest(0, coalesce((elem ->> 'salesCount')::integer, 0)) + v_quantity
+          'salesCount', greatest(0, coalesce((elem ->> 'salesCount')::integer, 0))
+                        + (v_sales ->> (elem ->> 'id'))::integer
         )
         else elem end
       order by ordinality
     ) into v_items
     from jsonb_array_elements(v_menu -> 'items') with ordinality as t(elem, ordinality);
     v_menu := jsonb_set(v_menu, '{items}', v_items);
-  end loop;
+  end if;
 
   v_commerce := v_menu -> 'commerce';
   v_contact := v_menu -> 'contact';
@@ -417,7 +437,7 @@ end;
 $function$;
 
 
--- (5) تغيير حالة الطلب مع عكس دقيق لرصيد «كاشك»
+-- (6) تغيير حالة الطلب مع عكس دقيق لرصيد «كاشك»
 create or replace function public.update_order_status(p_order_id text, p_status text)
 returns jsonb
 language plpgsql

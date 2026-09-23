@@ -58,9 +58,24 @@
 | `GET /api/invoices/session` | التحقق من جلسة شاشة الفواتير + الدور | أدمن أو `invoice_staff` |
 | `GET /api/invoices/orders` | طلبات شاشة الفواتير (نفس جدول `orders`) | أدمن أو `invoice_staff` |
 | `PATCH /api/invoices/orders` | تحديث حالة طلب من شاشة الفواتير | أدمن أو `invoice_staff` |
+| `POST /api/loyalty` | رصيد «كاشك» لرقم موبايل (للعرض في السلة) | عام (محدود بـ15/دقيقة) |
+| `GET /api/admin/customers` | قائمة عملاء «كاشك» وأرصدتهم | أدمن (Supabase token) |
+| `GET /api/admin/backups` | قائمة النسخ الاحتياطية أو استرجاع نسخة بـ`?id=` | أدمن (Supabase token) |
+| `POST /api/admin/backups` | إنشاء نسخة احتياطية فورية | أدمن (Supabase token) |
+| `POST /api/push-subscription` | تسجيل جهاز لاستقبال إشعارات الطلبات | أدمن (Supabase token) |
+| `DELETE /api/push-subscription` | إلغاء تسجيل الجهاز | أدمن (Supabase token) |
+| `GET /api/cron/backup` | نسخة احتياطية يومية (Vercel Cron) | `CRON_SECRET` |
 
 التحقق من التوكن بيتم في `lib/server-auth.ts` بمخاطبة `SUPABASE_URL/auth/v1/user`،
 والبيانات بتتحفظ عن طريق `lib/server-database.ts`.
+
+### قواعد قبول الطلب
+
+`POST /api/orders` بيتحقق على السيرفر من كل قواعد المحل قبل ما يسجّل أي طلب:
+السلة مفتوحة، المحل شغّال (يدوي أو بالجدول)، نوع الطلب مفعّل، الحد الأدنى
+(العام وبتاع المنطقة)، وبيانات العميل المطلوبة. المنطق في
+[`lib/order-rules.ts`](lib/order-rules.ts) ومتكرر في دالة `place_order` كخط
+دفاع أخير — يعني الحماية مش معتمدة على المتصفح.
 
 ## قاعدة البيانات
 
@@ -72,6 +87,12 @@
 > تقبل «استلام من المحل» أو «توصيل» بس — المحل مفيهوش طاولات فنوع «من داخل المحل»
 > بقى مرفوض على السيرفر.
 
+> **ترقيات جزئية:** ملفات `supabase/migrations/` بتطبّق تغييرات محدّدة على قاعدة
+> شغّالة من غير ما تعيد تنفيذ الملف الكامل. أحدثها
+> [`2026-09-server-order-rules.sql`](supabase/migrations/2026-09-server-order-rules.sql) —
+> بتفرض قواعد الطلب على السيرفر وبتقفل قراءة الطلبات وبيانات العملاء على
+> الأدمن وموظف الفواتير بس. كلها آمنة للتكرار.
+
 الملف بينشئ:
 
 - `catalog_data` — الكتالوج (قراءة عامة، كتابة للأدمن).
@@ -80,7 +101,9 @@
 - `push_subscriptions` — اشتراكات Web Push؛ لا يمكن قراءتها مباشرة من المتصفح.
 - `place_order(payload jsonb)` — دالة `SECURITY DEFINER` تتحقق من المنتجات والأسعار ومنطقة التوصيل وتسجّل الطلب بحالة «جديد» بدون أي متابعة للمخزون.
 - `update_order_status(order_id, status)` — دالة `SECURITY DEFINER` للأدمن فقط تحدّث حالة الطلب.
-- `current_app_role()` — بتقرا دور المستخدم من `app_metadata.role` في التوكن (`admin` افتراضياً).
+- `current_app_role()` — بتقرا دور المستخدم من `app_metadata.role` في التوكن. غياب
+  الدور = `admin` (توافق مع الحسابات القديمة)، وأي قيمة غير معروفة = بدون صلاحيات.
+- `store_is_open(contact jsonb)` — هل المحل بيستقبل طلبات دلوقتي (نفس منطق التطبيق).
 - `generate_order_number(prefix)` — رقم طلب قصير وفريد وسهل القراءة: `BF-7K4P2`.
 - تفعيل **Supabase Realtime** على الجداول (`alter publication supabase_realtime add table ...`)
   عشان التحديث اللحظي يوصل فوراً لكل الأجهزة عبر WebSocket.
@@ -237,6 +260,32 @@ npm run dev
 ## التحقق
 
 ```bash
-npm run lint
-npm run build
+npm run typecheck   # فحص الأنواع
+npm run lint        # فحص الأسلوب
+npm test            # الاختبارات (vitest)
+npm run build       # بناء الإنتاج
+```
+
+الأربعة بيتنفّذوا تلقائياً على كل push و pull request عن طريق
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+
+### الاختبارات
+
+الاختبارات في `tests/` وبتغطّي المنطق الحسّاس اللي متكرر بين TypeScript وSQL —
+أي انحراف بين الاتنين معناه إن العميل يشوف رقم في السلة ويتحاسب على رقم تاني:
+
+| الملف | بيغطّي |
+| --- | --- |
+| `order-rules.test.ts` | قواعد قبول الطلب على السيرفر |
+| `totals.test.ts` | حساب الفاتورة (توصيل، خدمة، خصم، توصيل مجاني) |
+| `loyalty.test.ts` | «كاشك»: توحيد الأرقام، العتبة، الخصم، الترحيل |
+| `schedule.test.ts` | مواعيد المحل بتوقيت القاهرة وفترات ما بعد نص الليل |
+| `offers.test.ts` | صلاحية العروض وتواريخ الانتهاء |
+| `order-number.test.ts` | توليد رقم الطلب القصير |
+| `normalize.test.ts` | استيراد النسخ القديمة وتطبيع الكتالوج |
+| `rate-limit.test.ts` | حدود المعدّل واستخراج IP |
+| `image.test.ts` | حساب حجم الصور المرفوعة |
+
+```bash
+npm run test:watch   # أثناء التطوير
 ```
