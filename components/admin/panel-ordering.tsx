@@ -1,26 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
-  Bell,
   CircleDollarSign,
   Clock,
   MapPin,
   MessageCircle,
-  Phone,
   Plus,
   Receipt,
-  Save,
   Sparkles,
   Trash2,
   Wallet,
 } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
-import { buildOrderMessage, computeTotals, TEMPLATE_TOKENS } from "@/lib/format";
 import { orderPrefixFrom } from "@/lib/order-number";
 import { describeNextOpening, isStoreOpenBySchedule, WEEK_DAYS_AR } from "@/lib/schedule";
-import type { ContactSettings, MenuItem, OrderType } from "@/lib/types";
-import type { DetailedLine } from "@/lib/use-cart";
+import type { ContactSettings, OrderType } from "@/lib/types";
 import { cx } from "@/lib/cx";
 import {
   Badge,
@@ -29,7 +24,6 @@ import {
   Field,
   NumberInput,
   Panel,
-  TextArea,
   TextInput,
   Toast,
   Toggle,
@@ -44,40 +38,7 @@ const TYPE_LABELS: Record<OrderType, string> = {
 export function OrderingPanel() {
   const { data, patchContact, patchCommerce } = useMenu();
   const { contact, commerce, brand } = data;
-  const [sample, setSample] = useState(true);
   const { toast, show } = useToast();
-
-  const demoItem = (id: string, name: string, price: number): MenuItem => ({
-    id,
-    categoryId: data.categories[0]?.id ?? "",
-    name,
-    price,
-    available: true,
-    isNew: false,
-    spicy: 0,
-  });
-
-  const demoLines: DetailedLine[] = [
-    { line: { itemId: "demo1", quantity: 2 }, item: demoItem("demo1", data.items[0]?.name ?? "أرز مصري فاخر — 1 كجم", data.items[0]?.price ?? 55) },
-    { line: { itemId: "demo2", quantity: 1 }, item: demoItem("demo2", "شاي العروسة — 250 جم", 60) },
-  ];
-  const demoZone = commerce.deliveryZones[0] ?? null;
-  const demoTotals = computeTotals(demoLines, commerce, "delivery", demoZone);
-
-  const preview = buildOrderMessage(
-    {
-      name: "أحمد محمود",
-      phone: "0101 234 5678",
-      address: "التجمع الخامس، شارع التسعين، كمبوند النخيل، عمارة ٤ شقة ١٢",
-      notes: "التسليم بعد المغرب لو سمحت",
-      orderType: "delivery",
-      lines: demoLines,
-      totals: demoTotals,
-      zoneName: commerce.enableZones ? demoZone?.name : undefined,
-      paymentMethod: commerce.paymentMethods[0],
-    },
-    { lang: brand.language, brand, contact, commerce },
-  );
 
   const orderPrefixPreview = useMemo(
     () =>
@@ -479,7 +440,7 @@ export function OrderingPanel() {
         </Button>
 
         <p className="mt-2 text-[11px] leading-relaxed text-muted">
-          بتظهر كذلك في فوتر الموقع، ومتاحة في قالب الواتساب بالمتغيّر <span dir="ltr" className="font-mono text-accent">{"{payment}"}</span>.
+          بتظهر كذلك في فوتر الموقع، وبتتسجّل مع الطلب وتظهر في الفاتورة وتبويب الطلبات.
         </p>
       </Panel>
 
@@ -511,58 +472,6 @@ export function OrderingPanel() {
           <a href="/invoices" target="_blank" rel="noopener" className="mx-1 font-bold text-accent hover:underline">صفحة الفواتير</a>
           أو من تبويب الطلبات هنا.
         </p>
-      </Panel>
-
-      <Panel title="قالب رسالة واتساب (الأرشيف)" description="القالب ده مابقاش بيتبعت للعميل — رسالة العميل بقت رقم الطلب فقط. سايبينه لو حبيت ترجّعه لاحقاً" icon={<Bell className="h-4 w-4" />}>
-        <div className="mb-2 flex flex-wrap gap-1.5">
-          {TEMPLATE_TOKENS.map((token) => (
-            <button
-              key={token}
-              type="button"
-              onClick={() => patchCommerce({ orderTemplate: `${commerce.orderTemplate}${token}` })}
-              className="rounded-lg border border-line bg-surface-2 px-2 py-1 font-mono text-[11px] text-accent transition hover:border-accent/50"
-            >
-              {token}
-            </button>
-          ))}
-        </div>
-        <TextArea
-          value={commerce.orderTemplate}
-          onChange={(event) => patchCommerce({ orderTemplate: event.target.value })}
-          className="min-h-[220px] font-mono text-[12px] leading-relaxed"
-        />
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" onClick={() => setSample((s) => !s)}>
-              {sample ? "إخفاء المعاينة" : "معاينة الرسالة"}
-            </Button>
-            <Button
-              size="sm"
-              variant="soft"
-              onClick={() => {
-                navigator.clipboard?.writeText(preview).then(
-                  () => show("الرسالة التجريبية اتنسخت"),
-                  () => show("المتصفح منع النسخ", "error"),
-                );
-              }}
-            >
-              <Save className="h-3.5 w-3.5" /> نسخ المعاينة
-            </Button>
-          </div>
-          <a
-            href={`https://wa.me/${contact.whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent("✅ تم ربط رقم الواتساب بنجاح")}`}
-            target="_blank"
-            rel="noopener"
-            className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-400 hover:underline"
-          >
-            <Phone className="h-3 w-3" /> تجربة إرسال على {contact.whatsapp || "—"}
-          </a>
-        </div>
-        {sample ? (
-          <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap rounded-xl border border-line bg-surface-2 p-3.5 text-[12px] leading-relaxed text-ink">
-            {preview}
-          </pre>
-        ) : null}
       </Panel>
 
       {toast ? <Toast message={toast.text} tone={toast.tone} /> : null}
