@@ -188,9 +188,21 @@ interface OrderRow {
   data: SavedOrder;
 }
 
-export async function fetchAdminOverview(token: string): Promise<RestResult<AdminOverview>> {
+/**
+ * أقصى عدد طلبات بيترجع في نداء واحد. الرقم ده سقف حماية مش هدف —
+ * كل طلب جواه الـ JSON بتاعه كامل (الأصناف + بيانات العميل)، فـ500 طلب
+ * ممكن يبقوا ميجابايتات على كل نداء، والنداء ده بيتكرر كل ٣٠ ثانية.
+ */
+const MAX_OVERVIEW_ORDERS = 500;
+const DEFAULT_OVERVIEW_ORDERS = 200;
+
+export async function fetchAdminOverview(
+  token: string,
+  limit = DEFAULT_OVERVIEW_ORDERS,
+): Promise<RestResult<AdminOverview>> {
+  const safeLimit = Math.min(MAX_OVERVIEW_ORDERS, Math.max(1, Math.floor(limit) || DEFAULT_OVERVIEW_ORDERS));
   const orders = await rest<OrderRow[]>(
-    `${ORDERS_TABLE}?select=id,created_at,data&order=created_at.desc&limit=500`,
+    `${ORDERS_TABLE}?select=id,created_at,data&order=created_at.desc&limit=${safeLimit}`,
     { token },
   );
   if (!orders.ok) return { ok: false, status: orders.status, data: null, message: orders.message, code: orders.code };

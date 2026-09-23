@@ -24,6 +24,7 @@
     "server-only": "^0.0.1",
     "web-push": "^3.6.7"
   },
+  "//typescript-note": "الأسماء هنا متبادلة عن قصد: حزمة \"typescript\" فيها TS 6 (@typescript/typescript6) وحزمة \"@typescript/native\" فيها TS 7. الأمر tsc بيجي من الأولى. متغيّرهاش من غير ما تجرب npm run typecheck.",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@next/eslint-plugin-next": "^16.3.6",

@@ -64,6 +64,8 @@ export interface StorageStatus {
 
 const DATABASE_PATH = process.env.DATABASE_FILE || path.join(process.cwd(), "data", "store.json");
 const DRIVER_TTL = 60_000;
+/** أقصى عدد طلبات بيتحفظ في ملف التطوير المحلي (مفيش حد في Supabase) */
+const FILE_ORDER_LIMIT = 500;
 let driverCache: { status: StorageStatus; at: number } | null = null;
 
 async function storageStatus(force = false): Promise<StorageStatus> {
@@ -462,8 +464,16 @@ async function createOrderInFile(input: PlaceOrderInput) {
   }
 
   database.orders.push(order);
-  // احتفظ بآخر 500 طلب فقط في وضع الملف (منع تضخم)
-  if (database.orders.length > 500) database.orders = database.orders.slice(-500);
+  // احتفظ بآخر 500 طلب فقط في وضع الملف (منع تضخم).
+  // ده سائق التطوير المحلي بس — في الإنتاج (Supabase) مفيش أي قص للطلبات.
+  if (database.orders.length > FILE_ORDER_LIMIT) {
+    const dropped = database.orders.length - FILE_ORDER_LIMIT;
+    database.orders = database.orders.slice(-FILE_ORDER_LIMIT);
+    console.warn(
+      `[store] ملف التطوير المحلي: اتشال ${dropped} طلب قديم (الحد ${FILE_ORDER_LIMIT}). ` +
+      `للاحتفاظ بكل الطلبات استخدم Supabase.`,
+    );
+  }
   database.menu.updatedAt = new Date().toISOString();
   await writeFileDatabase(database);
   return order;
@@ -545,7 +555,7 @@ export async function getAdminOverview(token: string | null): Promise<AdminOverv
 
   const database = await readFileDatabase();
   return {
-    orders: database.orders.slice(-500).reverse(),
+    orders: database.orders.slice(-FILE_ORDER_LIMIT).reverse(),
     storage: { driver: "file", persistent: false },
   };
 }
