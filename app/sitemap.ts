@@ -2,8 +2,9 @@ import type { MetadataRoute } from "next";
 import { getMenu } from "@/lib/server-database";
 import { getSiteUrl } from "@/lib/site-url";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+// خريطة الموقع بتتغير لما المنتجات تتغير بس — ساعة كاش أكتر من كفاية،
+// وبتوفّر استعلام كامل على كل زيارة من عناكب البحث.
+export const revalidate = 3600;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = getSiteUrl();

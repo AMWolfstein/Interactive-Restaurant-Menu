@@ -47,7 +47,7 @@ export async function sendPushNotification(message: PushMessage): Promise<{ sent
   let sent = 0;
   let removed = 0;
   for (let start = 0; start < subscriptions.length; start += 25) {
-    const results = await Promise.allSettled(
+    await Promise.allSettled(
       subscriptions.slice(start, start + 25).map(async (subscription) => {
         try {
           await webpush.sendNotification(subscription, payload, { TTL: 60 * 60 * 12 });
@@ -64,7 +64,6 @@ export async function sendPushNotification(message: PushMessage): Promise<{ sent
         }
       }),
     );
-    void results;
   }
   return { sent, removed };
 }

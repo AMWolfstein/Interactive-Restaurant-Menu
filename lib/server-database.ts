@@ -18,7 +18,7 @@ import {
   updateOrderStatus,
   type PlaceOrderInput,
 } from "./supabase-store";
-import { isStoreOpenBySchedule } from "./schedule";
+import { checkOrderRules, resolveDeliveryZone } from "./order-rules";
 import { isValidOrderType, sanitizeText } from "./validation";
 import { generateOrderNumber, orderPrefixFrom } from "./order-number";
 import {
@@ -273,36 +273,44 @@ export async function createOrder(input: PlaceOrderInput): Promise<{ order: Save
   const status = await storageStatus();
 
   if (status.driver === "supabase") {
-    // تحقق من مواعيد المحل + مناطق التوصيل + حساب الإجمالي من الكتالوج الحقيقي (مكافحة تلاعب)
+    // تحقق من قواعد المحل + مناطق التوصيل + حساب الإجمالي من الكتالوج الحقيقي (مكافحة تلاعب)
     try {
       const menu = await getMenu();
-      // المحل مقفل حسب الجدول الأوتوماتيكي؟ مفيش طلبات جديدة
-      if (menu.contact.autoSchedule && !isStoreOpenBySchedule(menu.contact.weeklySchedule ?? [])) {
-        throw new StoreError("المحل مقفل حالياً — مش ممكن تسجيل طلبات دلوقتي", 409);
-      }
-      if (sanitizedInput.orderType === "delivery" && menu.commerce.enableZones) {
-        const zones = menu.commerce.deliveryZones ?? [];
-        if (zones.length > 0) {
-          const zone = zones.find((z) => z.id === sanitizedInput.zoneId);
-          if (!zone) throw new StoreError("اختار منطقة التوصيل", 400);
-        }
-      }
+
+      // منطقة التوصيل لازم تكون صالحة لو المناطق مفعّلة
+      const { required: zoneRequired, zone } = resolveDeliveryZone(
+        menu.commerce,
+        sanitizedInput.orderType,
+        sanitizedInput.zoneId,
+      );
+      if (zoneRequired && !zone) throw new StoreError("اختار منطقة التوصيل", 400);
+
       const linesWithPrice = sanitizedInput.lines.map((l) => {
         const item = menu.items.find((m) => m.id === l.itemId);
         return { price: item?.price ?? 0, quantity: l.quantity };
       });
-      const zone = (menu.commerce.deliveryZones ?? []).find((z) => z.id === sanitizedInput.zoneId);
-      const serverTotal = computeServerTotals(
+      const totals = computeServerTotals(
         linesWithPrice,
         menu.commerce,
         sanitizedInput.orderType,
         zone?.fee,
-      ).total;
+      );
+
+      // قواعد المحل (مفتوح/مقفول، نوع الطلب، الحد الأدنى، بيانات العميل المطلوبة).
+      // بتتحسب على الإجمالي اللي السيرفر حسبه — مش على الرقم الجاي من العميل.
+      const violation = checkOrderRules(menu, {
+        orderType: sanitizedInput.orderType,
+        customer: sanitizedInput.customer,
+        subtotal: totals.subtotal,
+        zone,
+      });
+      if (violation) throw new StoreError(violation.message, violation.status);
+
       // اسمح بفارق بسيط (تقريب) لكن ارفض التلاعب الكبير
-      if (Math.abs(serverTotal - sanitizedInput.total) > 5 && sanitizedInput.total < serverTotal * 0.5) {
-        console.warn(`[order] total mismatch client=${sanitizedInput.total} server=${serverTotal} - using server total`);
+      if (Math.abs(totals.total - sanitizedInput.total) > 5 && sanitizedInput.total < totals.total * 0.5) {
+        console.warn(`[order] total mismatch client=${sanitizedInput.total} server=${totals.total} - using server total`);
       }
-      sanitizedInput.total = serverTotal;
+      sanitizedInput.total = totals.total;
     } catch (error) {
       if (error instanceof StoreError) throw error;
       // لو فشل الحساب، استمر لكن الـ DB سيعيد الحساب أيضاً
@@ -323,22 +331,19 @@ async function createOrderInFile(input: PlaceOrderInput) {
   if (!Array.isArray(input.lines) || input.lines.length === 0) throw new StoreError("السلة فارغة", 400);
   if (input.lines.length > 50) throw new StoreError("عدد المنتجات كبير جداً", 400);
 
-  // الجدول الأوتوماتيكي بيتحقق على السيرفر حتى في وضع الملف
-  if (database.menu.contact.autoSchedule && !isStoreOpenBySchedule(database.menu.contact.weeklySchedule ?? [])) {
-    throw new StoreError("المحل مقفل حالياً — مش ممكن تسجيل طلبات دلوقتي", 409);
-  }
-
   // منطقة التوصيل لازم تكون موجودة لو المناطق مفعّلة
-  const zones = database.menu.commerce.deliveryZones ?? [];
-  const zone =
-    input.orderType === "delivery" && database.menu.commerce.enableZones && zones.length > 0
-      ? zones.find((z) => z.id === input.zoneId)
-      : undefined;
-  if (input.orderType === "delivery" && database.menu.commerce.enableZones && zones.length > 0 && !zone) {
-    throw new StoreError("اختار منطقة التوصيل", 400);
-  }
+  const { required: zoneRequired, zone: resolvedZone } = resolveDeliveryZone(
+    database.menu.commerce,
+    input.orderType,
+    input.zoneId,
+  );
+  if (zoneRequired && !resolvedZone) throw new StoreError("اختار منطقة التوصيل", 400);
+  const zone = resolvedZone ?? undefined;
 
+  // بنبني سطور الطلب الأول من غير ما نعدّل `salesCount` — عشان لو الطلب اترفض
+  // في تحقق القواعد تحت ما يكونش عدّاد المبيعات اتزوّد بالباطل.
   const orderLines: SavedOrder["lines"] = [];
+  const soldQuantities = new Map<string, number>();
 
   for (const line of input.lines) {
     const item = database.menu.items.find((candidate) => candidate.id === line.itemId);
@@ -348,12 +353,29 @@ async function createOrderInFile(input: PlaceOrderInput) {
     if (rawQty < 1 || rawQty > 50) throw new StoreError(`الحد الأقصى 50 قطعة للمنتج: ${item.name}`, 400);
     const quantity = rawQty;
     orderLines.push({ itemId: item.id, name: item.name, quantity, unitPrice: item.price });
-    item.salesCount = Math.max(0, item.salesCount ?? 0) + quantity;
+    soldQuantities.set(item.id, (soldQuantities.get(item.id) ?? 0) + quantity);
   }
 
   // احسب الإجمالي على السيرفر - تجاهل total القادم من العميل
   const rawPhone = sanitizeText(input.customer?.phone ?? "", 30);
   const customerName = sanitizeText(input.customer?.name ?? "", 100);
+
+  // قواعد المحل (مفتوح/مقفول، نوع الطلب، الحد الأدنى، بيانات العميل المطلوبة) —
+  // نفس الدالة المستخدمة في سائق Supabase عشان السلوك يبقى واحد.
+  const ruleSubtotal = orderLines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0);
+  const violation = checkOrderRules(database.menu, {
+    orderType: input.orderType,
+    customer: { name: customerName, phone: rawPhone, address: input.customer?.address ?? "" },
+    subtotal: ruleSubtotal,
+    zone,
+  });
+  if (violation) throw new StoreError(violation.message, violation.status);
+
+  // القواعد عدّت — دلوقتي بس نزوّد عدّاد المبيعات
+  for (const [itemId, quantity] of soldQuantities) {
+    const item = database.menu.items.find((candidate) => candidate.id === itemId);
+    if (item) item.salesCount = Math.max(0, item.salesCount ?? 0) + quantity;
+  }
 
   // ── خصم «كاشك» ──────────────────────────────────────────────────────────
   // نفس منطق دالة place_order في Supabase بالظبط عشان السلوك ميختلفش بين

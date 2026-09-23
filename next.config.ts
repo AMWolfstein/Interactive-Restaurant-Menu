@@ -7,6 +7,18 @@ const nextConfig: NextConfig = {
   ...(isDev
     ? { allowedDevOrigins: ["*.e2b.app", "*.trycloudflare.com", "*.ngrok-free.app"] }
     : {}),
+  images: {
+    // الصور المرفوعة بتروح Cloudinary. من غير السطر ده next/image بيرفض أي
+    // رابط خارجي، فكل الصور كانت مضطرة تستخدم <img> عادي — يعني من غير
+    // تحويل WebP/AVIF ولا أحجام متعددة ولا حجز مساحة يمنع القفز في التخطيط.
+    remotePatterns: [
+      { protocol: "https", hostname: "res.cloudinary.com", pathname: "/**" },
+    ],
+    // أحجام مناسبة لشبكة المنتجات على الموبايل (٢–٣ أعمدة) وللكروت الكبيرة
+    imageSizes: [64, 96, 128, 200, 256, 384],
+    // الصور المرفوعة مش بتتغير على نفس الرابط — كاش طويل آمن
+    minimumCacheTTL: 60 * 60 * 24 * 30,
+  },
   async headers() {
     return [
       {

@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "cloudinary:whoami": "node scripts/cloudinary-whoami.mjs"
   },
   "dependencies": {
@@ -38,6 +40,7 @@
     "globals": "^17.12.0",
     "tailwindcss": "^4",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
-    "typescript-eslint": "^8.70.1"
+    "typescript-eslint": "^8.70.1",
+    "vitest": "^3.2.7"
   }
 }

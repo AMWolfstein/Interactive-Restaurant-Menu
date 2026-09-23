@@ -16,6 +16,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
+import { usePoll } from "@/lib/use-poll";
 import { orderStatusOf, ORDER_STATUS_LABEL } from "@/lib/format";
 import { effectiveStoreOpen } from "@/lib/schedule";
 import { Badge, Button, Panel } from "@/components/ui";
@@ -78,15 +79,15 @@ export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: str
       [{ table: ORDERS_TABLE, event: "INSERT" }],
       () => void loadOverview(),
     );
-    // شبكة أمان: فحص دوري كل 30 ثانية لو الـ Realtime انقطع
-    const timer = window.setInterval(() => void loadOverview(), 30_000);
     const kick = window.setTimeout(() => void loadOverview(), 0);
     return () => {
       unsubscribe();
-      window.clearInterval(timer);
       window.clearTimeout(kick);
     };
   }, [loadOverview]);
+
+  // شبكة أمان لو الـ Realtime انقطع — بتقف لما التاب يكون مخفي
+  usePoll(() => void loadOverview(), 30_000);
 
   const stats = useMemo(() => {
     const soldOut = items.filter((item) => !item.available).length;

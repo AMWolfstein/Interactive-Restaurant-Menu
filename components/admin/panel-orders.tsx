@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
+import { usePoll } from "@/lib/use-poll";
 import { orderStatusOf, ORDER_STATUS_LABEL } from "@/lib/format";
 import { subscribeRealtime } from "@/lib/realtime";
 import { ORDERS_TABLE } from "@/lib/supabase";
@@ -97,14 +98,15 @@ export function OrdersPanel() {
       ],
       () => void loadOrders(),
     );
-    const timer = window.setInterval(() => void loadOrders(), 30_000);
     const kick = window.setTimeout(() => void loadOrders(), 0);
     return () => {
       unsubscribe();
-      window.clearInterval(timer);
       window.clearTimeout(kick);
     };
   }, [loadOrders]);
+
+  // شبكة أمان لو الـ Realtime انقطع — بتقف لما التاب يكون مخفي
+  usePoll(() => void loadOrders(), 30_000);
 
   const changeStatus = async (order: SavedOrder, status: OrderStatus) => {
     if (updatingId) return;

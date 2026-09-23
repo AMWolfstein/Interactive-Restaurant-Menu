@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
 import type { HeroImage } from "@/lib/types";
 import { cx } from "@/lib/cx";
@@ -42,10 +43,33 @@ export function HeroCarousel({ images, fallback, label }: { images?: HeroImage[]
       aria-label={label}
     >
       <div className="flex h-full w-full transition-transform duration-700 motion-reduce:transition-none" style={{ transform: `translateX(-${activeIndex * 100}%)` }} dir="ltr">
-        {slides.map((slide) => (
+        {slides.map((slide, slideIndex) => (
           <div key={slide.id} className="relative h-full w-full shrink-0" aria-hidden={slide !== slides[activeIndex]}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={slide.image} alt="" className="h-full w-full object-cover" draggable={false} />
+            {/* صورة الـ Hero هي أكبر عنصر في الصفحة (LCP). أول سلايد بيتحمّل
+                بأولوية، والباقي كسول — وNext بيحوّلهم WebP/AVIF بأحجام
+                مناسبة للشاشة بدل ما يبعت الأصل الكبير للموبايل.
+                الصور المخزّنة كـ data URL مش بتعدّي على المُحسِّن. */}
+            {slide.image.startsWith("data:") || slide.image.startsWith("blob:") ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={slide.image}
+                alt=""
+                className="h-full w-full object-cover"
+                draggable={false}
+                loading={slideIndex === 0 ? "eager" : "lazy"}
+              />
+            ) : (
+              <Image
+                src={slide.image}
+                alt=""
+                fill
+                // الـ Hero بعرض الشاشة كامل
+                sizes="100vw"
+                priority={slideIndex === 0}
+                draggable={false}
+                className="object-cover"
+              />
+            )}
           </div>
         ))}
       </div>

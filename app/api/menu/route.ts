@@ -10,9 +10,11 @@ export const dynamic = "force-dynamic";
 /** قراءة الكتالوج — عامة لكل العملاء (ولو معاك توكن أدمن صالح بتتزامن بيانات البداية) */
 export async function GET(request: NextRequest) {
   const token = bearerToken(request);
-  const check = await checkAdmin(token);
+  // التوكن مطلوب في حالة واحدة نادرة بس: زرع بيانات البداية أول مرة.
+  // من غير توكن مفيش أي داعي نضرب Supabase — وده الطريق العام لكل زائر.
+  const isAdmin = token ? (await checkAdmin(token)).ok : false;
   try {
-    return NextResponse.json(await getMenu(check.ok ? token : null), {
+    return NextResponse.json(await getMenu(isAdmin ? token : null), {
       headers: { "cache-control": "no-store" },
     });
   } catch (error) {

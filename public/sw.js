@@ -1,5 +1,5 @@
 // غيّر الرقم ده لو عدّلت استراتيجية الكاش — بيمسح كل النسخ القديمة.
-const CACHE_NAME = "store-catalog-v5";
+const CACHE_NAME = "store-catalog-v6";
 // صفحة احتياطية للعرض وقت انقطاع النت فقط.
 const OFFLINE_URLS = ["/"];
 
@@ -40,17 +40,23 @@ self.addEventListener("fetch", (event) => {
 
   // الصفحات: الشبكة أولاً عشان بيانات المحل تبقى دايماً أحدث نسخة،
   // والكاش بيشتغل بس لو النت مقطوع.
+  //
+  // كل مسار بيتخزّن تحت مفتاح المسار بتاعه. قبل كده كل الصفحات كانت بتتخزّن
+  // تحت المفتاح "/" — فزيارة /menu وهو أونلاين كانت بتستبدل الصفحة الرئيسية
+  // المخزّنة، وبعد انقطاع النت الزائر يفتح "/" فيلاقي البوستر بدل الستورفرونت.
   if (request.mode === "navigate") {
+    const pageKey = new Request(url.origin + url.pathname, { method: "GET" });
     event.respondWith(
       fetch(request)
         .then((response) => {
           if (response.ok) {
             const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put("/", copy));
+            caches.open(CACHE_NAME).then((cache) => cache.put(pageKey, copy));
           }
           return response;
         })
-        .catch(() => caches.match("/")),
+        // الرجوع لنفس الصفحة المخزّنة، وإلا الصفحة الرئيسية كملاذ أخير.
+        .catch(() => caches.match(pageKey).then((cached) => cached || caches.match("/"))),
     );
     return;
   }

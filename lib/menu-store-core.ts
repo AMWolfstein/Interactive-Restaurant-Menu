@@ -107,8 +107,17 @@ function ensureInit() {
     },
   );
 
-  // شبكة أمان لو الـ Realtime مش متاح (جداول مش مضافة للـ publication)
-  window.setInterval(refreshFromRemote, 60_000);
+  // شبكة أمان لو الـ Realtime مش متاح (جداول مش مضافة للـ publication).
+  // بيقف لما التاب يكون مخفي: من غير كده أي تاب سايبه المستخدم مفتوح بيفضل
+  // بيجيب الكتالوج كامل كل دقيقة للأبد.
+  const tick = () => {
+    if (!document.hidden) refreshFromRemote();
+  };
+  window.setInterval(tick, 60_000);
+  // أول ما التاب يرجع يبان، حدّث حالاً بدل ما تستنى الدورة الجاية
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refreshFromRemote();
+  });
 }
 
 export function subscribeMenu(listener: () => void) {

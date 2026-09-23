@@ -310,8 +310,10 @@ function OrderAlerts({ onNewOrder }: { onNewOrder: () => void }) {
         // تجاهل — الفحص الجاي هيجرب تاني
       }
     };
+    // بيقف لما التاب يكون مخفي — لوحة سايبها مفتوحة كانت بتضرب
+    // /api/admin/overview كل دقيقة طول اليوم من غير أي فايدة
     const timer = window.setInterval(() => {
-      if (!cancelled) void poll();
+      if (!cancelled && !document.hidden) void poll();
     }, 60_000);
     void poll();
 
