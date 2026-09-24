@@ -1,9 +1,35 @@
--- Interactive Store Catalog — كتالوج منتجات وطلبات واتساب فقط
--- نفّذ الملف في Supabase Dashboard → SQL Editor.
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Interactive Store Catalog — الملف الكامل لقاعدة البيانات
+--
+-- ده الملف الوحيد. نفّذه في Supabase Dashboard → SQL Editor.
+--
+-- بيشتغل في الحالتين:
+--   • داتابيز جديدة فاضية  → بينشئ كل حاجة من الصفر
+--   • داتابيز شغالة قديمة  → بيحدّثها من غير ما يمس بياناتك
+--
+-- **idempotent**: نفّذه مية مرة، النتيجة واحدة. مفيش `drop table` ولا أي
+-- حاجة بتمسح بيانات في الملف كله.
+--
+-- الترتيب: جداول ← فهارس ← RLS وسياسات ← صلاحيات ← دوال ← ترحيل البيانات
+-- القديمة (آخر قسم) ← Realtime.
+-- ═══════════════════════════════════════════════════════════════════════════
 
 create table if not exists public.catalog_data (
   slug text primary key,
   data jsonb not null,
+  updated_at timestamptz not null default now()
+);
+
+-- عدّاد مبيعات كل منتج في جدول مستقل بدل ما يكون حقل جوه JSON الكتالوج.
+--
+-- ليه: `salesCount` كان بيتخزّن جوه `catalog_data.data` — يعني أي طلب لازم
+-- يقفل صف الكتالوج (وهو صف واحد للمتجر كله) ويعيد كتابة الكتالوج بالكامل
+-- عشان يزوّد رقم واحد. النتيجة إن الطلبات المتوازية كانت بتتصفّ ورا بعض،
+-- وكل طلب بيكتب عشرات أو مئات الكيلوبايتات من غير داعي.
+-- دلوقتي كل منتج له صف صغير لوحده، والتزويد جملة upsert واحدة.
+create table if not exists public.item_sales (
+  item_id text primary key,
+  sales_count bigint not null default 0 check (sales_count >= 0),
   updated_at timestamptz not null default now()
 );
 
@@ -56,11 +82,23 @@ language sql
 stable
 set search_path = public, pg_temp
 as $function$
-  select case
-    when coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb
-           #>> '{app_metadata,role}' = 'invoice_staff'
-    then 'invoice_staff'
-    else 'admin'
+  -- نفس منطق roleOf في lib/server-auth.ts:
+  --   مفيش دور متسجّل → admin (توافق مع الحسابات القديمة)
+  --   دور معروف       → نفسه
+  --   قيمة غريبة      → 'unknown' وما بتفتحش أي policy
+  -- ملاحظة: `case x when null then …` عمره ما بيطابق في SQL، فالحالة الفاضية
+  -- بتتحوّل لـ 'admin' بـ nullif + coalesce قبل الـ case.
+  select case coalesce(
+      nullif(
+        coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb
+          #>> '{app_metadata,role}',
+        ''
+      ),
+      'admin'
+    )
+    when 'invoice_staff' then 'invoice_staff'
+    when 'admin' then 'admin'
+    else 'unknown'
   end;
 $function$;
 
@@ -80,13 +118,23 @@ create policy "catalog_owner_write" on public.catalog_data
   using (public.current_app_role() = 'admin')
   with check (public.current_app_role() = 'admin');
 
--- قراءة الطلبات متاحة للأدمن ولموظف الفواتير (ده شغلهم الأساسي).
+-- قراءة الطلبات متاحة للأدمن ولموظف الفواتير (ده شغلهم الأساسي) — وبس.
+-- `using (true)` كانت بتدّي أي مستخدم مسجّل في المشروع كل الطلبات ببيانات
+-- عملائها، حتى لو مالوش أي علاقة بلوحة التحكم.
 drop policy if exists "orders_owner_read" on public.orders;
 create policy "orders_owner_read" on public.orders
-  for select to authenticated using (true);
+  for select to authenticated
+  using (public.current_app_role() in ('admin', 'invoice_staff'));
+
+-- عدّادات المبيعات: قراءة عامة (بتظهر في «الأكثر مبيعاً»)، والكتابة من
+-- place_order بس — وهي security definer — فمحدش يقدر يزوّد أرقام مبيعاته.
+alter table public.item_sales enable row level security;
+drop policy if exists "item_sales_public_read" on public.item_sales;
+create policy "item_sales_public_read" on public.item_sales for select using (true);
 
 grant usage on schema public to anon, authenticated;
 grant select on public.catalog_data to anon, authenticated;
+grant select on public.item_sales to anon, authenticated;
 grant insert, update, delete on public.catalog_data to authenticated;
 grant select on public.orders to authenticated;
 -- هذان الجدولان مقفولان بـ RLS بدون policy عامة. API السيرفر فقط يستخدم service_role
@@ -195,7 +243,8 @@ alter table public.customers enable row level security;
 -- العميل نفسه بيشوف رصيده من خلال دالة آمنة (customer_loyalty) مش من الجدول.
 drop policy if exists "customers_staff_read" on public.customers;
 create policy "customers_staff_read" on public.customers
-  for select to authenticated using (true);
+  for select to authenticated
+  using (public.current_app_role() in ('admin', 'invoice_staff'));
 
 drop policy if exists "customers_admin_write" on public.customers;
 create policy "customers_admin_write" on public.customers
@@ -223,6 +272,107 @@ begin
   return left(v, 20);
 end;
 $function$;
+
+-- ── ملخّص النسخ الاحتياطية من غير تنزيل الكتالوج كامل ───────────────────────
+-- قائمة النسخ كانت بتجيب عمود `data` بالكامل لكل نسخة (كتالوج كامل، ممكن
+-- يبقى ميجابايتات) عشان تعرض عدد المنتجات والأقسام بس. العدّ بيحصل في
+-- قاعدة البيانات دلوقتي، والرد بقى أرقام صغيرة.
+create or replace function public.list_catalog_backups(p_limit integer default 15)
+returns table (
+  id uuid,
+  created_at timestamptz,
+  reason text,
+  item_count integer,
+  category_count integer
+)
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $function$
+  select
+    b.id,
+    b.created_at,
+    b.reason,
+    coalesce(jsonb_array_length(b.data -> 'items'), 0)::integer,
+    coalesce(jsonb_array_length(b.data -> 'categories'), 0)::integer
+  from public.catalog_backups b
+  order by b.created_at desc
+  limit least(greatest(coalesce(p_limit, 15), 1), 100);
+$function$;
+
+revoke all on function public.list_catalog_backups(integer) from public, anon, authenticated;
+grant execute on function public.list_catalog_backups(integer) to service_role;
+
+-- ── هل المحل بيستقبل طلبات دلوقتي؟ ──────────────────────────────────────────
+-- نفس منطق `effectiveStoreOpen` في lib/schedule.ts بالظبط:
+--   - autoSchedule = false → المفتاح اليدوي isOpen
+--   - autoSchedule = true  → الجدول الأسبوعي بتوقيت المحل (Africa/Cairo)
+-- بيدعم الفترات اللي بتعدي نص الليل (مثال 18:00 → 02:00) بفحص يوم امبارح.
+create or replace function public.store_is_open(p_contact jsonb)
+returns boolean
+language plpgsql
+stable
+set search_path = public, pg_temp
+as $function$
+declare
+  v_tz constant text := 'Africa/Cairo';
+  v_now timestamptz := now();
+  v_day integer;
+  v_minutes integer;
+  v_slot jsonb;
+  v_open integer;
+  v_close integer;
+begin
+  -- القفل اليدوي هو الحاكم لما الجدول الأوتوماتيكي يكون مقفول
+  if coalesce((p_contact ->> 'autoSchedule')::boolean, false) = false then
+    return coalesce((p_contact ->> 'isOpen')::boolean, true);
+  end if;
+
+  v_day := extract(dow from v_now at time zone v_tz)::integer;          -- 0 = الأحد
+  v_minutes := extract(hour from v_now at time zone v_tz)::integer * 60
+             + extract(minute from v_now at time zone v_tz)::integer;
+
+  -- فترة النهارده
+  select elem into v_slot
+    from jsonb_array_elements(coalesce(p_contact -> 'weeklySchedule', '[]'::jsonb)) as elem
+   where (elem ->> 'day')::integer = v_day
+     and coalesce((elem ->> 'enabled')::boolean, false) = true
+   limit 1;
+
+  if v_slot is not null then
+    v_open  := split_part(v_slot ->> 'open',  ':', 1)::integer * 60
+             + split_part(v_slot ->> 'open',  ':', 2)::integer;
+    v_close := split_part(v_slot ->> 'close', ':', 1)::integer * 60
+             + split_part(v_slot ->> 'close', ':', 2)::integer;
+    if v_close <= v_open then
+      -- بتعدي نص الليل: من وقت الفتح لحد 24:00
+      if v_minutes >= v_open then return true; end if;
+    elsif v_minutes >= v_open and v_minutes < v_close then
+      return true;
+    end if;
+  end if;
+
+  -- فترة امبارح اللي بتعدي نص الليل: من 00:00 لحد وقت القفل
+  select elem into v_slot
+    from jsonb_array_elements(coalesce(p_contact -> 'weeklySchedule', '[]'::jsonb)) as elem
+   where (elem ->> 'day')::integer = (v_day + 6) % 7
+     and coalesce((elem ->> 'enabled')::boolean, false) = true
+   limit 1;
+
+  if v_slot is not null then
+    v_open  := split_part(v_slot ->> 'open',  ':', 1)::integer * 60
+             + split_part(v_slot ->> 'open',  ':', 2)::integer;
+    v_close := split_part(v_slot ->> 'close', ':', 1)::integer * 60
+             + split_part(v_slot ->> 'close', ':', 2)::integer;
+    if v_close <= v_open and v_minutes < v_close then return true; end if;
+  end if;
+
+  return false;
+end;
+$function$;
+
+revoke all on function public.store_is_open(jsonb) from public, anon;
 
 -- ── رصيد العميل للعرض في السلة ──────────────────────────────────────────────
 -- دالة آمنة بترجّع الرصيد ونسبة التقدّم بس — من غير الاسم ولا عدد الطلبات ولا
@@ -289,6 +439,12 @@ $function$;
 revoke all on function public.search_customers(text, integer) from public, anon;
 grant execute on function public.search_customers(text, integer) to authenticated;
 
+-- فهرس على رقم موبايل العميل المُوحّد داخل الطلب.
+-- من غيره `customer_orders` بتعمل sequential scan على كل الطلبات وبتنادي
+-- normalize_phone على كل صف — يبقى أبطأ وأبطأ كل ما الطلبات تزيد.
+create index if not exists orders_customer_phone_idx
+  on public.orders (public.normalize_phone(data #>> '{customer,phone}'));
+
 -- ── كل طلبات عميل واحد ──────────────────────────────────────────────────────
 create or replace function public.customer_orders(p_phone text, p_limit integer default 100)
 returns setof public.orders
@@ -321,7 +477,6 @@ set search_path = public, pg_temp
 as $function$
 declare
   v_menu jsonb;
-  v_items jsonb;
   v_lines jsonb := coalesce(payload -> 'lines', '[]'::jsonb);
   v_line jsonb;
   v_item jsonb;
@@ -330,6 +485,8 @@ declare
   v_item_name text;
   v_item_price numeric;
   v_quantity integer;
+  /** خريطة {itemId: الكمية} بتتجمّع في اللوب وبتتطبّق مرة واحدة بعده */
+  v_sales jsonb := '{}'::jsonb;
   v_order_lines jsonb := '[]'::jsonb;
   v_order jsonb;
   v_order_id text;
@@ -340,10 +497,13 @@ declare
   v_service numeric := 0;
   v_total numeric := 0;
   v_commerce jsonb;
+  v_contact jsonb;
   v_order_type text;
   v_free_over numeric;
   v_fee numeric;
   v_pct numeric;
+  v_min_order numeric := 0;
+  v_zone_min numeric := 0;
   v_zone jsonb;
   v_zone_id text;
   v_zone_name text := '';
@@ -368,7 +528,10 @@ begin
     raise exception 'عدد المنتجات كبير جداً (الحد 50)' using errcode = '22023';
   end if;
 
-  select data into v_menu from public.catalog_data where slug = 'main' for update;
+  -- من غير `for update`: عدّاد المبيعات بقى في جدول public.item_sales، فمحدش
+  -- بيكتب على صف الكتالوج وقت الطلب. قبل كده كل طلب كان بيقفل الصف ده —
+  -- وهو صف واحد للمتجر كله — فالطلبات المتوازية كانت بتتصفّ ورا بعض.
+  select data into v_menu from public.catalog_data where slug = 'main';
   if v_menu is null then
     raise exception 'كتالوج المتجر لسه مش محفوظ' using errcode = '22023';
   end if;
@@ -403,20 +566,19 @@ begin
       'quantity', v_quantity, 'unitPrice', v_item_price
     );
 
-    -- الأكثر مبيعاً يُحسب تلقائياً من الكميات الموجودة في الطلبات المكتملة.
-    select jsonb_agg(
-      case when elem ->> 'id' = v_item_id
-        then elem || jsonb_build_object(
-          'salesCount', greatest(0, coalesce((elem ->> 'salesCount')::integer, 0)) + v_quantity
-        )
-        else elem end
-      order by ordinality
-    ) into v_items
-    from jsonb_array_elements(v_menu -> 'items') with ordinality as t(elem, ordinality);
-    v_menu := jsonb_set(v_menu, '{items}', v_items);
+    -- بنجمّع الكميات في خريطة بس، والتطبيق على الكتالوج بيحصل مرة واحدة بعد
+    -- اللوب. قبل كده كان كل سطر في الطلب بيعيد بناء مصفوفة المنتجات كلها —
+    -- يعني ١٠ أصناف × ٣٠٠ منتج = ٣٠٠٠ عملية، وكل ده والصف متقفول بـ
+    -- `for update` فباقي الطلبات مستنية.
+    v_sales := jsonb_set(
+      v_sales,
+      array[v_item_id],
+      to_jsonb(coalesce((v_sales ->> v_item_id)::integer, 0) + v_quantity)
+    );
   end loop;
 
   v_commerce := v_menu -> 'commerce';
+  v_contact := v_menu -> 'contact';
   -- المحل تيك-أواي (مفيش طاولات): استلام من المحل أو توصيل بس
   v_order_type := coalesce(payload ->> 'orderType', 'pickup');
   if v_order_type not in ('delivery', 'pickup') then
@@ -425,6 +587,49 @@ begin
 
   select coalesce(sum((elem->>'unitPrice')::numeric * (elem->>'quantity')::integer), 0)
     into v_subtotal from jsonb_array_elements(v_order_lines) as elem;
+
+  -- ══ قواعد قبول الطلب ══════════════════════════════════════════════════════
+  -- الإعدادات دي كانت متفروضة في المتصفح بس، فأي POST مباشر على /api/orders
+  -- كان بيعدّيها. دي آخر خط دفاع — بتشتغل حتى لو حد نادى Supabase REST مباشرةً.
+  -- نفس المنطق في lib/order-rules.ts للسائق المحلي.
+
+  -- (١) السلة مقفولة خالص (وضع «معرض فقط»)
+  if coalesce((v_commerce ->> 'enableCart')::boolean, true) = false then
+    raise exception 'الطلب من الموقع مقفول حالياً' using errcode = '22023';
+  end if;
+
+  -- (٢) المحل مقفول (يدوي أو بالجدول الأوتوماتيكي)
+  if not public.store_is_open(v_contact) then
+    raise exception 'المحل مقفل حالياً — مش ممكن تسجيل طلبات دلوقتي' using errcode = '22023';
+  end if;
+
+  -- (٣) نوع الطلب لازم يكون مفعّل في إعدادات المحل
+  if jsonb_array_length(coalesce(v_commerce -> 'orderTypes', '[]'::jsonb)) > 0
+     and not (v_commerce -> 'orderTypes' ? v_order_type) then
+    raise exception 'نوع الطلب ده مش متاح حالياً' using errcode = '22023';
+  end if;
+
+  -- (٤) بيانات العميل المطلوبة حسب إعدادات المحل
+  if coalesce((v_commerce ->> 'requireName')::boolean, false)
+     and length(btrim(coalesce(payload #>> '{customer,name}', ''))) < 2 then
+    raise exception 'اكتب الاسم بالكامل' using errcode = '22023';
+  end if;
+  if coalesce((v_commerce ->> 'requirePhone')::boolean, false)
+     and length(regexp_replace(coalesce(payload #>> '{customer,phone}', ''), '\D', '', 'g')) < 10 then
+    raise exception 'رقم الموبايل مش كامل' using errcode = '22023';
+  end if;
+  if v_order_type = 'delivery'
+     and coalesce((v_commerce ->> 'requireAddress')::boolean, false)
+     and length(btrim(coalesce(payload #>> '{customer,address}', ''))) < 8 then
+    raise exception 'اكتب العنوان بالتفصيل (الشارع، رقم العقار، الدور، الشقة)' using errcode = '22023';
+  end if;
+
+  -- (٥) الحد الأدنى للطلب — على قيمة الأصناف قبل التوصيل والخدمة
+  v_min_order := greatest(0, coalesce((v_commerce ->> 'minimumOrder')::numeric, 0));
+  if v_min_order > 0 and v_subtotal < v_min_order then
+    raise exception 'أقل طلب % %', v_min_order, coalesce(v_commerce ->> 'currency', '')
+      using errcode = '22023';
+  end if;
 
   -- ── خصم كاشك ──────────────────────────────────────────────────────────────
   -- بيتحسب قبل رسوم الخدمة عشان العميل يستفيد بالخصم كامل، وعلى الأصناف فقط
@@ -476,6 +681,13 @@ begin
       end if;
       v_fee := greatest(0, coalesce((v_zone->>'fee')::numeric, 0));
       v_zone_name := left(btrim(coalesce(v_zone->>'name', '')), 60);
+
+      -- (٦) الحد الأدنى الخاص بالمنطقة — كان متفروض في المتصفح بس
+      v_zone_min := greatest(0, coalesce((v_zone ->> 'minimumOrder')::numeric, 0));
+      if v_zone_min > 0 and v_subtotal < v_zone_min then
+        raise exception 'أقل طلب في % هو % %', v_zone_name, v_zone_min,
+          coalesce(v_commerce ->> 'currency', '') using errcode = '22023';
+      end if;
     end if;
 
     -- التوصيل المجاني بيتحسب على قيمة الأصناف قبل الخصم — الخصم مكافأة
@@ -534,9 +746,17 @@ begin
       updated_at     = v_now;
   end if;
 
-  update public.catalog_data
-    set data = jsonb_set(v_menu, '{updatedAt}', to_jsonb(v_now_iso)), updated_at = v_now
-    where slug = 'main';
+  -- عدّادات المبيعات: جملة واحدة على جدول مستقل بدل إعادة كتابة الكتالوج كله.
+  -- القفل هنا على صفوف المنتجات المطلوبة بس، فطلبين لمنتجين مختلفين
+  -- ما بيستنّوش بعض خالص.
+  if v_sales <> '{}'::jsonb then
+    insert into public.item_sales as s (item_id, sales_count, updated_at)
+    select key, value::text::bigint, v_now from jsonb_each(v_sales)
+    on conflict (item_id) do update
+      set sales_count = s.sales_count + excluded.sales_count,
+          updated_at  = excluded.updated_at;
+  end if;
+
   return jsonb_build_object('order', v_order);
 end;
 $function$;
@@ -564,6 +784,18 @@ declare
   v_subtotal numeric;
   v_loyalty jsonb;
   v_delta numeric;
+  -- الفروق اللي هتتطبّق على صف العميل، والقيم قبل التعديل عشان نحسب المطبّق فعلاً
+  v_reverse jsonb;
+  v_d_spent numeric;
+  v_d_lifetime numeric;
+  v_d_orders integer;
+  v_d_rewards integer;
+  v_d_discount numeric;
+  v_spent_before numeric := 0;
+  v_lifetime_before numeric := 0;
+  v_orders_before integer := 0;
+  v_rewards_before integer := 0;
+  v_discount_before numeric := 0;
 begin
   if p_status not in ('new', 'cancelled') then
     raise exception 'حالة الطلب غير صالحة' using errcode = '22023';
@@ -583,23 +815,56 @@ begin
     v_subtotal := greatest(0, coalesce((v_order ->> 'subtotal')::numeric, 0));
     v_loyalty := v_order -> 'loyalty';
 
+    -- الفروق المسجّلة من آخر تغيير حالة — لو موجودة يبقى ده رجوع عن نفس التغيير
+    v_reverse := v_order -> 'loyaltyAdjustment';
+
     if length(v_phone) >= 8 then
+      -- القيم قبل التعديل عشان نحسب الفرق اللي اتطبّق فعلاً بعد الحد الأدنى صفر
+      select spent, lifetime, orders_count, rewards_used, discount_total
+        into v_spent_before, v_lifetime_before, v_orders_before, v_rewards_before, v_discount_before
+        from public.customers where phone = v_phone;
+
       -- عند الإلغاء: نشيل قيمة الطلب، ولو كان صرف مكافأة نرجّع العتبة لرصيده.
       -- عند إرجاعه «جديد»: العكس بالظبط.
-      v_delta := v_subtotal - coalesce((v_loyalty ->> 'threshold')::numeric, 0);
-      if p_status = 'cancelled' then v_delta := -v_delta; end if;
+      --
+      -- مهم: `greatest(0, …)` بيمنع الأرقام السالبة، وده كان بيسبب انحراف في
+      -- الرصيد. مثال: رصيد 50 وطلب بـ 100 → الإلغاء بينزّله لـ 0 (مش -50)،
+      -- وإرجاع الطلب كان بيزوّد 100 فيبقى 100 بدل 50 الأصلية. الحل إننا
+      -- نسجّل الفرق اللي اتطبّق فعلاً على الصف، ونعكسه هو بالظبط بعد كده.
+      if v_reverse is not null then
+        -- عملية عكسية: استخدم الفروق المسجّلة من التغيير السابق بإشارة معكوسة
+        v_d_spent    := -coalesce((v_reverse ->> 'spent')::numeric, 0);
+        v_d_lifetime := -coalesce((v_reverse ->> 'lifetime')::numeric, 0);
+        v_d_orders   := -coalesce((v_reverse ->> 'ordersCount')::integer, 0);
+        v_d_rewards  := -coalesce((v_reverse ->> 'rewardsUsed')::integer, 0);
+        v_d_discount := -coalesce((v_reverse ->> 'discountTotal')::numeric, 0);
+      else
+        v_delta := v_subtotal - coalesce((v_loyalty ->> 'threshold')::numeric, 0);
+        if p_status = 'cancelled' then v_delta := -v_delta; end if;
+        v_d_spent    := v_delta;
+        v_d_lifetime := case when p_status = 'cancelled' then -v_subtotal else v_subtotal end;
+        v_d_orders   := case when p_status = 'cancelled' then -1 else 1 end;
+        v_d_rewards  := case when v_loyalty is null then 0
+                             when p_status = 'cancelled' then -1 else 1 end;
+        v_d_discount := case when p_status = 'cancelled' then -1 else 1 end
+                        * coalesce((v_loyalty ->> 'discount')::numeric, 0);
+      end if;
 
       update public.customers set
-        spent          = greatest(0, spent + v_delta),
-        lifetime       = greatest(0, lifetime + case when p_status = 'cancelled' then -v_subtotal else v_subtotal end),
-        orders_count   = greatest(0, orders_count + case when p_status = 'cancelled' then -1 else 1 end),
-        rewards_used   = greatest(0, rewards_used + case
-                           when v_loyalty is null then 0
-                           when p_status = 'cancelled' then -1 else 1 end),
-        discount_total = greatest(0, discount_total + case when p_status = 'cancelled' then -1 else 1 end
-                           * coalesce((v_loyalty ->> 'discount')::numeric, 0)),
+        spent          = greatest(0, spent + v_d_spent),
+        lifetime       = greatest(0, lifetime + v_d_lifetime),
+        orders_count   = greatest(0, orders_count + v_d_orders),
+        rewards_used   = greatest(0, rewards_used + v_d_rewards),
+        discount_total = greatest(0, discount_total + v_d_discount),
         updated_at     = now()
-      where phone = v_phone;
+      where phone = v_phone
+      returning
+        spent - v_spent_before,
+        lifetime - v_lifetime_before,
+        orders_count - v_orders_before,
+        rewards_used - v_rewards_before,
+        discount_total - v_discount_before
+      into v_d_spent, v_d_lifetime, v_d_orders, v_d_rewards, v_d_discount;
     end if;
   end if;
 
@@ -607,6 +872,17 @@ begin
     'status', p_status,
     'statusUpdatedAt', to_char(now() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
   );
+
+  -- سجّل الفروق اللي اتطبّقت فعلاً (بعد الحد الأدنى صفر) عشان العكس يبقى مضبوط
+  if v_was <> p_status and v_d_spent is not null then
+    v_order := v_order || jsonb_build_object('loyaltyAdjustment', jsonb_build_object(
+      'spent', v_d_spent,
+      'lifetime', v_d_lifetime,
+      'ordersCount', v_d_orders,
+      'rewardsUsed', v_d_rewards,
+      'discountTotal', v_d_discount
+    ));
+  end if;
 
   update public.orders set data = v_order where id = btrim(coalesce(p_order_id, ''));
   return jsonb_build_object('order', v_order);
@@ -617,6 +893,60 @@ revoke all on function public.update_order_status(text, text) from public, anon;
 grant execute on function public.update_order_status(text, text) to authenticated;
 
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- ترحيل البيانات القديمة
+--
+-- القسم ده بيلمّ التلات خطوات اللي كانت في ملفات migration منفصلة. كلهم
+-- بيشتغلوا مرة واحدة فعلياً وبيبقوا no-op بعد كده، وعلى داتابيز جديدة
+-- فاضية مش بيعملوا أي حاجة أصلاً (مفيش صفوف يشتغلوا عليها).
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- ── (١) أرصدة كاشك للعملاء من الطلبات الموجودة ─────────────────────────────
+-- عشان العملاء القدام ميبدأوش من الصفر. الطلبات الملغية مش بتتحسب.
+-- `on conflict do nothing` = لو العميل موجود سيبه زي ما هو، فإعادة التنفيذ
+-- ما بتضاعفش أي رصيد.
+insert into public.customers (phone, name, spent, lifetime, orders_count, created_at, updated_at)
+select
+  public.normalize_phone(data #>> '{customer,phone}') as phone,
+  coalesce((array_agg(data #>> '{customer,name}' order by created_at desc))[1], '') as name,
+  sum(greatest(0, coalesce((data ->> 'subtotal')::numeric, (data ->> 'total')::numeric, 0))) as spent,
+  sum(greatest(0, coalesce((data ->> 'subtotal')::numeric, (data ->> 'total')::numeric, 0))) as lifetime,
+  count(*)::integer as orders_count,
+  min(created_at), max(created_at)
+from public.orders
+where length(public.normalize_phone(data #>> '{customer,phone}')) >= 8
+  and coalesce(data ->> 'status', 'new') <> 'cancelled'
+group by 1
+on conflict (phone) do nothing;
+
+-- ملاحظة: الأرصدة المرحّلة ممكن تكون أكبر من العتبة، يعني أول طلب لعميل قديم
+-- كبير هياخد الخصم على طول. ده مقصود — العميل فعلاً اشترى القيمة دي.
+-- لو مش عايز ده، نفّذ بعد الملف: update public.customers set spent = 0;
+
+-- ── (٢) عدّادات المبيعات من JSON الكتالوج لجدول item_sales ─────────────────
+-- الأرقام القديمة لسه مخزّنة جوه `catalog_data.data`؛ بننقلها للجدول الجديد.
+-- `greatest()` مش جمع — فإعادة التنفيذ ما بتضاعفش الأرقام.
+insert into public.item_sales (item_id, sales_count)
+select elem ->> 'id',
+       greatest(0, coalesce((elem ->> 'salesCount')::bigint, 0))
+  from public.catalog_data,
+       lateral jsonb_array_elements(data -> 'items') as elem
+ where slug = 'main'
+   and nullif(btrim(coalesce(elem ->> 'id', '')), '') is not null
+on conflict (item_id) do update
+  set sales_count = greatest(public.item_sales.sales_count, excluded.sales_count);
+
+-- ── (٣) تبسيط حالات الطلب ──────────────────────────────────────────────────
+-- الحالات القديمة «مؤكد» و«تم التسليم» بقت حالة واحدة «جديد» (يعني طلب شغال
+-- مش ملغي). الطلبات الملغية ما بتتغيرش. بعد أول تنفيذ مفيش صفوف بتطابق الشرط.
+update public.orders
+set data = data || jsonb_build_object('status', 'new')
+where data ->> 'status' in ('confirmed', 'delivered');
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Realtime
+-- ═══════════════════════════════════════════════════════════════════════════
 do $$
 begin
   if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then

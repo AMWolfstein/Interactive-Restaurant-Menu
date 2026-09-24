@@ -32,10 +32,7 @@ import { pick } from "@/lib/format";
 import { useHashValue } from "@/lib/use-hash";
 import { cx } from "@/lib/cx";
 import { flashTitle, playOrderChime, primeAlertAudio, stopTitleFlash } from "@/lib/alerts";
-import { subscribeRealtime } from "@/lib/realtime";
-import { ORDERS_TABLE } from "@/lib/supabase";
-import { authenticatedFetch } from "@/lib/supabase-auth-core";
-import type { AdminOverview } from "@/lib/types";
+import { subscribeOverviewRefresh } from "@/lib/admin-overview-store";
 import { Button, Field, TextInput } from "@/components/ui";
 import { DashboardPanel } from "./panel-dashboard";
 import { BrandPanel } from "./panel-brand";
@@ -284,41 +281,23 @@ function OrderAlerts({ onNewOrder }: { onNewOrder: () => void }) {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = subscribeRealtime(
-      "realtime:admin-order-alerts",
-      [{ table: ORDERS_TABLE, event: "INSERT" }],
-      () => announce(),
-    );
-
     // المتصفح بيمنع الصوت قبل أول تفاعل — بنجهّزه من أول نقرة/كبسة
     const prime = () => primeAlertAudio();
     window.addEventListener("pointerdown", prime, { once: true });
     window.addEventListener("keydown", prime, { once: true });
 
-    let cancelled = false;
-    const poll = async () => {
-      try {
-        const response = await authenticatedFetch("/api/admin/overview", { cache: "no-store" });
-        if (!response.ok) return;
-        const result = (await response.json()) as AdminOverview;
-        const latest = result.orders?.[0]?.id ?? null;
-        if (!latest) return;
-        // أول تحميل بيثبّت آخر طلب من غير تنبيه
-        if (lastSeenId.current && latest !== lastSeenId.current) announce();
-        lastSeenId.current = latest;
-      } catch {
-        // تجاهل — الفحص الجاي هيجرب تاني
-      }
-    };
-    const timer = window.setInterval(() => {
-      if (!cancelled) void poll();
-    }, 60_000);
-    void poll();
+    // بنسمع من الستور المشترك بدل ما يكون لينا اشتراك Realtime ومؤقّت
+    // منفصلين. الستور بيتكفّل بالتحديث اللحظي وبالفحص الدوري لكل اللوحة.
+    const unsubscribe = subscribeOverviewRefresh((orders) => {
+      const latest = orders[0]?.id ?? null;
+      if (!latest) return;
+      // أول تحميل بيثبّت آخر طلب من غير تنبيه
+      if (lastSeenId.current && latest !== lastSeenId.current) announce();
+      lastSeenId.current = latest;
+    });
 
     return () => {
-      cancelled = true;
       unsubscribe();
-      window.clearInterval(timer);
       window.removeEventListener("pointerdown", prime);
       window.removeEventListener("keydown", prime);
       stopTitleFlash();

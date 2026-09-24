@@ -20,14 +20,14 @@ export const SUPABASE_ANON_KEY = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "
 export const CATALOG_TABLE = "catalog_data";
 /** الصف المنشور اللي بيقراه العملاء */
 export const PUBLISHED_SLUG = "main";
+/** عدّادات مبيعات المنتجات — جدول مستقل عشان الطلبات ما تتقافلش على الكتالوج */
+export const ITEM_SALES_TABLE = "item_sales";
 /** جدول الطلبات */
 export const ORDERS_TABLE = "orders";
 /** دالة تسجيل الطلب في قاعدة البيانات */
 export const PLACE_ORDER_FUNCTION = "place_order";
 /** دالة تحديث حالة الطلب (أدمن فقط) */
 export const UPDATE_ORDER_STATUS_FUNCTION = "update_order_status";
-/** جدول عملاء نظام «كاشك» */
-export const CUSTOMERS_TABLE = "customers";
 /** رصيد كاشك لعميل — دالة آمنة بترجّع الرصيد بس من غير بيانات شخصية */
 export const CUSTOMER_LOYALTY_FUNCTION = "customer_loyalty";
 /** بحث العملاء على السيرفر (أدمن فقط) */

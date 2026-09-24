@@ -42,7 +42,19 @@ function set(patch: Partial<MenuState>) {
   state = { ...state, ...patch };
   emit();
 }
-const sizeOf = (data: MenuData) => Math.round(new Blob([JSON.stringify(data)]).size / 1024);
+/**
+ * حجم الكتالوج بالكيلوبايت — عدّاد بيتعرض في تبويب «البيانات» بس.
+ *
+ * `new Blob([...])` كانت بتعمل نسخة تانية كاملة من الـ JSON في الذاكرة عشان
+ * رقم تقريبي. TextEncoder بيعدّ البايتات من غير ما يبني Blob، وبيدّي نفس
+ * النتيجة بالظبط لأن الاتنين UTF-8.
+ */
+const encoder = typeof TextEncoder === "undefined" ? null : new TextEncoder();
+const sizeOf = (data: MenuData) => {
+  const json = JSON.stringify(data);
+  const bytes = encoder ? encoder.encode(json).length : json.length;
+  return Math.round(bytes / 1024);
+};
 const clone = (value: MenuData): MenuData => structuredClone(value);
 const newId = () => crypto.randomUUID().slice(0, 8);
 
@@ -107,8 +119,17 @@ function ensureInit() {
     },
   );
 
-  // شبكة أمان لو الـ Realtime مش متاح (جداول مش مضافة للـ publication)
-  window.setInterval(refreshFromRemote, 60_000);
+  // شبكة أمان لو الـ Realtime مش متاح (جداول مش مضافة للـ publication).
+  // بيقف لما التاب يكون مخفي: من غير كده أي تاب سايبه المستخدم مفتوح بيفضل
+  // بيجيب الكتالوج كامل كل دقيقة للأبد.
+  const tick = () => {
+    if (!document.hidden) refreshFromRemote();
+  };
+  window.setInterval(tick, 60_000);
+  // أول ما التاب يرجع يبان، حدّث حالاً بدل ما تستنى الدورة الجاية
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refreshFromRemote();
+  });
 }
 
 export function subscribeMenu(listener: () => void) {

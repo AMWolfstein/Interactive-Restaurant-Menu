@@ -256,6 +256,7 @@ function PosterHeader({
         <ProductImage
           src={headerImage}
           alt=""
+          capture
           className={`w-full bg-white/50 object-fill! ${imageHeightClass ?? (compact ? "h-36" : "h-56 sm:h-72")} ${compact ? "rounded-b-2xl" : "rounded-b-[24px]"}`}
         />
       ) : null}

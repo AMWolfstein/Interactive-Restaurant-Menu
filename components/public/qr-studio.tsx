@@ -54,7 +54,7 @@ export function QrStudio() {
           <QrCode className="h-4 w-4" /> كود QR للطباعة
         </div>
         <div className="mx-auto flex w-fit max-w-full items-center justify-center gap-3">
-          {brand.logo ? <ProductImage src={brand.logo} alt="" className="h-12 w-12 rounded-xl border border-line" /> : null}
+          {brand.logo ? <ProductImage src={brand.logo} alt="" capture className="h-12 w-12 rounded-xl border border-line" /> : null}
           <div className="text-start">
             <h1 className="text-xl font-black">{brand.storeName}</h1>
             {brand.tagline ? <p className="mt-0.5 text-xs text-muted">{brand.tagline}</p> : null}

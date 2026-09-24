@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
+import { usePoll } from "@/lib/use-poll";
 import { useStaffSession } from "@/lib/use-staff-session";
 import { authenticatedFetch } from "@/lib/supabase-auth-core";
 import { formatPrice, ORDER_STATUS_LABEL, ORDER_TYPE_LABEL, orderStatusOf } from "@/lib/format";
@@ -245,19 +246,20 @@ function InvoicesWorkspace({
     );
     const prime = () => primeAlertAudio();
     window.addEventListener("pointerdown", prime, { once: true });
-    const timer = window.setInterval(() => void load(), 120_000);
     // نفس أسلوب لوحة الأدمن: أول تحميل بعد الرندر عشان ما نعملش setState
     // متزامن جوه الـeffect.
     const kick = window.setTimeout(() => void load(), 0);
 
     return () => {
       unsubscribe();
-      window.clearInterval(timer);
       window.clearTimeout(kick);
       window.removeEventListener("pointerdown", prime);
       stopTitleFlash();
     };
   }, [load]);
+
+  // شبكة أمان لو الـ Realtime انقطع — بتقف لما التاب يكون مخفي
+  usePoll(() => void load(), 120_000);
 
   const changeStatus = async (order: SavedOrder, status: OrderStatus) => {
     if (updatingId) return;

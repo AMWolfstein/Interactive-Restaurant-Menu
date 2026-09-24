@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request);
-  const rl = rateLimit(`loyalty:${ip}`, LIMITS.loyalty);
+  const rl = await rateLimit(`loyalty:${ip}`, LIMITS.loyalty);
   if (!rl.success) {
     return NextResponse.json(
       { error: "طلبات كثيرة - حاول بعد دقيقة" },

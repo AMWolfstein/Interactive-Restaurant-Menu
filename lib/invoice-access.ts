@@ -37,7 +37,7 @@ export async function guardInvoiceRequest(
   }
 
   const ip = getClientIp(request);
-  const rl = rateLimit(`${options.rateKey}:${ip}:${check.user.id}`, options.limit ?? LIMITS.menuSave);
+  const rl = await rateLimit(`${options.rateKey}:${ip}:${check.user.id}`, options.limit ?? LIMITS.menuSave);
   if (!rl.success) {
     return {
       ok: false,

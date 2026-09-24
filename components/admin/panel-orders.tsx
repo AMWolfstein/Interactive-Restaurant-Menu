@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import {
   CircleX,
   ClipboardList,
@@ -18,11 +18,16 @@ import {
 } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
 import { orderStatusOf, ORDER_STATUS_LABEL } from "@/lib/format";
-import { subscribeRealtime } from "@/lib/realtime";
-import { ORDERS_TABLE } from "@/lib/supabase";
 import { authenticatedFetch } from "@/lib/supabase-auth-core";
+import {
+  applyOrderUpdate,
+  getAdminOverviewServerSnapshot,
+  getAdminOverviewSnapshot,
+  refreshAdminOverview,
+  subscribeAdminOverview,
+} from "@/lib/admin-overview-store";
 import { cx } from "@/lib/cx";
-import type { AdminOverview, OrderStatus, OrderType, SavedOrder } from "@/lib/types";
+import type { OrderStatus, OrderType, SavedOrder } from "@/lib/types";
 import { Badge, Button, Panel, Segmented, TextInput, Toast, useToast } from "@/components/ui";
 
 /**
@@ -60,51 +65,17 @@ export function OrdersPanel() {
   const { commerce } = data;
   const { toast, show } = useToast();
 
-  const [orders, setOrders] = useState<SavedOrder[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  // نفس الستور المشترك اللي بتستخدمه اللوحة والتنبيهات
+  const { orders, error, loading } = useSyncExternalStore(
+    subscribeAdminOverview,
+    getAdminOverviewSnapshot,
+    getAdminOverviewServerSnapshot,
+  );
   const [statusFilter, setStatusFilter] = useState<"all" | OrderStatus>("all");
   const [typeFilter, setTypeFilter] = useState<"all" | OrderType>("all");
   const [period, setPeriod] = useState<PeriodFilter>("all");
   const [query, setQuery] = useState("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-
-  const loadOrders = useCallback(async () => {
-    try {
-      const response = await authenticatedFetch("/api/admin/overview", { cache: "no-store" });
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-        setError(payload?.error ?? "تعذّر قراءة الطلبات");
-        return;
-      }
-      const result = (await response.json()) as AdminOverview;
-      setOrders(result.orders ?? []);
-      setError(null);
-    } catch {
-      setError("تعذّر الاتصال بالباك إند");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    // تحديث لحظي: طلب جديد أو تغيير حالة من جهاز تاني بيظهر فوراً
-    const unsubscribe = subscribeRealtime(
-      "realtime:admin-orders-panel",
-      [
-        { table: ORDERS_TABLE, event: "INSERT" },
-        { table: ORDERS_TABLE, event: "UPDATE" },
-      ],
-      () => void loadOrders(),
-    );
-    const timer = window.setInterval(() => void loadOrders(), 30_000);
-    const kick = window.setTimeout(() => void loadOrders(), 0);
-    return () => {
-      unsubscribe();
-      window.clearInterval(timer);
-      window.clearTimeout(kick);
-    };
-  }, [loadOrders]);
 
   const changeStatus = async (order: SavedOrder, status: OrderStatus) => {
     if (updatingId) return;
@@ -120,11 +91,11 @@ export function OrdersPanel() {
         throw new Error(payload?.error ?? "تعذّر تحديث الحالة");
       }
       const result = (await response.json()) as { order: SavedOrder };
-      setOrders((prev) => prev.map((candidate) => (candidate.id === order.id ? result.order : candidate)));
+      applyOrderUpdate(result.order);
       show(`تم تحديث ${order.id} → ${ORDER_STATUS_LABEL[status].ar}`);
     } catch (err) {
       show(err instanceof Error ? err.message : "تعذّر تحديث الحالة", "error");
-      void loadOrders();
+      void refreshAdminOverview(true);
     } finally {
       setUpdatingId(null);
     }

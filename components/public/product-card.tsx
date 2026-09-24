@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
+import Image from "next/image";
 import { Flame, Heart, Leaf, Minus, Plus } from "lucide-react";
 import { pick, formatPrice } from "@/lib/format";
 import type { CommerceSettings, MenuItem, SiteLanguage } from "@/lib/types";
@@ -13,14 +14,34 @@ import {
   toggleFavorite,
 } from "@/lib/favorites-store";
 
+/**
+ * صورة منتج/شعار مع بديل لطيف لو الصورة مكسورة أو مش موجودة.
+ *
+ * بتستخدم `next/image` عشان التحويل التلقائي لـ WebP/AVIF والأحجام المتعددة
+ * حسب الشاشة — ده بيقلّل حجم التحميل بشكل كبير على الموبايل، وهو الجهاز
+ * الأساسي لزباين المحل.
+ *
+ * `capture` بترجّع لـ `<img>` عادي: أدوات التصوير (html-to-image في البوستر
+ * وكود QR) بتقرا الـ DOM كما هو، وتحسين Next بيضيف srcset وتحميل كسول
+ * ممكن يطلّع الصورة فاضية في الصورة المصدّرة.
+ */
 export function ProductImage({
   src,
   alt,
   className,
+  priority,
+  sizes = "(max-width: 640px) 50vw, 300px",
+  capture,
 }: {
   src?: string;
   alt: string;
   className?: string;
+  /** للصور اللي بتبان فوق الطية — بتتحمّل فوراً من غير تأجيل */
+  priority?: boolean;
+  /** تلميح للمتصفح عن المقاس المعروض عشان يختار أنسب نسخة */
+  sizes?: string;
+  /** استخدم <img> خام — للبوستر وكود QR اللي بيتصوّروا من الـ DOM */
+  capture?: boolean;
 }) {
   const [broken, setBroken] = useState(false);
   if (!src || broken) {
@@ -36,15 +57,39 @@ export function ProductImage({
       </div>
     );
   }
+
+  // الصور المرفوعة من لوحة التحكم بتتخزّن أحياناً كـ data URL جوه الكتالوج
+  // نفسه. مُحسِّن Next ما بيتعاملش مع الشكل ده (ولا مع blob:)، فبنعرضهم
+  // كما هم — هما أصلاً متضغوطين في المتصفح قبل الحفظ.
+  const isInline = src.startsWith("data:") || src.startsWith("blob:");
+
+  if (capture || isInline) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src}
+        alt={alt}
+        loading={priority ? "eager" : "lazy"}
+        onError={() => setBroken(true)}
+        className={cx("shrink-0 object-cover", className)}
+      />
+    );
+  }
+
+  // الأبعاد بتيجي من الـ className (h-11 w-11 / h-24 w-full …)، فبنستخدم
+  // `fill` جوه غلاف بنفس الكلاسات بدل ما نخمّن مقاسات ثابتة.
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={src}
-      alt={alt}
-      loading="lazy"
-      onError={() => setBroken(true)}
-      className={cx("shrink-0 object-cover", className)}
-    />
+    <div className={cx("relative shrink-0 overflow-hidden", className)}>
+      <Image
+        src={src}
+        alt={alt}
+        fill
+        sizes={sizes}
+        priority={priority}
+        onError={() => setBroken(true)}
+        className="object-cover"
+      />
+    </div>
   );
 }
 

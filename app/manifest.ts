@@ -3,10 +3,11 @@ import { getMenu } from "@/lib/server-database";
 import { DEFAULT_DATA } from "@/lib/defaults";
 import { safeAccent } from "@/lib/color";
 
-// The manifest depends on settings saved by the owner, so it must not be
-// frozen at build time or served with an old logo after the brand is updated.
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+// الملف بيعتمد على إعدادات صاحب المحل، فما ينفعش يتجمّد وقت البناء.
+// بس كمان ما ينفعش يقرا من قاعدة البيانات مع كل طلب: المتصفحات بتطلبه
+// كتير، وكل طلب كان بيبقى استعلام كامل على الكتالوج. دقيقتين كاش بتحل
+// الاتنين — أي تغيير في اللوجو بيظهر خلالهم.
+export const revalidate = 120;
 
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
   let logo = "";

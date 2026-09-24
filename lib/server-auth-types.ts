@@ -4,4 +4,8 @@
  * lib/server-auth.ts معلّم بـ "server-only" فما ينفعش يتستورد من كمبوننت
  * في المتصفح — فالنوع بس موجود هنا عشان الاتنين يستخدموا نفس التعريف.
  */
-export type AppRole = "admin" | "invoice_staff";
+/**
+ * `unknown` = الحساب عليه قيمة دور مش معروفة للتطبيق. بيتعامل كأنه من غير
+ * صلاحيات خالص — مش بديل عن admin.
+ */
+export type AppRole = "admin" | "invoice_staff" | "unknown";

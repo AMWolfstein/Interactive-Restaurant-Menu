@@ -1,0 +1,46 @@
+name: CI
+
+# الفحوصات دي كانت موجودة كـ npm scripts بس محدش بينفّذها تلقائياً،
+# فكان ممكن يتعمل merge لكود مكسور. دلوقتي بتشتغل على كل push و PR.
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+# إلغاء التشغيل القديم لو اتعمل push جديد على نفس الفرع
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: فحص الكود
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: تثبيت الحزم
+        run: npm ci
+
+      - name: فحص الأنواع
+        run: npm run typecheck
+
+      - name: فحص الأسلوب
+        run: npm run lint
+
+      - name: الاختبارات
+        run: npm test
+
+      - name: بناء الإنتاج
+        run: npm run build
+        env:
+          # البناء لازم ينجح من غير أسرار — الصفحات اللي محتاجة قاعدة بيانات
+          # بتشتغل وقت الطلب مش وقت البناء.
+          NEXT_TELEMETRY_DISABLED: "1"

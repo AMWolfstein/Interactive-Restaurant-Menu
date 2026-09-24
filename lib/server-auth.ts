@@ -95,9 +95,20 @@ async function verifyToken(token: string): Promise<AdminUser | null> {
   return user;
 }
 
-/** أي قيمة غير معروفة = admin (توافق مع الحسابات القديمة قبل نظام الأدوار) */
+/**
+ * تحويل `app_metadata.role` لدور معروف.
+ *
+ *  - مفيش دور متسجّل خالص (null/undefined/"") → admin.
+ *    ده توافق مع الحسابات القديمة اللي اتعملت قبل نظام الأدوار.
+ *  - قيمة متسجّلة ومعروفة → الدور بتاعها.
+ *  - قيمة متسجّلة بس **مش** معروفة ("invoicestaff"، "Invoice_Staff"، "kitchen") →
+ *    `unknown`، ومحدش بياخد صلاحيات بيها. قبل كده كانت بترجع admin، يعني
+ *    غلطة إملائية واحدة في لوحة Supabase كانت بتدّي موظف الفواتير أدمن كامل.
+ */
 function roleOf(value: unknown): AppRole {
-  return value === "invoice_staff" ? "invoice_staff" : "admin";
+  if (value === null || value === undefined || value === "") return "admin";
+  if (value === "admin" || value === "invoice_staff") return value;
+  return "unknown";
 }
 
 /** تحقق من التوكن من غير أي شرط على الدور */
@@ -117,10 +128,22 @@ export async function checkAdmin(token: string | null): Promise<AdminCheck> {
   return check;
 }
 
+/** الأدوار المسموح لها بفتح شاشة الفواتير */
+const INVOICE_ROLES: readonly AppRole[] = ["admin", "invoice_staff"];
+
 /**
  * صلاحية شاشة الفواتير: الأدمن أو موظف الفواتير.
  * بتُستخدم في /api/invoices/* بس — مش بتفتح أي وظيفة إدارية.
+ *
+ * الفحص على الدور صريح هنا عن قصد: `roleOf` حالياً بيرجّع `admin` لأي قيمة
+ * غير معروفة، فلو اتضاف دور جديد بعدين (مطبخ، كاشير…) ما يدخلش الشاشة دي
+ * تلقائياً من غير ما حد ياخد باله.
  */
 export async function checkInvoiceStaff(token: string | null): Promise<AdminCheck> {
-  return checkSession(token);
+  const check = await checkSession(token);
+  if (!check.ok) return check;
+  if (!INVOICE_ROLES.includes(check.user.role)) {
+    return { ok: false, status: 403, error: FORBIDDEN };
+  }
+  return check;
 }

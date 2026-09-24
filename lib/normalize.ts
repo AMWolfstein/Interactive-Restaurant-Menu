@@ -152,7 +152,7 @@ function migrateLegacyBackup(raw: unknown): unknown {
   const contact = {
     ...DEFAULT_DATA.contact,
     phone: String(restaurant.phone ?? ""),
-    whatsapp: String(restaurant.phone ?? "").replace(/\\D/g, ""),
+    whatsapp: String(restaurant.phone ?? "").replace(/\D/g, ""),
     instagram: String(restaurant.instagramUrl ?? ""),
     facebook: String(restaurant.facebookUrl ?? ""),
     tiktok: String(restaurant.tiktokUrl ?? ""),
@@ -164,7 +164,11 @@ function migrateLegacyBackup(raw: unknown): unknown {
 
 export function normalizeData(raw: unknown): MenuData {
   const migrated = migrateLegacyBackup(raw);
-  const merged = mergeWithDefaults<MenuData>(DEFAULT_DATA, migrated);
+  // أي مدخل مش كائن (null، مصفوفة، رقم، نص) بيتعامل كأنه مفيش بيانات محفوظة.
+  // من غير الحارس ده ملف استيراد تالف كان بيرمي TypeError جوه الأدمن بدل
+  // ما يرجّع رسالة خطأ مفهومة.
+  const safe = isPlainObject(migrated) ? migrated : {};
+  const merged = mergeWithDefaults<MenuData>(DEFAULT_DATA, safe);
   // الموقع عربي فقط حتى لو البيانات اتخزنت بالإنجليزية.
   merged.brand.language = "ar";
   merged.commerce.productLayout = merged.commerce.productLayout === "grid" ? "grid" : "list";
