@@ -217,7 +217,7 @@ update public.catalog_data
 
 **المقترح:** `.github/workflows/ci.yml` بسيط يشغّل `npm ci && npm run lint && npm run typecheck && npm run build` على كل push و PR.
 
-### ❌ مفيش migration لآخر التغييرات في `schema.sql`
+### ✅ [اتحل] مفيش migration لآخر التغييرات في `schema.sql`
 مجلد `supabase/migrations/` فيه ٣ ملفات:
 - `2026-09-invoices.sql`
 - `2026-09-loyalty-kashak.sql`
@@ -225,7 +225,7 @@ update public.catalog_data
 
 لكن `schema.sql` فيه نسخة من `update_order_status` **أحدث** من اللي في `2026-09-simplify-order-status.sql` (النسخة اللي في schema بتعكس أثر كاشك عند الإلغاء، واللي في الـ migration لأ). أي حد عنده قاعدة بيانات شغالة ونفّذ الـ migrations بالترتيب **هيفضل عنده النسخة القديمة** اللي مش بتصحّح رصيد العميل عند الإلغاء.
 
-**الحل:** إضافة migration جديد (`2026-09-loyalty-reversal.sql`) فيه نسخة `update_order_status` المحدّثة، أو توثيق صريح إن لازم إعادة تنفيذ `schema.sql` كامل.
+**الحل المنفّذ:** مجلد `migrations/` اتشال بالكامل ودمجناه في `schema.sql` واحد idempotent — فمصدر الـdrift ده مبقاش موجود أصلاً. التفاصيل في قسم ٧ من [تقرير التنفيذ](fixes-2026-09.md).
 
 ### ⚠️ توثيق ناقص في README
 جدول الـ API في `README.md` (سطور 50-60) فيه ٩ endpoints بس. الموجود فعلياً ١٤. الناقصين:
@@ -391,7 +391,7 @@ script-src 'self' 'unsafe-inline'
 | 8 | نقل `salesCount` بره `catalog_data` | 🚀 أداء | كبير |
 | 9 | توحيد polling الأدمن في ستور واحد | 🚀 أداء | متوسط |
 | 10 | تحديث جدول الـ API في README (٦ endpoints ناقصين) | ⚠️ توثيق | صغير |
-| 11 | migration لـ `update_order_status` المحدّثة | ❌ ناقص | صغير |
+| 11 | migration لـ `update_order_status` المحدّثة | ✅ اتحل — كل ملفات SQL اتدمجت في `schema.sql` واحد، فمصدر الـdrift نفسه اتشال | صغير |
 | 12 | `next/image` لصور المنتجات + `remotePatterns` | 🚀 أداء | متوسط |
 | 13 | functional index على `normalize_phone` في `orders` | 🚀 أداء | دقيقة |
 | 14 | حذف `CUSTOMERS_TABLE` غير المستخدم | 🔵 P3 | دقيقة |

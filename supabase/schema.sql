@@ -1,5 +1,18 @@
--- Interactive Store Catalog — كتالوج منتجات وطلبات واتساب فقط
--- نفّذ الملف في Supabase Dashboard → SQL Editor.
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Interactive Store Catalog — الملف الكامل لقاعدة البيانات
+--
+-- ده الملف الوحيد. نفّذه في Supabase Dashboard → SQL Editor.
+--
+-- بيشتغل في الحالتين:
+--   • داتابيز جديدة فاضية  → بينشئ كل حاجة من الصفر
+--   • داتابيز شغالة قديمة  → بيحدّثها من غير ما يمس بياناتك
+--
+-- **idempotent**: نفّذه مية مرة، النتيجة واحدة. مفيش `drop table` ولا أي
+-- حاجة بتمسح بيانات في الملف كله.
+--
+-- الترتيب: جداول ← فهارس ← RLS وسياسات ← صلاحيات ← دوال ← ترحيل البيانات
+-- القديمة (آخر قسم) ← Realtime.
+-- ═══════════════════════════════════════════════════════════════════════════
 
 create table if not exists public.catalog_data (
   slug text primary key,
@@ -880,6 +893,60 @@ revoke all on function public.update_order_status(text, text) from public, anon;
 grant execute on function public.update_order_status(text, text) to authenticated;
 
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- ترحيل البيانات القديمة
+--
+-- القسم ده بيلمّ التلات خطوات اللي كانت في ملفات migration منفصلة. كلهم
+-- بيشتغلوا مرة واحدة فعلياً وبيبقوا no-op بعد كده، وعلى داتابيز جديدة
+-- فاضية مش بيعملوا أي حاجة أصلاً (مفيش صفوف يشتغلوا عليها).
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- ── (١) أرصدة كاشك للعملاء من الطلبات الموجودة ─────────────────────────────
+-- عشان العملاء القدام ميبدأوش من الصفر. الطلبات الملغية مش بتتحسب.
+-- `on conflict do nothing` = لو العميل موجود سيبه زي ما هو، فإعادة التنفيذ
+-- ما بتضاعفش أي رصيد.
+insert into public.customers (phone, name, spent, lifetime, orders_count, created_at, updated_at)
+select
+  public.normalize_phone(data #>> '{customer,phone}') as phone,
+  coalesce((array_agg(data #>> '{customer,name}' order by created_at desc))[1], '') as name,
+  sum(greatest(0, coalesce((data ->> 'subtotal')::numeric, (data ->> 'total')::numeric, 0))) as spent,
+  sum(greatest(0, coalesce((data ->> 'subtotal')::numeric, (data ->> 'total')::numeric, 0))) as lifetime,
+  count(*)::integer as orders_count,
+  min(created_at), max(created_at)
+from public.orders
+where length(public.normalize_phone(data #>> '{customer,phone}')) >= 8
+  and coalesce(data ->> 'status', 'new') <> 'cancelled'
+group by 1
+on conflict (phone) do nothing;
+
+-- ملاحظة: الأرصدة المرحّلة ممكن تكون أكبر من العتبة، يعني أول طلب لعميل قديم
+-- كبير هياخد الخصم على طول. ده مقصود — العميل فعلاً اشترى القيمة دي.
+-- لو مش عايز ده، نفّذ بعد الملف: update public.customers set spent = 0;
+
+-- ── (٢) عدّادات المبيعات من JSON الكتالوج لجدول item_sales ─────────────────
+-- الأرقام القديمة لسه مخزّنة جوه `catalog_data.data`؛ بننقلها للجدول الجديد.
+-- `greatest()` مش جمع — فإعادة التنفيذ ما بتضاعفش الأرقام.
+insert into public.item_sales (item_id, sales_count)
+select elem ->> 'id',
+       greatest(0, coalesce((elem ->> 'salesCount')::bigint, 0))
+  from public.catalog_data,
+       lateral jsonb_array_elements(data -> 'items') as elem
+ where slug = 'main'
+   and nullif(btrim(coalesce(elem ->> 'id', '')), '') is not null
+on conflict (item_id) do update
+  set sales_count = greatest(public.item_sales.sales_count, excluded.sales_count);
+
+-- ── (٣) تبسيط حالات الطلب ──────────────────────────────────────────────────
+-- الحالات القديمة «مؤكد» و«تم التسليم» بقت حالة واحدة «جديد» (يعني طلب شغال
+-- مش ملغي). الطلبات الملغية ما بتتغيرش. بعد أول تنفيذ مفيش صفوف بتطابق الشرط.
+update public.orders
+set data = data || jsonb_build_object('status', 'new')
+where data ->> 'status' in ('confirmed', 'delivered');
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Realtime
+-- ═══════════════════════════════════════════════════════════════════════════
 do $$
 begin
   if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
