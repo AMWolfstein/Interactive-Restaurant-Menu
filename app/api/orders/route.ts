@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   // Rate limiting لحماية تسجيل الطلبات
   const ip = getClientIp(request);
-  const rl = rateLimit(`orders:${ip}`, LIMITS.orders);
+  const rl = await rateLimit(`orders:${ip}`, LIMITS.orders);
   if (!rl.success) {
     return NextResponse.json(
       { error: "طلبات كثيرة - حاول بعد دقيقة" },

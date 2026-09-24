@@ -20,6 +20,8 @@ export const SUPABASE_ANON_KEY = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "
 export const CATALOG_TABLE = "catalog_data";
 /** الصف المنشور اللي بيقراه العملاء */
 export const PUBLISHED_SLUG = "main";
+/** عدّادات مبيعات المنتجات — جدول مستقل عشان الطلبات ما تتقافلش على الكتالوج */
+export const ITEM_SALES_TABLE = "item_sales";
 /** جدول الطلبات */
 export const ORDERS_TABLE = "orders";
 /** دالة تسجيل الطلب في قاعدة البيانات */

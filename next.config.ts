@@ -33,29 +33,10 @@ const nextConfig: NextConfig = {
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
           { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
           ...(isDev ? [] : [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" }]),
-          // CSP خفيف — يسمح بالصور المحلية والـ data: والخطوط من Google
-          {
-            key: "Content-Security-Policy",
-            value: [
-              "default-src 'self'",
-              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
-              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "font-src 'self' https://fonts.gstatic.com data:",
-              "img-src 'self' data: https: blob:",
-              // تصدير المنيو PNG بيقرا الصور والخطوط بـ fetch قبل ما يحوّلها data:
-              // فلازم تكون مصادر الصور/الخطوط مسموحة هنا كمان مش في img-src/font-src بس.
-              [
-                "connect-src 'self' data: blob:",
-                "https://*.supabase.co",
-                "wss://*.supabase.co",
-                "https://api.cloudinary.com",
-                "https://res.cloudinary.com",
-                "https://fonts.googleapis.com",
-                "https://fonts.gstatic.com",
-              ].join(" "),
-              "frame-ancestors 'none'",
-            ].join("; "),
-          },
+          // ملحوظة: الـContent-Security-Policy مش هنا — بقت في middleware.ts
+          // لأنها محتاجة nonce جديد مع كل طلب، وده مستحيل من ملف إعدادات
+          // ستاتيك. لو اتحطت في المكانين المتصفح بيطبّق الاتنين مع بعض
+          // وأي حاجة ممنوعة في واحدة منهم بتتمنع.
         ],
       },
     ];

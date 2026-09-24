@@ -17,7 +17,7 @@ export async function PATCH(request: NextRequest) {
   if (!check.ok) return NextResponse.json({ error: check.error }, { status: check.status });
 
   const ip = getClientIp(request);
-  const rl = rateLimit(`orders-status:${ip}`, LIMITS.menuSave);
+  const rl = await rateLimit(`orders-status:${ip}`, LIMITS.menuSave);
   if (!rl.success) {
     return NextResponse.json(
       { error: "طلبات كثيرة - حاول بعد دقيقة" },

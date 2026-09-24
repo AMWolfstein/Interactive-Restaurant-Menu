@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { Storefront } from "@/components/public/storefront";
 import { DEFAULT_DATA } from "@/lib/defaults";
 import { pick } from "@/lib/format";
@@ -46,6 +47,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function HomePage() {
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   const menu = await menuForSeo();
   const siteUrl = absoluteSiteUrl("/");
   const name = pick(menu.brand.language, menu.brand.storeName, menu.brand.storeNameEn);
@@ -85,6 +87,7 @@ export default async function HomePage() {
   return (
     <>
       <script
+        nonce={nonce}
         type="application/ld+json"
         // JSON stringify with < escaped prevents a product name from closing the script tag.
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }}

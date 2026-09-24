@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   CATALOG_TABLE,
+  ITEM_SALES_TABLE,
   CUSTOMER_LOYALTY_FUNCTION,
   CUSTOMER_ORDERS_FUNCTION,
   ORDERS_TABLE,
@@ -133,12 +134,49 @@ interface MenuRow {
   updated_at: string;
 }
 
+interface ItemSalesRow {
+  item_id: string;
+  sales_count: number;
+}
+
+/**
+ * عدّادات المبيعات بقت في جدول `item_sales` مش جوه JSON الكتالوج.
+ *
+ * بترجع خريطة {itemId: العدد}. لو الجدول لسه مش موجود (الميجريشن متنفذتش)
+ * بترجع null بدل ما ترمي خطأ — ساعتها بنستخدم الأرقام القديمة اللي في
+ * الكتالوج نفسه، فالموقع بيشتغل عادي قبل وبعد الميجريشن.
+ */
+async function fetchItemSales(): Promise<Map<string, number> | null> {
+  const result = await rest<ItemSalesRow[]>(`${ITEM_SALES_TABLE}?select=item_id,sales_count`);
+  if (!result.ok) return null;
+  const counts = new Map<string, number>();
+  for (const row of result.data ?? []) {
+    if (row?.item_id) counts.set(row.item_id, Math.max(0, Number(row.sales_count) || 0));
+  }
+  return counts;
+}
+
 export async function fetchPublishedMenu(): Promise<RestResult<MenuData>> {
-  const result = await rest<MenuRow[]>(`${CATALOG_TABLE}?slug=eq.${PUBLISHED_SLUG}&select=slug,data,updated_at&limit=1`);
+  // النداءين مستقلين — بيتنفذوا مع بعض عشان ما نزوّدش زمن الاستجابة
+  const [result, sales] = await Promise.all([
+    rest<MenuRow[]>(`${CATALOG_TABLE}?slug=eq.${PUBLISHED_SLUG}&select=slug,data,updated_at&limit=1`),
+    fetchItemSales(),
+  ]);
   if (!result.ok) return { ok: false, status: result.status, data: null, message: result.message, code: result.code };
   const row = result.data?.[0];
   if (!row?.data) return { ok: false, status: 404, data: null, message: "الكتالوج غير محفوظ بعد", code: "EMPTY" };
-  return { ok: true, status: 200, data: normalizeData(row.data), message: "", code: "" };
+  return { ok: true, status: 200, data: normalizeData(withItemSales(row.data, sales)), message: "", code: "" };
+}
+
+/** بيدمج أرقام `item_sales` جوه المنيو عشان باقي التطبيق ما يحسّش بالتغيير */
+function withItemSales(menu: MenuData, sales: Map<string, number> | null): MenuData {
+  if (!sales || !Array.isArray(menu.items)) return menu;
+  return {
+    ...menu,
+    items: menu.items.map((item) =>
+      sales.has(item.id) ? { ...item, salesCount: sales.get(item.id) } : item,
+    ),
+  };
 }
 
 /** فحص سريع: هل جداول قاعدة البيانات جاهزة؟ */

@@ -19,7 +19,7 @@ function validSubscription(body: SubscriptionBody | null): body is { endpoint: s
 
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request);
-  const allowed = rateLimit(`push-subscribe:${ip}`, { limit: 8, windowMs: 60 * 60_000 });
+  const allowed = await rateLimit(`push-subscribe:${ip}`, { limit: 8, windowMs: 60 * 60_000 });
   if (!allowed.success) return NextResponse.json({ error: "محاولات كثيرة — حاول لاحقًا" }, { status: 429 });
 
   const body = await request.json().catch(() => null) as SubscriptionBody | null;
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   const ip = getClientIp(request);
-  const allowed = rateLimit(`push-unsubscribe:${ip}`, { limit: 12, windowMs: 60 * 60_000 });
+  const allowed = await rateLimit(`push-unsubscribe:${ip}`, { limit: 12, windowMs: 60 * 60_000 });
   if (!allowed.success) return NextResponse.json({ error: "محاولات كثيرة — حاول لاحقًا" }, { status: 429 });
 
   const body = await request.json().catch(() => null) as SubscriptionBody | null;

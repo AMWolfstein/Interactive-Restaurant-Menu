@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import {
   ArrowUpRight,
   Banknote,
@@ -16,25 +16,21 @@ import {
   Wallet,
 } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
-import { usePoll } from "@/lib/use-poll";
 import { orderStatusOf, ORDER_STATUS_LABEL } from "@/lib/format";
 import { effectiveStoreOpen } from "@/lib/schedule";
 import { Badge, Button, Panel } from "@/components/ui";
 import { cx } from "@/lib/cx";
-import { subscribeRealtime } from "@/lib/realtime";
-import { ORDERS_TABLE } from "@/lib/supabase";
-import { authenticatedFetch } from "@/lib/supabase-auth-core";
-import type { AdminOverview, SavedOrder } from "@/lib/types";
+import {
+  getAdminOverviewServerSnapshot,
+  getAdminOverviewSnapshot,
+  subscribeAdminOverview,
+} from "@/lib/admin-overview-store";
+import type { SavedOrder } from "@/lib/types";
 
 interface OverviewState {
   orders: SavedOrder[];
   storage: { driver: "supabase" | "file"; persistent: boolean };
 }
-
-const EMPTY_OVERVIEW: OverviewState = {
-  orders: [],
-  storage: { driver: "file", persistent: false },
-};
 
 const ORDER_TYPE_LABEL: Record<string, string> = {
   delivery: "دليفري",
@@ -49,45 +45,17 @@ export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: str
   const { data, isCustomized, storageKb } = useMenu();
   const { items, categories, brand, contact, commerce } = data;
   const supabaseAuth = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-  const [overview, setOverview] = useState<OverviewState>(EMPTY_OVERVIEW);
-  const [overviewError, setOverviewError] = useState<string | null>(null);
-
-  const loadOverview = useCallback(async () => {
-    try {
-      const response = await authenticatedFetch("/api/admin/overview", { cache: "no-store" });
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-        setOverviewError(payload?.error ?? "تعذّر قراءة بيانات اللوحة");
-        return;
-      }
-      const result = (await response.json()) as AdminOverview;
-      setOverview({
-        orders: result.orders ?? [],
-        storage: result.storage ?? EMPTY_OVERVIEW.storage,
-      });
-      setOverviewError(null);
-    } catch {
-      setOverviewError("تعذّر الاتصال بالباك إند");
-    }
-  }, []);
-
-  useEffect(() => {
-    // متابعة لحظية فورية عبر Supabase Realtime:
-    // أي طلب جديد يظهر في اللوحة في نفس اللحظة (WebSocket)
-    const unsubscribe = subscribeRealtime(
-      "realtime:admin-overview",
-      [{ table: ORDERS_TABLE, event: "INSERT" }],
-      () => void loadOverview(),
-    );
-    const kick = window.setTimeout(() => void loadOverview(), 0);
-    return () => {
-      unsubscribe();
-      window.clearTimeout(kick);
-    };
-  }, [loadOverview]);
-
-  // شبكة أمان لو الـ Realtime انقطع — بتقف لما التاب يكون مخفي
-  usePoll(() => void loadOverview(), 30_000);
+  // مصدر واحد مشترك مع تبويب الطلبات وتنبيهات الأدمن — اشتراك Realtime
+  // واحد ومؤقّت واحد بدل تلاتة بيضربوا نفس النقطة.
+  const { orders: overviewOrders, storage, error: overviewError } = useSyncExternalStore(
+    subscribeAdminOverview,
+    getAdminOverviewSnapshot,
+    getAdminOverviewServerSnapshot,
+  );
+  const overview = useMemo<OverviewState>(
+    () => ({ orders: overviewOrders, storage }),
+    [overviewOrders, storage],
+  );
 
   const stats = useMemo(() => {
     const soldOut = items.filter((item) => !item.available).length;

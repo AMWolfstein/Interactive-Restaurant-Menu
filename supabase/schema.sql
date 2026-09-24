@@ -7,6 +7,19 @@ create table if not exists public.catalog_data (
   updated_at timestamptz not null default now()
 );
 
+-- عدّاد مبيعات كل منتج في جدول مستقل بدل ما يكون حقل جوه JSON الكتالوج.
+--
+-- ليه: `salesCount` كان بيتخزّن جوه `catalog_data.data` — يعني أي طلب لازم
+-- يقفل صف الكتالوج (وهو صف واحد للمتجر كله) ويعيد كتابة الكتالوج بالكامل
+-- عشان يزوّد رقم واحد. النتيجة إن الطلبات المتوازية كانت بتتصفّ ورا بعض،
+-- وكل طلب بيكتب عشرات أو مئات الكيلوبايتات من غير داعي.
+-- دلوقتي كل منتج له صف صغير لوحده، والتزويد جملة upsert واحدة.
+create table if not exists public.item_sales (
+  item_id text primary key,
+  sales_count bigint not null default 0 check (sales_count >= 0),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.orders (
   id text primary key,
   created_at timestamptz not null default now(),
@@ -100,8 +113,15 @@ create policy "orders_owner_read" on public.orders
   for select to authenticated
   using (public.current_app_role() in ('admin', 'invoice_staff'));
 
+-- عدّادات المبيعات: قراءة عامة (بتظهر في «الأكثر مبيعاً»)، والكتابة من
+-- place_order بس — وهي security definer — فمحدش يقدر يزوّد أرقام مبيعاته.
+alter table public.item_sales enable row level security;
+drop policy if exists "item_sales_public_read" on public.item_sales;
+create policy "item_sales_public_read" on public.item_sales for select using (true);
+
 grant usage on schema public to anon, authenticated;
 grant select on public.catalog_data to anon, authenticated;
+grant select on public.item_sales to anon, authenticated;
 grant insert, update, delete on public.catalog_data to authenticated;
 grant select on public.orders to authenticated;
 -- هذان الجدولان مقفولان بـ RLS بدون policy عامة. API السيرفر فقط يستخدم service_role
@@ -444,7 +464,6 @@ set search_path = public, pg_temp
 as $function$
 declare
   v_menu jsonb;
-  v_items jsonb;
   v_lines jsonb := coalesce(payload -> 'lines', '[]'::jsonb);
   v_line jsonb;
   v_item jsonb;
@@ -496,7 +515,10 @@ begin
     raise exception 'عدد المنتجات كبير جداً (الحد 50)' using errcode = '22023';
   end if;
 
-  select data into v_menu from public.catalog_data where slug = 'main' for update;
+  -- من غير `for update`: عدّاد المبيعات بقى في جدول public.item_sales، فمحدش
+  -- بيكتب على صف الكتالوج وقت الطلب. قبل كده كل طلب كان بيقفل الصف ده —
+  -- وهو صف واحد للمتجر كله — فالطلبات المتوازية كانت بتتصفّ ورا بعض.
+  select data into v_menu from public.catalog_data where slug = 'main';
   if v_menu is null then
     raise exception 'كتالوج المتجر لسه مش محفوظ' using errcode = '22023';
   end if;
@@ -541,21 +563,6 @@ begin
       to_jsonb(coalesce((v_sales ->> v_item_id)::integer, 0) + v_quantity)
     );
   end loop;
-
-  -- تطبيق عدّادات المبيعات في تمريرة واحدة على الكتالوج
-  if v_sales <> '{}'::jsonb then
-    select jsonb_agg(
-      case when v_sales ? (elem ->> 'id')
-        then elem || jsonb_build_object(
-          'salesCount', greatest(0, coalesce((elem ->> 'salesCount')::integer, 0))
-                        + (v_sales ->> (elem ->> 'id'))::integer
-        )
-        else elem end
-      order by ordinality
-    ) into v_items
-    from jsonb_array_elements(v_menu -> 'items') with ordinality as t(elem, ordinality);
-    v_menu := jsonb_set(v_menu, '{items}', v_items);
-  end if;
 
   v_commerce := v_menu -> 'commerce';
   v_contact := v_menu -> 'contact';
@@ -726,9 +733,17 @@ begin
       updated_at     = v_now;
   end if;
 
-  update public.catalog_data
-    set data = jsonb_set(v_menu, '{updatedAt}', to_jsonb(v_now_iso)), updated_at = v_now
-    where slug = 'main';
+  -- عدّادات المبيعات: جملة واحدة على جدول مستقل بدل إعادة كتابة الكتالوج كله.
+  -- القفل هنا على صفوف المنتجات المطلوبة بس، فطلبين لمنتجين مختلفين
+  -- ما بيستنّوش بعض خالص.
+  if v_sales <> '{}'::jsonb then
+    insert into public.item_sales as s (item_id, sales_count, updated_at)
+    select key, value::text::bigint, v_now from jsonb_each(v_sales)
+    on conflict (item_id) do update
+      set sales_count = s.sales_count + excluded.sales_count,
+          updated_at  = excluded.updated_at;
+  end if;
+
   return jsonb_build_object('order', v_order);
 end;
 $function$;

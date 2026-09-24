@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import type { ReactNode } from "react";
 import "./globals.css";
 import { GOOGLE_FONTS_HREF } from "@/lib/fonts";
@@ -54,6 +55,8 @@ async function menuForLayout(): Promise<MenuData> {
 
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   const menu = await menuForLayout();
+  // الـnonce بيتولد في middleware.ts لكل طلب — من غيره السكربت تحت هيتمنع
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   const { brand } = menu;
   const accent = safeAccent(brand.accent);
   const language = brand.language === "en" ? "en" : "ar";
@@ -86,6 +89,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         {/* أيقونات التاب و iOS بتتولد تلقائياً من app/icon و app/apple-icon
             و app/favicon.ico — كلها بترجع لوجو البراند نفسه بتاع الـ manifest. */}
         <script
+          nonce={nonce}
           // اختيار الزائر للستايل (أسود/أبيض) محفوظ على جهازه — بنطبقه قبل أول
           // رسم للصفحة عشان ما يحصلش وميض من ستايل المحل لستايل الزائر.
           dangerouslySetInnerHTML={{

@@ -32,7 +32,7 @@ export async function PUT(request: NextRequest) {
 
   // Rate limiting للأدمن (20 حفظ / دقيقة لكل IP + توكن)
   const ip = getClientIp(request);
-  const rl = rateLimit(`menu-save:${ip}:${check.ok ? token?.slice(-8) : "anon"}`, LIMITS.menuSave);
+  const rl = await rateLimit(`menu-save:${ip}:${check.ok ? token?.slice(-8) : "anon"}`, LIMITS.menuSave);
   if (!rl.success) {
     return NextResponse.json(
       { error: "محاولات حفظ كثيرة - حاول بعد دقيقة" },
