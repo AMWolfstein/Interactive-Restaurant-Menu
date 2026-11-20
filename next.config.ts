@@ -33,7 +33,7 @@ const nextConfig: NextConfig = {
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
           { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
           ...(isDev ? [] : [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" }]),
-          // ملحوظة: الـContent-Security-Policy مش هنا — بقت في middleware.ts
+          // ملحوظة: الـContent-Security-Policy مش هنا — بقت في proxy.ts
           // لأنها محتاجة nonce جديد مع كل طلب، وده مستحيل من ملف إعدادات
           // ستاتيك. لو اتحطت في المكانين المتصفح بيطبّق الاتنين مع بعض
           // وأي حاجة ممنوعة في واحدة منهم بتتمنع.

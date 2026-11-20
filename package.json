@@ -13,21 +13,21 @@
     "cloudinary:whoami": "node scripts/cloudinary-whoami.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.117.1",
+    "@supabase/supabase-js": "^2.119.2",
     "canvas-confetti": "^1.9.4",
     "html-to-image": "^1.11.13",
-    "lucide-react": "^1.48.0",
-    "next": "^16.3.6",
+    "lucide-react": "^1.77.0",
+    "next": "^16.4.6",
     "qrcode": "^1.5.4",
-    "react": "19.3.0",
-    "react-dom": "19.3.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "server-only": "^0.0.1",
-    "web-push": "^3.6.7"
+    "web-push": "^4.0.0"
   },
   "//typescript-note": "الأسماء هنا متبادلة عن قصد: حزمة \"typescript\" فيها TS 6 (@typescript/typescript6) وحزمة \"@typescript/native\" فيها TS 7. الأمر tsc بيجي من الأولى. متغيّرهاش من غير ما تجرب npm run typecheck.",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@next/eslint-plugin-next": "^16.3.6",
+    "@next/eslint-plugin-next": "^16.4.6",
     "@tailwindcss/postcss": "^4",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^26",
@@ -36,13 +36,13 @@
     "@types/react-dom": "^19.3.0",
     "@types/web-push": "^3.6.4",
     "@typescript/native": "npm:typescript@^7.0.2",
-    "eslint": "^10.11.0",
+    "eslint": "^10.15.0",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "globals": "^17.12.0",
-    "jsdom": "^30.1.1",
+    "globals": "^17.14.0",
+    "jsdom": "^31.0.1",
     "tailwindcss": "^4",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
-    "typescript-eslint": "^8.70.1",
-    "vitest": "^5.0.1"
+    "typescript-eslint": "^8.73.0",
+    "vitest": "^5.1.1"
   }
 }

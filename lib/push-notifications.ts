@@ -1,6 +1,6 @@
 import "server-only";
 
-import webpush from "web-push";
+import { sendNotification, setVapidDetails } from "web-push";
 import { isItemOnOffer, offerPercent } from "./offers";
 import { listPushSubscriptions, removePushSubscription } from "./push-store";
 import type { MenuData, MenuItem } from "./types";
@@ -36,7 +36,7 @@ export async function sendPushNotification(message: PushMessage): Promise<{ sent
 
   const subscriptions = await listPushSubscriptions();
   if (!subscriptions.length) return { sent: 0, removed: 0 };
-  webpush.setVapidDetails(vapid.subject, vapid.publicKey, vapid.privateKey);
+  setVapidDetails(vapid.subject, vapid.publicKey, vapid.privateKey);
   const payload = JSON.stringify({
     title: message.title.slice(0, 80),
     body: message.body.slice(0, 180),
@@ -50,7 +50,7 @@ export async function sendPushNotification(message: PushMessage): Promise<{ sent
     await Promise.allSettled(
       subscriptions.slice(start, start + 25).map(async (subscription) => {
         try {
-          await webpush.sendNotification(subscription, payload, { TTL: 60 * 60 * 12 });
+          await sendNotification(subscription, payload, { TTL: 60 * 60 * 12 });
           sent += 1;
         } catch (error) {
           const status = typeof error === "object" && error !== null && "statusCode" in error

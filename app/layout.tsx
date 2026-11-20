@@ -55,7 +55,7 @@ async function menuForLayout(): Promise<MenuData> {
 
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   const menu = await menuForLayout();
-  // الـnonce بيتولد في middleware.ts لكل طلب — من غيره السكربت تحت هيتمنع
+  // الـnonce بيتولد في proxy.ts لكل طلب — من غيره السكربت تحت هيتمنع
   const nonce = (await headers()).get("x-nonce") ?? undefined;
   const { brand } = menu;
   const accent = safeAccent(brand.accent);

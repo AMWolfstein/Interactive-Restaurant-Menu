@@ -9,7 +9,7 @@ const isDev = process.env.NODE_ENV !== "production";
  * وده عملياً بيلغي أهم فايدة من الـCSP — أي سكربت متحقون في الصفحة كان هيشتغل
  * عادي. المشكلة إن App Router بيحقن سكربتات inline بنفسه (بيانات الهيدريشن
  * `self.__next_f.push(...)`) ومحتواها بيتغير كل طلب، فالـhash مش حل. الحل
- * الوحيد هو nonce بيتولد لكل طلب — وده لازم يحصل في middleware.
+ * الوحيد هو nonce بيتولد لكل طلب — وده لازم يحصل في proxy.
  *
  * التكلفة المعتادة للطريقة دي إن الصفحات بتبقى dynamic، بس ده مش فارق هنا:
  * كل صفحات الـHTML في المشروع (`/`, `/menu`, `/admin`, `/invoices`, `/qr`)
@@ -55,7 +55,7 @@ function buildCsp(nonce: string): string {
   ].join("; ");
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const nonce = crypto.randomUUID().replaceAll("-", "");
   const csp = buildCsp(nonce);
 
