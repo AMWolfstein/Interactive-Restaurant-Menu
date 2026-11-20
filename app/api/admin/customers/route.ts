@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCustomerOrders, listCustomers, StoreError } from "@/lib/server-database";
+import { getCustomerProfile, listCustomers, StoreError } from "@/lib/server-database";
 import { bearerToken, checkAdmin } from "@/lib/server-auth";
 import { getClientIp, rateLimit, LIMITS } from "@/lib/rate-limit";
 
@@ -35,14 +35,9 @@ export async function GET(request: NextRequest) {
   try {
     // ملف عميل واحد + تاريخ مشترياته الكامل
     if (phone) {
-      const [orders, matches] = await Promise.all([
-        getCustomerOrders(phone, token),
-        listCustomers(phone, token, 1),
-      ]);
-      return NextResponse.json(
-        { customer: matches[0] ?? null, orders },
-        { headers: { "cache-control": "no-store" } },
-      );
+      return NextResponse.json(await getCustomerProfile(phone, token), {
+        headers: { "cache-control": "no-store" },
+      });
     }
 
     const customers = await listCustomers(params.get("q") ?? "", token);

@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode, type SVGProps } from "react";
 import {
   Clock,
@@ -22,7 +23,6 @@ import { useStoreOpen } from "@/lib/use-store-open";
 import { describeNextOpening } from "@/lib/schedule";
 import { cx } from "@/lib/cx";
 import { ProductCard, ProductImage } from "@/components/public/product-card";
-import { CartSheet } from "@/components/public/cart-sheet";
 import { ThemeToggle } from "@/components/public/theme-toggle";
 import { PwaInstallButton } from "@/components/public/pwa-install-button";
 import { PreviousOrderButton } from "@/components/public/previous-order-button";
@@ -33,6 +33,8 @@ import { useOnlineStatus } from "@/lib/use-online-status";
 import { HeroCarousel } from "@/components/public/hero-carousel";
 import { OfflineBanner } from "@/components/public/offline-banner";
 import { PushNotificationButton } from "@/components/public/push-notification-button";
+
+const CartSheet = dynamic(() => import("./cart-sheet").then((module) => module.CartSheet));
 
 const ALL = "all";
 const FAVORITES = "favorites";
@@ -77,7 +79,7 @@ export function Storefront() {
   const [supplierFilter, setSupplierFilter] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortBy>("newest");
   const [page, setPage] = useState(1);
-  const [cartOpen, setCartOpen] = useState(false);
+  const [cartState, setCartState] = useState<"unopened" | "open" | "closed">("unopened");
   const online = useOnlineStatus();
   const pendingOrder = usePendingOrder();
 
@@ -276,7 +278,7 @@ export function Storefront() {
               language={lang}
               validItemIds={new Set(items.map((item) => item.id))}
               onRestore={cart.restore}
-              onOpenCart={() => setCartOpen(true)}
+              onOpenCart={() => setCartState("open")}
             />
             <PwaInstallButton language={lang} />
             <a
@@ -298,7 +300,7 @@ export function Storefront() {
             </a>
             <button
               type="button"
-              onClick={() => setCartOpen(true)}
+              onClick={() => setCartState("open")}
               className="relative grid h-9 w-9 place-items-center rounded-full border border-line bg-surface text-accent transition hover:border-accent/60"
               aria-label={en ? "Open cart" : "فتح السلة"}
             >
@@ -610,7 +612,7 @@ export function Storefront() {
       {(pendingOrder || (commerce.enableCart && totals.itemCount > 0)) ? (
         <button
           type="button"
-          onClick={() => setCartOpen(true)}
+          onClick={() => setCartState("open")}
           className="fixed inset-x-4 bottom-4 z-40 mx-auto flex max-w-md items-center justify-between gap-3 rounded-card bg-accent px-4 py-3 text-accent-contrast shadow-[0_18px_45px_-18px_var(--accent)] transition hover:brightness-110 active:scale-[.99]"
         >
           <span className="flex items-center gap-2 text-xs font-black">
@@ -625,14 +627,16 @@ export function Storefront() {
         </button>
       ) : null}
 
-      <CartSheet
-        open={cartOpen}
-        onClose={() => setCartOpen(false)}
-        lines={cart.lines}
-        setQuantity={cart.setQuantity}
-        remove={cart.remove}
-        clear={cart.clear}
-      />
+      {cartState !== "unopened" ? (
+        <CartSheet
+          open={cartState === "open"}
+          onClose={() => setCartState("closed")}
+          lines={cart.lines}
+          setQuantity={cart.setQuantity}
+          remove={cart.remove}
+          clear={cart.clear}
+        />
+      ) : null}
     </div>
   );
 }

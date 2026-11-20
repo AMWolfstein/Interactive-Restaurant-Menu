@@ -10,6 +10,7 @@ import {
   fetchCustomer,
   fetchCustomerOrders,
   fetchLatestOrders,
+  fetchLoyaltySettings,
   fetchPublishedMenu,
   placeOrder,
   savePublishedMenu,
@@ -267,15 +268,14 @@ export async function getAdminOverview(token: string | null): Promise<AdminOverv
  * فحتى لو حد زوّد الرقم ده من المتصفح مش هيغيّر حاجة في الفاتورة.
  */
 export async function getLoyaltyStatus(phone: string): Promise<LoyaltyStatus> {
-  const menu = await getMenu();
-  const settings = menu.commerce.loyalty;
-  const off = loyaltyStatus({ ...settings, enabled: false }, 0);
-  if (!settings.enabled || !isUsablePhone(phone)) return off;
+  const cloud = Boolean(firebaseProjectId());
+  const database = cloud ? null : await readFileDatabase();
+  const settings = (cloud ? await fetchLoyaltySettings() : database?.menu.commerce.loyalty)
+    ?? DEFAULT_DATA.commerce.loyalty;
+  if (!settings.enabled || !isUsablePhone(phone)) return loyaltyStatus({ ...settings, enabled: false }, 0);
 
   const key = normalizePhone(phone);
-  const customer = firebaseProjectId()
-    ? await fetchCustomer(key)
-    : (await readFileDatabase()).customers.find((row) => row.phone === key);
+  const customer = cloud ? await fetchCustomer(key) : database?.customers.find((row) => row.phone === key);
   return loyaltyStatus(settings, customer?.spent ?? 0);
 }
 
@@ -302,23 +302,26 @@ export async function listCustomers(
 }
 
 /** كل طلبات عميل واحد بالموبايل — تاريخ مشترياته الكامل */
-export async function getCustomerOrders(
+export async function getCustomerProfile(
   phone: string,
   token: string | null,
   limit = 100,
-): Promise<SavedOrder[]> {
-  const safeLimit = Math.min(500, Math.max(1, Math.floor(limit) || 100));
-  if (!isUsablePhone(phone)) return [];
+): Promise<{ customer: CustomerRecord | null; orders: SavedOrder[] }> {
+  if (!isUsablePhone(phone)) return { customer: null, orders: [] };
 
+  const safeLimit = Math.min(500, Math.max(1, Math.floor(limit) || 100));
   const key = normalizePhone(phone);
   if (firebaseProjectId()) {
     if (!token) throw new StoreError("غير مصرّح", 401);
-    return fetchCustomerOrders(key, safeLimit);
+    const [customer, orders] = await Promise.all([fetchCustomer(key), fetchCustomerOrders(key, safeLimit)]);
+    return { customer: customer ?? null, orders };
   }
 
   const database = await readFileDatabase();
-  return database.orders
+  const customer = database.customers.find((row) => row.phone === key) ?? null;
+  const orders = database.orders
     .filter((order) => normalizePhone(order.customer?.phone ?? "") === key)
     .reverse()
     .slice(0, safeLimit);
+  return { customer, orders };
 }

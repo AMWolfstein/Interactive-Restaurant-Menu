@@ -17,7 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
-import { orderStatusOf, ORDER_STATUS_LABEL } from "@/lib/format";
+import { orderLineName, orderStatusOf, ORDER_STATUS_LABEL } from "@/lib/format";
 import { authenticatedFetch } from "@/lib/firebase-auth-core";
 import {
   applyOrderUpdate,
@@ -150,7 +150,7 @@ export function OrdersPanel() {
         ORDER_STATUS_LABEL[orderStatusOf(order)].ar,
         String(order.lines?.reduce((sum, line) => sum + line.quantity, 0) ?? 0),
         String(order.total),
-        order.lines?.map((line) => `${line.name} ×${line.quantity}`).join(" | ") ?? "",
+        order.lines?.map((line) => `${orderLineName(line)} ×${line.quantity}`).join(" | ") ?? "",
       ]),
     ];
     // BOM عشان الإكسل يقرا العربي صح
@@ -297,7 +297,7 @@ export function OrdersPanel() {
 
                   <p className="mt-2 rounded-xl border border-line bg-surface p-2.5 text-[11px] leading-relaxed text-muted">
                     <Receipt className="me-1 inline h-3 w-3 text-accent" />
-                    {order.lines?.map((line) => `${line.name} ×${line.quantity}`).join("، ")}
+                    {order.lines?.map((line) => `${orderLineName(line)} ×${line.quantity}`).join("، ")}
                     {order.customer?.notes ? <span className="block pt-1 text-muted/80">📝 {order.customer.notes}</span> : null}
                   </p>
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { orderLineName } from "../lib/format";
 import { DEFAULT_DATA } from "../lib/defaults";
 import { changeOrderStatus, prepareOrder, type PlaceOrderInput } from "../lib/order-write";
 import type { CustomerRecord, MenuData } from "../lib/types";
@@ -59,6 +60,32 @@ describe("transactional order calculations", () => {
     expect(second.order.loyalty).toBeUndefined();
     expect(second.updatedCustomer?.spent).toBe(250);
     expect(customer.spent).toBe(550);
+  });
+
+  it("uses the selected weight price and label while keeping base-price compatibility", () => {
+    const weighted = {
+      ...catalog,
+      items: [{ ...item, variants: [{ id: "large", label: "٢ كجم", price: 175 }] }],
+    };
+    const weightedInput = { ...input, lines: [{ itemId: item.id, variantId: "large", quantity: 2 }] };
+    const result = prepareOrder(weighted, weightedInput, "ORD-ABCDE", now, phone, customer);
+
+    expect(result.order).toMatchObject({
+      subtotal: 350,
+      deliveryFee: 0,
+      total: 315,
+      loyalty: { discount: 35 },
+      lines: [{ itemId: item.id, name: "شاي", variantLabel: "٢ كجم", quantity: 2, unitPrice: 175 }],
+    });
+    expect(orderLineName(result.order.lines[0])).toBe("شاي — ٢ كجم");
+    expect(result.soldQuantities.get(item.id)).toBe(2);
+    expect(prepareOrder(weighted, input, "ORD-FGHIJ", now, "", undefined).order.subtotal).toBe(100);
+  });
+
+  it("rejects a weight that was removed after being added to the cart", () => {
+    const stale = { ...input, lines: [{ itemId: item.id, variantId: "removed", quantity: 1 }] };
+    expect(() => prepareOrder(catalog, stale, "ORD-ABCDE", now, phone, customer))
+      .toThrow(expect.objectContaining({ status: 409 }));
   });
 
   it("restores only the balance actually removed when cancelling hit zero", () => {

@@ -28,6 +28,10 @@ export function orderStatusOf(order: { status?: string }): OrderStatus {
   return order.status === "cancelled" ? "cancelled" : "new";
 }
 
+export function orderLineName(line: { name: string; variantLabel?: string }): string {
+  return line.variantLabel ? `${line.name} — ${line.variantLabel}` : line.name;
+}
+
 /** يرجّع النص المناسب للغة الحالية مع رجوع للغة التانية لو فاضية */
 export function pick(
   lang: SiteLanguage,
@@ -48,7 +52,7 @@ export function formatPrice(value: number, lang: SiteLanguage, commerce: Commerc
   return lang === "en" ? `${unit} ${num}` : `${num} ${unit}`;
 }
 
-export interface CartTotals {
+interface CartTotals {
   subtotal: number;
   delivery: number;
   service: number;
@@ -72,30 +76,29 @@ export function computeTotals(
   discount = 0,
 ): CartTotals {
   const subtotal = lines.reduce((sum, { line, item }) => sum + item.price * line.quantity, 0);
-  const itemCount = lines.reduce((sum, { line }) => sum + line.quantity, 0);
-  const isDelivery = orderType === "delivery";
-  const qualifiesFree =
-    isDelivery && commerce.freeDeliveryOver > 0 && subtotal >= commerce.freeDeliveryOver;
-  // لو فيه منطقة توصيل مختارة، رسومها هي اللي بتتحسب بدل الرسوم العامة
-  const baseDeliveryFee = zone ? Math.max(0, zone.fee) : Math.max(0, commerce.deliveryFee);
-  const delivery = isDelivery && !qualifiesFree ? baseDeliveryFee : 0;
-  const safeDiscount = Math.max(0, Math.min(subtotal, discount));
-  const service =
-    commerce.serviceChargePercent > 0
-      ? Math.round(((subtotal - safeDiscount + delivery) * commerce.serviceChargePercent) / 100)
-      : 0;
   return {
-    subtotal,
-    delivery,
-    service,
-    discount: safeDiscount,
-    total: Math.max(0, subtotal - safeDiscount + delivery + service),
-    itemCount,
-    freeDeliveryGap:
-      isDelivery && commerce.freeDeliveryOver > 0
-        ? Math.max(0, commerce.freeDeliveryOver - subtotal)
-        : 0,
+    ...computeOrderTotals(subtotal, commerce, orderType, zone?.fee, discount),
+    itemCount: lines.reduce((sum, { line }) => sum + line.quantity, 0),
+    freeDeliveryGap: orderType === "delivery" ? Math.max(0, commerce.freeDeliveryOver - subtotal) : 0,
   };
+}
+
+/** حساب موحّد للسلة والفاتورة من إجمالي الأصناف ورسوم المنطقة وخصم كاشك. */
+export function computeOrderTotals(
+  subtotal: number,
+  commerce: CommerceSettings,
+  orderType: OrderType,
+  zoneFee?: number,
+  discount = 0,
+) {
+  const isDelivery = orderType === "delivery";
+  const qualifiesFree = isDelivery && commerce.freeDeliveryOver > 0 && subtotal >= commerce.freeDeliveryOver;
+  const delivery = isDelivery && !qualifiesFree ? Math.max(0, zoneFee ?? commerce.deliveryFee) : 0;
+  const safeDiscount = Math.max(0, Math.min(subtotal, discount));
+  const service = commerce.serviceChargePercent > 0
+    ? Math.round(((subtotal - safeDiscount + delivery) * commerce.serviceChargePercent) / 100)
+    : 0;
+  return { subtotal, delivery, service, discount: safeDiscount, total: Math.max(0, subtotal - safeDiscount + delivery + service) };
 }
 
 /** يحوّل رقم الموبايل المصري (أو أي دولة) لصيغة واتساب دولية */

@@ -13,7 +13,7 @@ import type { LoyaltySettings, LoyaltySnapshot } from "./types";
  * ⚠️ القيم دي للعرض بس. الخصم الحقيقي بيتحسب في قاعدة البيانات وقت تسجيل
  * الطلب، فأي تلاعب هنا مش بيغيّر الفاتورة.
  */
-export interface LoyaltyView {
+interface LoyaltyView {
   /** هل نعرض حاجة أصلاً */
   show: boolean;
   balance: number;
@@ -21,9 +21,6 @@ export interface LoyaltyView {
   percent: number;
   /** العميل مستحق خصم على الطلب ده */
   eligible: boolean;
-  remaining: number;
-  progress: number;
-  loading: boolean;
 }
 
 const EMPTY: LoyaltyView = {
@@ -32,9 +29,6 @@ const EMPTY: LoyaltyView = {
   threshold: 0,
   percent: 0,
   eligible: false,
-  remaining: 0,
-  progress: 0,
-  loading: false,
 };
 
 /** الرد الخام من السيرفر لرقم معيّن */
@@ -44,43 +38,38 @@ interface Fetched {
   threshold: number;
   percent: number;
   eligible: boolean;
-  remaining: number;
-  progress: number;
 }
 
 export function useLoyalty(phone: string, settings: LoyaltySettings): LoyaltyView {
   const [fetched, setFetched] = useState<Fetched | null>(null);
-  const [loading, setLoading] = useState(false);
   const key = normalizePhone(phone);
   const active = settings.enabled && isUsablePhone(phone);
 
   useEffect(() => {
     if (!active) return;
 
-    let cancelled = false;
+    const controller = new AbortController();
     // نستنى نص ثانية بعد آخر تعديل — العميل بيكتب ١١ رقم، مش عايزين ١١ نداء
     const timer = setTimeout(async () => {
-      setLoading(true);
       try {
         const response = await fetch("/api/loyalty", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ phone: key }),
+          signal: controller.signal,
         });
         if (!response.ok) throw new Error("failed");
         const data = (await response.json()) as Omit<Fetched, "key"> & { enabled: boolean };
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
         setFetched(data.enabled ? { ...data, key } : null);
       } catch {
         // فشل الشبكة ميعطلش الطلب — بنخفي الشريط وخلاص
-        if (!cancelled) setFetched(null);
-      } finally {
-        if (!cancelled) setLoading(false);
+        if (!controller.signal.aborted) setFetched(null);
       }
     }, 500);
 
     return () => {
-      cancelled = true;
+      controller.abort();
       clearTimeout(timer);
     };
   }, [key, active]);
@@ -88,7 +77,7 @@ export function useLoyalty(phone: string, settings: LoyaltySettings): LoyaltyVie
   // النتيجة بتتشتق من الحالة — لو الرقم اتغيّر بنتجاهل رد الرقم القديم
   // من غير ما نضطر نستدعي setState جوه الـ effect.
   if (!active || !fetched || fetched.key !== key) {
-    return { ...EMPTY, loading: active && loading };
+    return EMPTY;
   }
 
   return {
@@ -97,9 +86,6 @@ export function useLoyalty(phone: string, settings: LoyaltySettings): LoyaltyVie
     threshold: fetched.threshold ?? settings.threshold,
     percent: fetched.percent ?? settings.percent,
     eligible: Boolean(fetched.eligible),
-    remaining: fetched.remaining ?? 0,
-    progress: fetched.progress ?? 0,
-    loading,
   };
 }
 
@@ -113,7 +99,7 @@ export function previewDiscount(
   return computeLoyaltyDiscount(settings, subtotal, view.balance);
 }
 
-export interface LoyaltyProgress {
+interface LoyaltyProgress {
   /** الباقي على المكافأة بعد احتساب اللي في السلة دلوقتي */
   remaining: number;
   progress: number;
@@ -124,7 +110,7 @@ export interface LoyaltyProgress {
 /**
  * تقدّم العميل ناحية المكافأة **شامل الطلب اللي في السلة**.
  *
- * `view.remaining` الجاي من السيرفر محسوب على الطلبات القديمة بس، فلو عرضناه
+ * الرصيد الجاي من السيرفر محسوب على الطلبات القديمة بس، فلو عرضناه
  * زي ما هو العميل اللي حاطط بـ ٢٠٠ في السلة هيقرا «فاضل ٥٠٠٠» بدل «٤٨٠٠».
  *
  * @param subtotal قيمة الأصناف في السلة قبل التوصيل والخدمة — دي اللي بتتضاف

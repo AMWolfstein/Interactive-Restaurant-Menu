@@ -242,7 +242,7 @@ export interface SavedOrder {
   createdAt: string;
   customer: { name: string; phone: string; address: string; notes: string };
   orderType: OrderType;
-  lines: Array<{ itemId: string; name: string; quantity: number; unitPrice: number }>;
+  lines: Array<{ itemId: string; name: string; variantLabel?: string; quantity: number; unitPrice: number }>;
   total: number;
   /** لقطة الحساب وقت الطلب — الفاتورة بتستخدمها بدل إعادة الحساب من الأسعار الحالية */
   subtotal?: number;

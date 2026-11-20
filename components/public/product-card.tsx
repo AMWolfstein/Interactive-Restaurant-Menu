@@ -118,11 +118,12 @@ export function ProductCard({
   const en = lang === "en";
   const favorites = useSyncExternalStore(subscribeFavorites, getFavoritesSnapshot, () => FAVORITES_SERVER_SNAPSHOT);
   const favorite = favorites.includes(item.id);
-  const [selectedVariantId, setSelectedVariantId] = useState(item.variants?.[0]?.id);
-  const selectedVariant = item.variants?.find((variant) => variant.id === selectedVariantId);
+  const [preferredVariantId, setSelectedVariantId] = useState(item.variants?.[0]?.id);
+  const selectedVariant = item.variants?.find((variant) => variant.id === preferredVariantId) ?? item.variants?.[0];
+  const selectedVariantId = selectedVariant?.id;
   const quantity = getQuantity(selectedVariantId);
   const displayPrice = selectedVariant?.price ?? item.price;
-  const displayOldPrice = selectedVariant?.oldPrice ?? item.oldPrice;
+  const displayOldPrice = selectedVariant ? selectedVariant.oldPrice : item.oldPrice;
   const price = formatPrice(displayPrice, lang, commerce);
   const discountEnd = selectedVariant
     ? { day: selectedVariant.offerEndDay, month: selectedVariant.offerEndMonth, year: selectedVariant.offerEndYear }
@@ -138,7 +139,7 @@ export function ProductCard({
         item={item}
         lang={lang}
         commerce={commerce}
-        quantity={quantity}
+        quantity={getQuantity()}
         onAdd={onAdd}
         onRemoveOne={onRemoveOne}
         onSupplierClick={onSupplierClick}

@@ -5,7 +5,7 @@ import { authenticatedFetch } from "./firebase-auth-core";
 import { validateImportedMenu } from "./validation";
 import type { Category, MenuData, MenuItem, Supplier } from "./types";
 
-export type SaveState = "idle" | "dirty" | "saved" | "error";
+type SaveState = "idle" | "dirty" | "saved" | "error";
 
 export interface MenuState {
   data: MenuData;
@@ -32,6 +32,9 @@ let initialized = false;
 let persistTimer: number | undefined;
 let resetTimer: number | undefined;
 let persistRevision = 0;
+let savedRevision = 0;
+let refreshInFlight: Promise<void> | null = null;
+let refreshQueued = false;
 let persistQueue: Promise<void> = Promise.resolve();
 
 function emit() {
@@ -66,41 +69,40 @@ async function errorMessage(response: Response): Promise<string | null> {
   }
 }
 
-/** قراءة الكتالوج من الباك إند */
-export async function refreshMenu() {
-  try {
-    const response = await fetch("/api/menu", { cache: "no-store" });
-    if (!response.ok) throw new Error((await errorMessage(response)) ?? "تعذّر قراءة الكتالوج من الباك إند");
-    const data = normalizeData(await response.json());
-    // A refresh can finish after the admin has started editing. Never replace
-    // unsaved local changes with a stale response that was already in flight.
-    if (state.saveState === "dirty") return;
-    set({ data, ready: true, isCustomized: true, storageKb: sizeOf(data), saveState: "idle", saveError: null });
-  } catch (error) {
-    // لا نستبدل لقطة السيرفر الصحيحة ببيانات الـ seed عند انقطاع الشبكة.
-    // إبقاء ready=false يجعل useMenu يعرض initialData التي جاءت مع الصفحة؛
-    // وكان الاستبدال بـ DEFAULT_DATA هو سبب ظهور البراند القديم بشكل متقطع.
-    set({
-      saveState: "error",
-      saveError: error instanceof Error && error.message ? error.message : "تعذّر الاتصال بالباك إند",
-    });
-  }
+/** قراءة واحدة مشتركة للتركيز والفحص الدوري والتحديث اللحظي. */
+export function refreshMenu(): Promise<void> {
+  if (persistRevision !== savedRevision) return Promise.resolve();
+  if (refreshInFlight) return refreshInFlight;
+
+  const revision = persistRevision;
+  refreshInFlight = (async () => {
+    try {
+      const response = await fetch("/api/menu", { cache: "no-store" });
+      if (!response.ok) throw new Error((await errorMessage(response)) ?? "تعذّر قراءة الكتالوج من الباك إند");
+      const data = normalizeData(await response.json());
+      if (revision !== persistRevision) return;
+      set({ data, ready: true, isCustomized: true, storageKb: sizeOf(data), saveState: "idle", saveError: null });
+    } catch (error) {
+      if (revision !== persistRevision) return;
+      // Keep the current catalog or the server-rendered snapshot when the refresh fails.
+      set({
+        saveState: "error",
+        saveError: error instanceof Error && error.message ? error.message : "تعذّر الاتصال بالباك إند",
+      });
+    }
+  })().finally(() => {
+    refreshInFlight = null;
+    if (refreshQueued) {
+      refreshQueued = false;
+      void refreshMenu();
+    }
+  });
+  return refreshInFlight;
 }
 
-/**
- * تحديث لحظي من قاعدة البيانات.
- * بيتجاهل أي تغيير أثناء تعديل الأدمن المحلي (saveState = dirty) عشان
- * تعديلات الأدمن ما تتمسحش برسالة قادمة من السيرفر — بتتطبق بعد ما يخلص الحفظ.
- */
 function refreshFromRemote() {
-  if (state.saveState === "dirty") return;
   void refreshMenu();
 }
-
-/** فترة آخر حفظ محلي (ms) — بنطنش صدى الحفظ بتاعنا الجاي من الـ Realtime */
-let lastLocalWriteAt = 0;
-/** مدة تجاهل صدى الكتابة المحلية */
-const SELF_ECHO_GUARD_MS = 4000;
 
 function ensureInit() {
   if (initialized || typeof window === "undefined") return;
@@ -108,14 +110,11 @@ function ensureInit() {
   void refreshMenu();
   window.addEventListener("focus", refreshFromRemote);
 
-  // تحديث لحظي فوري: أي تعديل من الأدمن يوصل لكل الأجهزة
-  subscribeRealtime(
-    "catalog",
-    () => {
-      if (Date.now() - lastLocalWriteAt < SELF_ECHO_GUARD_MS) return;
-      refreshFromRemote();
-    },
-  );
+  subscribeRealtime("catalog", () => {
+    // The current read may have started before the change reached Firestore.
+    if (refreshInFlight) refreshQueued = true;
+    refreshFromRemote();
+  });
 
   // شبكة أمان لو الـ Realtime مش متاح (قواعد الاستماع مش متاحة).
   // بيقف لما التاب يكون مخفي: من غير كده أي تاب سايبه المستخدم مفتوح بيفضل
@@ -142,8 +141,7 @@ export function getMenuSnapshot() {
 /** حفظ التعديل في الباك إند (PUT /api/menu بتوكن الأدمن) */
 function schedulePersist(value: MenuData) {
   if (typeof window === "undefined") return;
-  lastLocalWriteAt = Date.now();
-  const revision = ++persistRevision;
+  const revision = persistRevision;
   window.clearTimeout(persistTimer);
   persistTimer = window.setTimeout(() => {
     // Keep writes ordered. Without this queue, two slow requests can finish in
@@ -160,6 +158,7 @@ function schedulePersist(value: MenuData) {
         // A newer edit may have been made while this request was running. Its
         // local snapshot must remain visible until the newer save completes.
         if (revision !== persistRevision) return;
+        savedRevision = revision;
         set({ data, saveState: "saved", saveError: null, isCustomized: true, storageKb: sizeOf(data) });
       } catch (error) {
         if (revision !== persistRevision) return;
@@ -177,6 +176,7 @@ function schedulePersist(value: MenuData) {
 }
 
 function commit(next: MenuData) {
+  persistRevision += 1;
   const stamped = { ...next, updatedAt: new Date().toISOString() };
   set({ data: stamped, saveState: "dirty" });
   schedulePersist(stamped);

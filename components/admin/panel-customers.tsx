@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
-import { orderStatusOf } from "@/lib/format";
+import { orderLineName, orderStatusOf } from "@/lib/format";
 import { loyaltyStatus } from "@/lib/loyalty";
 import { authenticatedFetch } from "@/lib/firebase-auth-core";
 import { cx } from "@/lib/cx";
@@ -230,7 +230,7 @@ export function CustomersPanel() {
                       </div>
                     </div>
                     <p className="mt-2 text-[11px] leading-relaxed text-muted">
-                      {order.lines?.map((line) => `${line.name} ×${line.quantity}`).join("، ")}
+                      {order.lines?.map((line) => `${orderLineName(line)} ×${line.quantity}`).join("، ")}
                     </p>
                     {order.loyalty ? (
                       <p className="mt-1.5 text-[11px] font-bold text-emerald-400">

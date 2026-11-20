@@ -12,6 +12,7 @@ vi.mock("../lib/firebase-admin", () => ({ firebaseProjectId: () => "" }));
 let directory: string;
 let databasePath: string;
 let createOrder: typeof import("../lib/server-database").createOrder;
+let getCustomerProfile: typeof import("../lib/server-database").getCustomerProfile;
 const item = { id: "tea", categoryId: "", name: "شاي", price: 100, available: true, isNew: false, spicy: 0 as const };
 const menu: MenuData = {
   ...DEFAULT_DATA,
@@ -28,7 +29,7 @@ beforeAll(async () => {
   directory = await mkdtemp(path.join(tmpdir(), "order-attempt-test-"));
   databasePath = path.join(directory, "store.json");
   vi.stubEnv("DATABASE_FILE", databasePath);
-  ({ createOrder } = await import("../lib/server-database"));
+  ({ createOrder, getCustomerProfile } = await import("../lib/server-database"));
 });
 
 beforeEach(async () => {
@@ -70,4 +71,20 @@ describe("idempotent order attempts", () => {
     expect(separate.order.id).not.toBe(first.order.id);
     expect((await database()).orders).toHaveLength(2);
   });
+});
+
+it("selects the exact customer profile even when a newer record contains the same digits", async () => {
+  const order = await createOrder(input);
+  const state = JSON.parse(await readFile(databasePath, "utf8"));
+  const phone = input.customer.phone;
+  state.customers = [
+    { phone, name: input.customer.name, updatedAt: "2026-11-01T00:00:00Z" },
+    { phone: `9${phone}9`, name: "عميل آخر", updatedAt: "2026-11-02T00:00:00Z" },
+  ];
+  await writeFile(databasePath, JSON.stringify(state));
+
+  const profile = await getCustomerProfile("+20 101 234 5678", null);
+  expect(profile.customer).toMatchObject({ phone, name: input.customer.name });
+  expect(profile.orders.map((entry) => entry.id)).toEqual([order.order.id]);
+  expect(await getCustomerProfile("101", null)).toEqual({ customer: null, orders: [] });
 });

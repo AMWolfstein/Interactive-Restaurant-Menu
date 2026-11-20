@@ -16,7 +16,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
-import { orderStatusOf, ORDER_STATUS_LABEL } from "@/lib/format";
+import { orderLineName, orderStatusOf, ORDER_STATUS_LABEL } from "@/lib/format";
 import { effectiveStoreOpen } from "@/lib/schedule";
 import { Badge, Button, Panel } from "@/components/ui";
 import { cx } from "@/lib/cx";
@@ -341,7 +341,7 @@ export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: str
                       {new Date(order.createdAt).toLocaleString("ar-EG")}
                     </p>
                     <p className="mt-0.5 text-[11px] text-muted">
-                      {order.lines?.map((line) => `${line.name} ×${line.quantity}`).join("، ")}
+                      {order.lines?.map((line) => `${orderLineName(line)} ×${line.quantity}`).join("، ")}
                     </p>
                   </li>
                 ))}

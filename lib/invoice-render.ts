@@ -10,6 +10,7 @@
  * الطلب) — مفيش أي إعادة حساب من أسعار المنتجات الحالية.
  */
 
+import { orderLineName } from "./format";
 import type { SavedOrder } from "./types";
 
 export interface InvoiceBrandInfo {
@@ -64,7 +65,7 @@ export function invoiceModelFromOrder(
   options: { orderTypeLabel: string; statusLabel: string; locale?: string },
 ): InvoiceModel {
   const lines: InvoiceLine[] = (order.lines ?? []).map((line) => ({
-    name: line.name,
+    name: orderLineName(line),
     quantity: line.quantity,
     unitPrice: line.unitPrice,
     lineTotal: line.unitPrice * line.quantity,

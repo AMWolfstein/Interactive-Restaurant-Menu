@@ -16,7 +16,6 @@ import {
   Trash2,
   Truck,
 } from "lucide-react";
-import confetti from "canvas-confetti";
 import { getCartSnapshot } from "@/lib/cart-store-core";
 import { saveOrderReceipt, savePendingOrder, usePendingOrder } from "@/lib/checkout-session";
 import { useMenu } from "@/lib/use-menu";
@@ -81,7 +80,7 @@ export function CartSheet({
   );
 
   // نظام «كاشك» — رصيد العميل بيتجاب من السيرفر أول ما يكتب رقم صالح
-  const loyalty = useLoyalty(phone, commerce.loyalty);
+  const loyalty = useLoyalty(open && !pending ? phone : "", commerce.loyalty);
   const rawSubtotal = useMemo(
     () => lines.reduce((sum, { line, item }) => sum + item.price * line.quantity, 0),
     [lines],
@@ -197,13 +196,13 @@ export function CartSheet({
       onClose();
       router.push("/order-confirmation");
       if (commerce.enableConfetti) {
-        void confetti({
+        void import("canvas-confetti").then(({ default: confetti }) => confetti({
           particleCount: 130,
           spread: 75,
           origin: { y: 0.65 },
           colors: [brand.accent, "#22c55e", "#ffffff"],
           disableForReducedMotion: true,
-        });
+        })).catch(() => undefined);
       }
     } catch {
       setErrors({

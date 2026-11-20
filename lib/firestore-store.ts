@@ -65,6 +65,14 @@ export function fetchPublishedMenu() {
   });
 }
 
+/** Loyalty only needs the catalog settings, so it skips the item sales collection. */
+export function fetchLoyaltySettings() {
+  return withFirestore("تعذّر قراءة إعدادات كاشك", async () => {
+    const catalog = decodePayload(await payloadChunks(catalogRef()).get());
+    return catalog ? normalizeData(catalog).commerce.loyalty : null;
+  });
+}
+
 export function savePublishedMenu(menu: MenuData) {
   return withFirestore("تعذّر حفظ الكتالوج", async () => {
     const db = firestoreDb();

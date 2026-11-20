@@ -22,7 +22,7 @@ import { useMenu } from "@/lib/use-menu";
 import { usePoll } from "@/lib/use-poll";
 import { useStaffSession } from "@/lib/use-staff-session";
 import { authenticatedFetch } from "@/lib/firebase-auth-core";
-import { formatPrice, ORDER_STATUS_LABEL, ORDER_TYPE_LABEL, orderStatusOf } from "@/lib/format";
+import { orderLineName, formatPrice, ORDER_STATUS_LABEL, ORDER_TYPE_LABEL, orderStatusOf } from "@/lib/format";
 import { subscribeRealtime } from "@/lib/realtime";
 import { flashTitle, playOrderChime, primeAlertAudio, stopTitleFlash } from "@/lib/alerts";
 import { cx } from "@/lib/cx";
@@ -555,7 +555,7 @@ function OrderDetails({
                 key={`${line.itemId}-${index}`}
                 className="flex items-center justify-between gap-3 border-b border-line px-3 py-2.5 text-[13px] last:border-0"
               >
-                <span className="min-w-0 flex-1 truncate font-semibold">{line.name}</span>
+                <span className="min-w-0 flex-1 truncate font-semibold">{orderLineName(line)}</span>
                 <span className="shrink-0 text-muted">×{line.quantity}</span>
                 <span className="shrink-0 font-black">
                   {formatPrice(line.unitPrice * line.quantity, "ar", commerce)}

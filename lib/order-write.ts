@@ -1,6 +1,7 @@
 import { checkOrderRules, resolveDeliveryZone } from "./order-rules";
 import { generateOrderNumber, orderPrefixFrom } from "./order-number";
 import { computeLoyaltyDiscount, nextBalance } from "./loyalty";
+import { computeOrderTotals, orderStatusOf } from "./format";
 import { StoreError } from "./store-error";
 import type { CartLine, CustomerRecord, LoyaltyAdjustment, MenuData, OrderStatus, OrderType, SavedOrder } from "./types";
 
@@ -10,43 +11,6 @@ export interface PlaceOrderInput {
   orderType: OrderType;
   zoneId?: string;
   paymentMethod?: string;
-}
-
-interface ServerTotals {
-  subtotal: number;
-  delivery: number;
-  service: number;
-  total: number;
-}
-
-/**
- * @param discount خصم «كاشك» — بيتخصم من قيمة الأصناف قبل حساب رسوم الخدمة
- *                 عشان العميل يستفيد بالمكافأة كاملة. التوصيل مش بيتأثر بيه.
- */
-function computeServerTotals(
-  lines: { price: number; quantity: number }[],
-  commerce: MenuData["commerce"],
-  orderType: string,
-  zoneFee?: number | null,
-  discount = 0,
-): ServerTotals {
-  const subtotal = lines.reduce((s, l) => s + l.price * l.quantity, 0);
-  const isDelivery = orderType === "delivery";
-  const qualifiesFree =
-    isDelivery && commerce.freeDeliveryOver > 0 && subtotal >= commerce.freeDeliveryOver;
-  const baseFee = typeof zoneFee === "number" && zoneFee >= 0 ? zoneFee : commerce.deliveryFee;
-  const delivery = isDelivery && !qualifiesFree ? Math.max(0, baseFee) : 0;
-  const safeDiscount = Math.max(0, Math.min(subtotal, discount));
-  const service =
-    commerce.serviceChargePercent > 0
-      ? Math.round(((subtotal - safeDiscount + delivery) * commerce.serviceChargePercent) / 100)
-      : 0;
-  return {
-    subtotal,
-    delivery,
-    service,
-    total: Math.max(0, subtotal - safeDiscount + delivery + service),
-  };
 }
 
 export function orderNumber(menu: MenuData, exists?: (id: string) => boolean) {
@@ -70,11 +34,21 @@ export function prepareOrder(
 
   const soldQuantities = new Map<string, number>();
   const items = new Map(menu.items.map((item) => [item.id, item]));
-  const lines = input.lines.map(({ itemId, quantity }) => {
+  const lines = input.lines.map(({ itemId, variantId, quantity }) => {
     const item = items.get(itemId);
     if (!item?.available) throw new StoreError("أحد المنتجات لم يعد متاحاً", 409);
+    const variant = variantId ? item.variants?.find((candidate) => candidate.id === variantId) : undefined;
+    if (variantId && !variant) throw new StoreError(`الوزن المختار لم يعد متاحاً: ${item.name}`, 409);
+    const unitPrice = variant?.price ?? item.price;
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) throw new StoreError(`سعر المنتج غير متاح: ${item.name}`, 409);
     soldQuantities.set(itemId, (soldQuantities.get(itemId) ?? 0) + quantity);
-    return { itemId, name: item.name, quantity, unitPrice: item.price };
+    return {
+      itemId,
+      name: item.name,
+      ...(variant?.label ? { variantLabel: variant.label } : {}),
+      quantity,
+      unitPrice,
+    };
   });
   const subtotal = lines.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0);
   const violation = checkOrderRules(menu, {
@@ -89,8 +63,8 @@ export function prepareOrder(
   const loyalty = phoneKey && settings.percent > 0
     ? computeLoyaltyDiscount(settings, subtotal, customer?.spent ?? 0)
     : null;
-  const totals = computeServerTotals(
-    lines.map(({ unitPrice, quantity }) => ({ price: unitPrice, quantity })),
+  const totals = computeOrderTotals(
+    subtotal,
     menu.commerce,
     input.orderType,
     zone?.fee,
@@ -139,7 +113,7 @@ export function changeOrderStatus(
   customer?: CustomerRecord,
 ) {
   const updatedOrder = { ...order, status, statusUpdatedAt: now };
-  const previous = order.status === "cancelled" ? "cancelled" : "new";
+  const previous = orderStatusOf(order);
   if (status === previous || !customer) return { order: updatedOrder };
 
   const subtotal = Math.max(0, order.subtotal ?? 0);
