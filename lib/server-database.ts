@@ -20,6 +20,7 @@ import { firebaseProjectId } from "./firebase-admin";
 import { changeOrderStatus, orderNumber, prepareOrder, type PlaceOrderInput } from "./order-write";
 import { isValidOrderType, sanitizeText } from "./validation";
 import { isUsablePhone, loyaltyStatus, normalizePhone, type LoyaltyStatus } from "./loyalty";
+import { assertSameOrderAttempt, missingAttemptOrder, orderAttempt, type OrderAttempt, type SavedOrderAttempt } from "./order-attempt";
 import { StoreError } from "./store-error";
 import type { AdminOverview, CustomerRecord, MenuData, OrderStatus, SavedOrder } from "./types";
 
@@ -33,12 +34,14 @@ interface FileDatabase {
   orders: SavedOrder[];
   /** عملاء نظام «كاشك» — مفتاحهم رقم الموبايل بصيغة موحّدة */
   customers: CustomerRecord[];
+  orderAttempts: Record<string, SavedOrderAttempt>;
 }
 
 const freshDatabase = (): FileDatabase => ({
   menu: normalizeData(structuredClone(DEFAULT_DATA)),
   orders: [],
   customers: [],
+  orderAttempts: {},
 });
 
 let queue = Promise.resolve();
@@ -70,6 +73,7 @@ async function readFileDatabase(): Promise<FileDatabase> {
     menu: normalizeData(parsed.menu ?? DEFAULT_DATA),
     orders: Array.isArray(parsed.orders) ? parsed.orders : [],
     customers: Array.isArray(parsed.customers) ? parsed.customers : [],
+    orderAttempts: parsed.orderAttempts ?? {},
   };
 }
 
@@ -125,7 +129,7 @@ export async function replaceMenu(menu: MenuData, token: string | null): Promise
   });
 }
 
-export async function createOrder(input: Partial<PlaceOrderInput>): Promise<{ order: SavedOrder }> {
+export async function createOrder(input: Partial<PlaceOrderInput>, key: string | null = null): Promise<{ order: SavedOrder }> {
   // تحقق أساسي من نوع الطلب
   const orderType = input?.orderType;
   if (!orderType || !isValidOrderType(orderType)) throw new StoreError("نوع الطلب غير صالح", 400);
@@ -145,8 +149,10 @@ export async function createOrder(input: Partial<PlaceOrderInput>): Promise<{ or
       if (!l || typeof l.itemId !== "string") throw new StoreError("منتج غير صالح", 400);
       const rawQty = Math.floor(Number(l.quantity) || 0);
       if (rawQty < 1 || rawQty > 50) throw new StoreError("الكمية يجب أن تكون بين 1 و 50", 400);
+      const variantId = sanitizeText(l.variantId ?? "", 50);
       return {
         itemId: sanitizeText(l.itemId, 50),
+        ...(variantId ? { variantId } : {}),
         quantity: rawQty,
       };
     }),
@@ -154,14 +160,22 @@ export async function createOrder(input: Partial<PlaceOrderInput>): Promise<{ or
     paymentMethod: sanitizeText(input.paymentMethod ?? "", 40) || undefined,
   };
 
+  const attempt = orderAttempt(key, sanitizedInput);
   const order = firebaseProjectId()
-    ? await placeOrder(sanitizedInput)
-    : await serialized(() => createOrderInFile(sanitizedInput));
+    ? await placeOrder(sanitizedInput, attempt)
+    : await serialized(() => createOrderInFile(sanitizedInput, attempt));
   return { order };
 }
 
-async function createOrderInFile(input: PlaceOrderInput) {
+async function createOrderInFile(input: PlaceOrderInput, attempt: OrderAttempt | null) {
   const database = await readFileDatabase();
+  if (attempt) {
+    const saved = database.orderAttempts[attempt.id];
+    if (saved) {
+      assertSameOrderAttempt(attempt, saved);
+      return database.orders.find((order) => order.id === saved.orderId) ?? missingAttemptOrder();
+    }
+  }
   const phoneKey = database.menu.commerce.loyalty.enabled && isUsablePhone(input.customer.phone)
     ? normalizePhone(input.customer.phone)
     : "";
@@ -181,6 +195,7 @@ async function createOrderInFile(input: PlaceOrderInput) {
     else database.customers[customerIndex] = updatedCustomer;
   }
   database.orders.push(order);
+  if (attempt) database.orderAttempts[attempt.id] = { orderId: order.id, fingerprint: attempt.fingerprint };
   database.orders = database.orders.slice(-FILE_ORDER_LIMIT);
   database.menu.updatedAt = now;
   await writeFileDatabase(database);

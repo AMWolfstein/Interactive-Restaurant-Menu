@@ -59,6 +59,8 @@ export interface MenuItem {
   nameEn?: string;
   description?: string;
   descriptionEn?: string;
+  /** كلمات بديلة يبحث بها العميل عن المنتج. */
+  searchKeywords?: string;
   /** الوزن أو حجم العبوة، مثال: 1 كجم */
   weight?: string;
   /** اسم المورد المصري */

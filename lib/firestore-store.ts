@@ -7,6 +7,7 @@ import { decodePayload, payloadChunks, writePayload } from "./firestore-payload.
 import { normalizeData } from "./normalize";
 import { isUsablePhone, normalizePhone } from "./loyalty";
 import { changeOrderStatus, orderNumber, prepareOrder, type PlaceOrderInput } from "./order-write";
+import { assertSameOrderAttempt, missingAttemptOrder, type OrderAttempt, type SavedOrderAttempt } from "./order-attempt";
 import { StoreError } from "./store-error";
 import type { CustomerRecord, MenuData, OrderStatus, SavedOrder } from "./types";
 
@@ -79,10 +80,21 @@ export function savePublishedMenu(menu: MenuData) {
   });
 }
 
-export function placeOrder(input: PlaceOrderInput) {
+export function placeOrder(input: PlaceOrderInput, attempt: OrderAttempt | null) {
   return withFirestore("تعذّر تسجيل الطلب", async () => {
     const db = firestoreDb();
     return db.runTransaction(async (tx) => {
+      const orders = db.collection("orders");
+      const attemptRef = attempt ? db.collection("order_attempts").doc(attempt.id) : null;
+      if (attemptRef && attempt) {
+        const saved = (await tx.get(attemptRef)).data() as SavedOrderAttempt | undefined;
+        if (saved) {
+          assertSameOrderAttempt(attempt, saved);
+          const record = (await tx.get(orders.doc(docId(saved.orderId)))).data() as OrderDocument | undefined;
+          return record?.data ?? missingAttemptOrder();
+        }
+      }
+
       const stored = decodePayload(await tx.get(payloadChunks(catalogRef(db))));
       if (!stored) throw new StoreError("الكتالوج غير جاهز لاستقبال الطلبات", 503);
       const menu = normalizeData(stored);
@@ -90,7 +102,6 @@ export function placeOrder(input: PlaceOrderInput) {
       const customerDoc = menu.commerce.loyalty.enabled && isUsablePhone(input.customer.phone) ? customerRef(phoneKey) : null;
       const customer = customerDoc ? (await tx.get(customerDoc)).data() as CustomerRecord | undefined : undefined;
 
-      const orders = db.collection("orders");
       let id = orderNumber(menu);
       let orderRef = orders.doc(docId(id));
       for (let attempt = 0; (await tx.get(orderRef)).exists; attempt += 1) {
@@ -109,6 +120,7 @@ export function placeOrder(input: PlaceOrderInput) {
 
       const document: OrderDocument = { data: order, createdAt: order.createdAt, phoneKey, loyaltyTracked: Boolean(customerDoc) };
       tx.create(orderRef, document);
+      if (attemptRef && attempt) tx.set(attemptRef, { orderId: id, fingerprint: attempt.fingerprint });
       if (customerDoc && updatedCustomer) tx.set(customerDoc, updatedCustomer);
       sales.forEach((snapshot, index) => {
         const itemId = itemIds[index];

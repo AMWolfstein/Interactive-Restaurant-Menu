@@ -15,6 +15,7 @@ import {
   BookOpenText,
 } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
+import { usePendingOrder } from "@/lib/checkout-session";
 import { useCart } from "@/lib/use-cart";
 import { computeTotals, formatPrice, pick, toWhatsappNumber } from "@/lib/format";
 import { useStoreOpen } from "@/lib/use-store-open";
@@ -27,6 +28,7 @@ import { PwaInstallButton } from "@/components/public/pwa-install-button";
 import { PreviousOrderButton } from "@/components/public/previous-order-button";
 import { FAVORITES_SERVER_SNAPSHOT, getFavoritesSnapshot, subscribeFavorites } from "@/lib/favorites-store";
 import { isItemOnOffer } from "@/lib/offers";
+import { matchesProductSearch, productSearchTerms, productSearchText } from "@/lib/product-search";
 import { useOnlineStatus } from "@/lib/use-online-status";
 import { HeroCarousel } from "@/components/public/hero-carousel";
 import { OfflineBanner } from "@/components/public/offline-banner";
@@ -77,6 +79,7 @@ export function Storefront() {
   const [page, setPage] = useState(1);
   const [cartOpen, setCartOpen] = useState(false);
   const online = useOnlineStatus();
+  const pendingOrder = usePendingOrder();
 
   const cart = useCart(items);
   const favoriteIds = useSyncExternalStore(subscribeFavorites, getFavoritesSnapshot, () => FAVORITES_SERVER_SNAPSHOT);
@@ -97,32 +100,32 @@ export function Storefront() {
   }, [sortBy]);
   const nameOf = (value: { name: string; nameEn?: string }) => pick(lang, value.name, value.nameEn);
 
-  const searched = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    if (!term) return items;
-    return items.filter((item) =>
-      [item.name, item.nameEn, item.description, item.descriptionEn]
-        .filter(Boolean)
-        .some((text) => String(text).toLowerCase().includes(term)),
-    );
-  }, [items, query]);
+  const searchIndex = useMemo(() => items.map((item) => ({ item, text: productSearchText(item) })), [items]);
+  const searchTerms = useMemo(() => productSearchTerms(query), [query]);
+  const hasSearch = searchTerms.length > 0;
+  const searched = useMemo(
+    () => hasSearch
+      ? searchIndex.filter(({ text }) => matchesProductSearch(text, searchTerms)).map(({ item }) => item)
+      : items,
+    [hasSearch, searchIndex, searchTerms, items],
+  );
   const featured = useMemo(
-    () => (commerce.enableFeatured && activeCategory === ALL && !query
+    () => (commerce.enableFeatured && activeCategory === ALL && !hasSearch
       ? items.filter((item) => item.available && (item.salesCount ?? 0) > 0).sort((a, b) => (b.salesCount ?? 0) - (a.salesCount ?? 0))
       : []),
-    [commerce.enableFeatured, activeCategory, query, items],
+    [commerce.enableFeatured, activeCategory, hasSearch, items],
   );
 
   // كل المنتجات في قائمة واحدة تحت بعض — من غير تقسيم أقسام — بعد تطبيق
   // الفلاتر (البحث/القسم/المورد/المفضلة/العروض) والترتيب المختار.
   const listItems = useMemo(() => {
-    const pool = searched.filter((item) => item.available || query);
+    const pool = searched.filter((item) => item.available || hasSearch);
     if (supplierFilter) return sortItems(pool.filter((item) => item.supplier?.trim() === supplierFilter));
     if (activeCategory === FAVORITES) return sortItems(pool.filter((item) => favoriteIds.includes(item.id)));
     if (activeCategory === OFFERS) return sortItems(pool.filter((item) => isItemOnOffer(item)));
     if (activeCategory !== ALL) return sortItems(pool.filter((item) => item.categoryId === activeCategory));
     return sortItems(pool);
-  }, [searched, activeCategory, query, favoriteIds, supplierFilter, sortItems]);
+  }, [searched, activeCategory, hasSearch, favoriteIds, supplierFilter, sortItems]);
 
   const isEmpty = listItems.length === 0;
 
@@ -604,7 +607,7 @@ export function Storefront() {
       </main>
 
       {/* شريط السلة العائم */}
-      {commerce.enableCart && totals.itemCount > 0 ? (
+      {(pendingOrder || (commerce.enableCart && totals.itemCount > 0)) ? (
         <button
           type="button"
           onClick={() => setCartOpen(true)}
@@ -612,10 +615,12 @@ export function Storefront() {
         >
           <span className="flex items-center gap-2 text-xs font-black">
             <ShoppingBag className="h-4 w-4" />
-            {totals.itemCount} {en ? "items" : "منتج"}
+            {pendingOrder ? (en ? "Order pending" : "طلب قيد التسجيل") : `${totals.itemCount} ${en ? "items" : "منتج"}`}
           </span>
           <span className="text-sm font-black">
-            {formatPrice(totals.subtotal, lang, commerce)} {en ? "→ Review order" : "— راجع الطلب ←"}
+            {pendingOrder
+              ? (en ? "Continue" : "كمّل الطلب")
+              : `${formatPrice(totals.subtotal, lang, commerce)} ${en ? "→ Review order" : "— راجع الطلب ←"}`}
           </span>
         </button>
       ) : null}

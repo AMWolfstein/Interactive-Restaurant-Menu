@@ -181,6 +181,7 @@ export function ItemsPanel({ intent, nonce }: { intent?: string; nonce: number }
       ...editing.draft,
       name: editing.draft.name.trim(),
       description: editing.draft.description?.trim() ?? "",
+      searchKeywords: editing.draft.searchKeywords?.trim() ?? "",
       supplier: editing.draft.supplier?.trim() ?? "",
       variants,
     };
@@ -471,6 +472,14 @@ function ItemEditor({
           </Field>
           <Field label="وصف المنتج">
             <TextArea value={draft.description ?? ""} onChange={(event) => set({ description: event.target.value })} rows={2} />
+          </Field>
+          <Field label="كلمات بحث بديلة" hint="افصل بين الأسماء أو الكلمات بفاصلة">
+            <TextInput
+              value={draft.searchKeywords ?? ""}
+              onChange={(event) => set({ searchKeywords: event.target.value })}
+              maxLength={300}
+              placeholder="رز، أرز بلدي"
+            />
           </Field>
           <Field label="المورد" hint="اختار من قائمة الموردين التي أضفتها في تبويب الموردين">
             <Select value={draft.supplier ?? ""} onChange={(event) => set({ supplier: event.target.value })}>

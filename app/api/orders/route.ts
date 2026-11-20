@@ -27,21 +27,21 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => {
+      throw new StoreError("بيانات الطلب غير صالحة", 400);
+    });
     // تحقق سريع من حجم الحمولة (منع DoS)
     if (JSON.stringify(body).length > 100_000) {
       return NextResponse.json({ error: "بيانات الطلب كبيرة جداً" }, { status: 413 });
     }
-    const result = await createOrder(body);
+    const result = await createOrder(body, request.headers.get("idempotency-key"));
     return NextResponse.json(result, {
       status: 201,
-      headers: { "X-RateLimit-Remaining": String(rl.remaining) },
+      headers: { "X-RateLimit-Remaining": String(rl.remaining), "Cache-Control": "no-store" },
     });
   } catch (error) {
-    const status = error instanceof StoreError ? error.status : 400;
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "تعذر تسجيل الطلب" },
-      { status },
-    );
+    if (error instanceof StoreError) return NextResponse.json({ error: error.message }, { status: error.status });
+    console.error("[orders] order submission failed", error);
+    return NextResponse.json({ error: "تعذر تسجيل الطلب" }, { status: 500 });
   }
 }

@@ -285,6 +285,7 @@ export function normalizeData(raw: unknown): MenuData {
     ...merged,
     items: merged.items.map((item) => ({
       ...item,
+      searchKeywords: typeof item.searchKeywords === "string" ? item.searchKeywords.trim().slice(0, 300) : "",
       supplier: typeof item.supplier === "string" ? item.supplier.trim().slice(0, 120) : "",
       // 0 = عادي، 1 = حار، 2 = نباتي. القيم القديمة الأكبر من 2 تتراجع لعادي.
       spicy: item.spicy === 2 ? 2 : item.spicy > 0 ? 1 : 0,

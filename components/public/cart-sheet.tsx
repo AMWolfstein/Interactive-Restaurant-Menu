@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   CircleX,
   Clock,
@@ -16,6 +17,8 @@ import {
   Truck,
 } from "lucide-react";
 import confetti from "canvas-confetti";
+import { getCartSnapshot } from "@/lib/cart-store-core";
+import { saveOrderReceipt, savePendingOrder, usePendingOrder } from "@/lib/checkout-session";
 import { useMenu } from "@/lib/use-menu";
 import { computeTotals, formatPrice, ORDER_TYPE_LABEL, pick, toWhatsappNumber } from "@/lib/format";
 import { useStoreOpen } from "@/lib/use-store-open";
@@ -47,6 +50,9 @@ export function CartSheet({
   remove: (id: string, variantId?: string) => void;
   clear: () => void;
 }) {
+  const router = useRouter();
+  const pending = usePendingOrder();
+  const sendingRef = useRef(false);
   const { data } = useMenu();
   const { brand, commerce, contact } = data;
   const lang = brand.language;
@@ -124,64 +130,92 @@ export function CartSheet({
   };
 
   const send = async () => {
-    if (!validate() || sending) return;
-    const number = toWhatsappNumber(contact.whatsapp);
-    if (!number) {
-      setErrors({ total: en ? "The shop did not set a WhatsApp number" : "صاحب المحل لسه ما حددش رقم واتساب" });
-      return;
-    }
-    const whatsappWindow = window.open("about:blank", "_blank");
-    setSending(true);
-    try {
-      const response = await fetch("/api/orders", {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          lines: lines.map(({ line }) => line), orderType, total: totals.total,
+    if (sendingRef.current) return;
+    let attempt = pending;
+    if (!attempt) {
+      if (!validate()) return;
+      const whatsappNumber = toWhatsappNumber(contact.whatsapp);
+      if (!whatsappNumber) {
+        setErrors({ total: en ? "The shop did not set a WhatsApp number" : "صاحب المحل لسه ما حددش رقم واتساب" });
+        return;
+      }
+      attempt = {
+        key: crypto.randomUUID(),
+        whatsappNumber,
+        cartSnapshot: JSON.stringify(getCartSnapshot()),
+        body: {
+          lines: lines.map(({ line }) => line),
+          orderType,
           customer: { name, phone, address, notes },
           ...(zone ? { zoneId: zone.id } : {}),
           ...(paymentMethod ? { paymentMethod } : {}),
-        }),
+        },
+      };
+      savePendingOrder(attempt);
+    }
+
+    sendingRef.current = true;
+    setSending(true);
+    setErrors({});
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 25_000);
+    try {
+      const response = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "content-type": "application/json", "idempotency-key": attempt.key },
+        body: JSON.stringify(attempt.body),
+        signal: controller.signal,
       });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "تعذر تسجيل الطلب");
-      if (commerce.enableConfetti) {
-        confetti({ particleCount: 130, spread: 75, origin: { y: 0.65 }, colors: [brand.accent, "#22c55e", "#ffffff"] });
+      if (response.status === 429) {
+        setErrors({ total: en ? "Too many attempts. Wait a minute and retry the same order." : "محاولات كتير. استنى دقيقة وجرّب نفس الطلب تاني." });
+        return;
       }
-      // الطلب اتسجّل في قاعدة البيانات بالفعل — رسالة واتساب فيها رقم الطلب بس.
-      // تفاصيل المنتجات والأسعار المحل بيشوفها في /invoices و /admin،
-      // والفاتورة الرسمية بيبعتها الموظف من هناك.
-      const orderNumber = result.order.id as string;
-      const message = en
-        ? [
-            "Your order has been created successfully.",
-            "",
-            "Order number:",
-            orderNumber,
-            "",
-            `Please send this message to ${brand.storeNameEn || brand.storeName} to confirm your order.`,
-          ].join("\n")
-        : [
-            "تم إنشاء طلبك بنجاح.",
-            "",
-            "رقم الطلب:",
-            orderNumber,
-            "",
-            "يرجى إرسال هذه الرسالة للمحل لإتمام الطلب.",
-          ].join("\n");
-      const url = `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
-      if (whatsappWindow) whatsappWindow.location.href = url;
-      else window.location.href = url;
+      if (!response.ok) {
+        const result = await response.json().catch(() => null);
+        if ([400, 409, 413].includes(response.status) && typeof result?.error === "string") {
+          savePendingOrder(null);
+          setErrors({ total: result.error });
+          return;
+        }
+        throw new Error("Order status unavailable");
+      }
+      const { order } = await response.json();
+      if (typeof order?.id !== "string" || !Number.isFinite(order.total)) throw new Error("Invalid order receipt");
+      saveOrderReceipt({
+        id: order.id,
+        total: order.total,
+        currency: order.currency ?? commerce.currency,
+        whatsappNumber: attempt.whatsappNumber,
+      });
       try {
-        window.localStorage.setItem(PREVIOUS_ORDER_KEY, JSON.stringify(lines.map(({ line }) => line)));
+        window.localStorage.setItem(PREVIOUS_ORDER_KEY, JSON.stringify(attempt.body.lines));
       } catch {
-        // إعادة الطلب ميزة اختيارية؛ فشل التخزين لا يمنع إكمال الطلب.
+        // The receipt works even when localStorage is unavailable.
       }
-      clear();
+      if (JSON.stringify(getCartSnapshot()) === attempt.cartSnapshot) clear();
+      savePendingOrder(null);
       onClose();
-    } catch (error) {
-      whatsappWindow?.close();
-      setErrors({ total: error instanceof Error ? error.message : (en ? "Could not submit order" : "تعذر تسجيل الطلب") });
-    } finally { setSending(false); }
+      router.push("/order-confirmation");
+      if (commerce.enableConfetti) {
+        void confetti({
+          particleCount: 130,
+          spread: 75,
+          origin: { y: 0.65 },
+          colors: [brand.accent, "#22c55e", "#ffffff"],
+          disableForReducedMotion: true,
+        });
+      }
+    } catch {
+      setErrors({
+        total: en
+          ? "We couldn't confirm that the order was saved. Try again to recover the same order."
+          : "ما قدرناش نتأكد إن الطلب اتحفظ. جرّب تاني عشان تكمل نفس الطلب.",
+      });
+    } finally {
+      window.clearTimeout(timeout);
+      sendingRef.current = false;
+      setSending(false);
+    }
   };
 
   const field = (
@@ -237,7 +271,16 @@ export function CartSheet({
           </button>
         </header>
 
-        {lines.length === 0 ? (
+        {pending ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center" role="status">
+            <Receipt aria-hidden="true" className="h-10 w-10 text-accent" />
+            <p className="text-sm font-bold">
+              {sending
+                ? (en ? "Saving your order…" : "جاري تسجيل طلبك…")
+                : errors.total ?? (en ? "You can try saving the same order again." : "تقدر تعيد محاولة تسجيل نفس الطلب.")}
+            </p>
+          </div>
+        ) : lines.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center text-muted">
             <ShoppingBag className="h-14 w-14 opacity-25" />
             <p className="text-sm font-bold">{en ? "Your cart is empty" : "السلة فاضية خالص"}</p>
@@ -518,7 +561,7 @@ export function CartSheet({
         )}
 
         <footer className="space-y-2.5 border-t border-line px-5 py-4">
-          {!storeOpen ? (
+          {!storeOpen && !pending ? (
             <p className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5 text-[11px] font-bold text-amber-400">
               <Clock className="h-3.5 w-3.5" /> {contact.closedMessage}
             </p>
@@ -534,11 +577,15 @@ export function CartSheet({
           <button
             type="button"
             onClick={send}
-            disabled={sending || lines.length === 0 || !storeOpen || !commerce.enableCart}
+            disabled={sending || (!pending && (lines.length === 0 || !storeOpen || !commerce.enableCart))}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3.5 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-500 disabled:opacity-40"
           >
             <Send className="h-4 w-4" />
-            {sending ? (en ? "Saving order…" : "جاري تسجيل الطلب…") : en ? "Send order on WhatsApp" : "إرسال الطلب على واتساب"}
+            {sending
+              ? (en ? "Saving order…" : "جاري تسجيل الطلب…")
+              : pending
+                ? (en ? "Retry saving order" : "إعادة محاولة تسجيل الطلب")
+                : (en ? "Save order" : "سجّل الطلب")}
           </button>
         </footer>
       </aside>
