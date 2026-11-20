@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 /**
  * تحديث حالة طلب (جديد / ملغي) — للأدمن فقط.
  * أي طلب جه من الموقع هيتنفذ، فالإجراء الوحيد هو الإلغاء (أو الإرجاع جديد).
- * محمي بـ Supabase access token + Rate limiting.
+ * محمي بـ Firebase ID token + Rate limiting.
  */
 export async function PATCH(request: NextRequest) {
   const token = bearerToken(request);

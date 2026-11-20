@@ -143,7 +143,7 @@ export function DataPanel() {
 
         <Panel
           title="الدخول والصلاحيات"
-          description="Supabase Auth — حساب واحد للأدمن"
+          description="Firebase Authentication — حساب واحد للأدمن"
           icon={<ShieldCheck className="h-4 w-4" />}
         >
           <div className="space-y-2.5 text-[11px] leading-relaxed">
@@ -156,11 +156,11 @@ export function DataPanel() {
             </div>
             <p className="flex gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/8 p-2.5 text-emerald-300">
               <KeyRound className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              الدخول للوحة يتم بالإيميل والباسورد من حساب الأدمن في Supabase (Authentication → Users) فقط.
+              الدخول للوحة يتم بالإيميل والباسورد من حساب الأدمن في Firebase (Authentication → Users) فقط.
             </p>
             <p className="text-muted">
               كل طلبات الأدمن (حفظ الكتالوج وقراءة الطلبات) بتتحقق من access token على السيرفر،
-              وأي طلب من غير توكن صالح بيرجع 401. إدارة الحسابات (إضافة أو إيقاف مستخدم) من لوحة Supabase.
+              وأي طلب من غير توكن صالح بيرجع 401. إدارة الحسابات (إضافة أو إيقاف مستخدم) من لوحة Firebase.
             </p>
           </div>
         </Panel>

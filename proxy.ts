@@ -1,6 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 const isDev = process.env.NODE_ENV !== "production";
+const firebaseEmulatorOrigins = [
+  process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_URL,
+  process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST && `http://${process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST}`,
+].flatMap((value) => {
+  if (!value) return [];
+  const url = new URL(value);
+  return ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) ? [url.origin] : [];
+});
 
 /**
  * CSP بـnonce لكل طلب بدل `'unsafe-inline'`.
@@ -35,8 +43,10 @@ function buildCsp(nonce: string): string {
     // فلازم تكون مصادر الصور/الخطوط مسموحة هنا كمان مش في img-src/font-src بس.
     [
       "connect-src 'self' data: blob:",
-      "https://*.supabase.co",
-      "wss://*.supabase.co",
+      "https://identitytoolkit.googleapis.com",
+      "https://securetoken.googleapis.com",
+      "https://firestore.googleapis.com",
+      ...firebaseEmulatorOrigins,
       "https://api.cloudinary.com",
       "https://res.cloudinary.com",
       "https://fonts.googleapis.com",
@@ -51,7 +61,7 @@ function buildCsp(nonce: string): string {
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
-    ...(isDev ? [] : ["upgrade-insecure-requests"]),
+    ...(isDev || firebaseEmulatorOrigins.length ? [] : ["upgrade-insecure-requests"]),
   ].join("; ");
 }
 

@@ -16,7 +16,7 @@ import {
 import { useMenu } from "@/lib/use-menu";
 import { orderStatusOf } from "@/lib/format";
 import { loyaltyStatus } from "@/lib/loyalty";
-import { authenticatedFetch } from "@/lib/supabase-auth-core";
+import { authenticatedFetch } from "@/lib/firebase-auth-core";
 import { cx } from "@/lib/cx";
 import type { CustomerRecord, SavedOrder } from "@/lib/types";
 import { Badge, Panel, TextInput, useToast } from "@/components/ui";

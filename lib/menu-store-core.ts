@@ -1,8 +1,7 @@
 import { DEFAULT_DATA } from "./defaults";
 import { isLegacyMenyuBackup, normalizeData } from "./normalize";
 import { subscribeRealtime } from "./realtime";
-import { CATALOG_TABLE, PUBLISHED_SLUG } from "./supabase";
-import { authenticatedFetch } from "./supabase-auth-core";
+import { authenticatedFetch } from "./firebase-auth-core";
 import { validateImportedMenu } from "./validation";
 import type { Category, MenuData, MenuItem, Supplier } from "./types";
 
@@ -70,7 +69,7 @@ async function errorMessage(response: Response): Promise<string | null> {
 /** قراءة الكتالوج من الباك إند */
 export async function refreshMenu() {
   try {
-    const response = await authenticatedFetch("/api/menu", { cache: "no-store" });
+    const response = await fetch("/api/menu", { cache: "no-store" });
     if (!response.ok) throw new Error((await errorMessage(response)) ?? "تعذّر قراءة الكتالوج من الباك إند");
     const data = normalizeData(await response.json());
     // A refresh can finish after the admin has started editing. Never replace
@@ -111,15 +110,14 @@ function ensureInit() {
 
   // تحديث لحظي فوري: أي تعديل من الأدمن يوصل لكل الأجهزة
   subscribeRealtime(
-    "realtime:menu",
-    [{ table: CATALOG_TABLE, event: "UPDATE", filter: `slug=eq.${PUBLISHED_SLUG}` }],
+    "catalog",
     () => {
       if (Date.now() - lastLocalWriteAt < SELF_ECHO_GUARD_MS) return;
       refreshFromRemote();
     },
   );
 
-  // شبكة أمان لو الـ Realtime مش متاح (جداول مش مضافة للـ publication).
+  // شبكة أمان لو الـ Realtime مش متاح (قواعد الاستماع مش متاحة).
   // بيقف لما التاب يكون مخفي: من غير كده أي تاب سايبه المستخدم مفتوح بيفضل
   // بيجيب الكتالوج كامل كل دقيقة للأبد.
   const tick = () => {

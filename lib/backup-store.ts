@@ -1,9 +1,10 @@
 import "server-only";
 
-import { rest } from "./supabase-store";
+import { randomUUID } from "node:crypto";
+import { firestoreDb } from "./firebase-admin";
+import { decodePayload, payloadChunks, writePayload } from "./firestore-payload.mjs";
 import type { MenuData } from "./types";
 
-const BACKUPS_TABLE = "catalog_backups";
 const RETENTION_COUNT = 30;
 export type BackupReason = "scheduled" | "manual";
 
@@ -15,98 +16,42 @@ export interface CatalogBackupSummary {
   categoryCount: number;
 }
 
-interface BackupRow {
-  id: string;
-  created_at: string;
-  reason: BackupReason;
-  data: MenuData;
-}
-
-function serviceRoleKey() {
-  return (process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim();
-}
-
-function configured(): boolean {
-  return Boolean(serviceRoleKey());
-}
-
-function serviceOptions() {
-  const key = serviceRoleKey();
-  return { apiKey: key, token: key };
-}
-
-function summarize(row: BackupRow): CatalogBackupSummary {
-  return {
-    id: row.id,
-    createdAt: row.created_at,
-    reason: row.reason,
-    itemCount: Array.isArray(row.data?.items) ? row.data.items.length : 0,
-    categoryCount: Array.isArray(row.data?.categories) ? row.data.categories.length : 0,
-  };
-}
-
 export async function createCatalogBackup(menu: MenuData, reason: BackupReason): Promise<CatalogBackupSummary> {
-  if (!configured()) throw new Error("SUPABASE_SERVICE_ROLE_KEY غير مضبوط — لا يمكن حفظ النسخ التلقائية بأمان");
-  const result = await rest<BackupRow[]>(BACKUPS_TABLE, {
-    method: "POST",
-    body: { reason, data: menu },
-    prefer: "return=representation",
-    ...serviceOptions(),
-  });
-  if (!result.ok || !result.data?.[0]) throw new Error(result.message || "تعذّر حفظ النسخة الاحتياطية");
-  await pruneCatalogBackups();
-  return summarize(result.data[0]);
-}
+  const db = firestoreDb();
+  const backups = db.collection("catalog_backups");
+  const ref = backups.doc(randomUUID());
+  const summary: CatalogBackupSummary = {
+    id: ref.id,
+    createdAt: new Date().toISOString(),
+    reason,
+    itemCount: menu.items.length,
+    categoryCount: menu.categories.length,
+  };
+  const batch = db.batch();
+  batch.create(ref, summary);
+  writePayload(batch, ref, menu);
+  await batch.commit();
 
-/** صف الملخّص الجاي من دالة list_catalog_backups */
-interface BackupSummaryRow {
-  id: string;
-  created_at: string;
-  reason: BackupReason;
-  item_count: number;
-  category_count: number;
+  const stale = await backups.orderBy("createdAt", "desc").offset(RETENTION_COUNT).select().get();
+  for (const snapshot of stale.docs) {
+    await db.runTransaction(async (tx) => {
+      const chunks = await tx.get(payloadChunks(snapshot.ref));
+      for (const chunk of chunks.docs) tx.delete(chunk.ref);
+      tx.delete(snapshot.ref);
+    });
+  }
+  return summary;
 }
 
 export async function listCatalogBackups(limit = 15): Promise<CatalogBackupSummary[]> {
-  if (!configured()) throw new Error("SUPABASE_SERVICE_ROLE_KEY غير مضبوط");
   const safeLimit = Math.min(Math.max(1, limit), RETENTION_COUNT);
-
-  // العدّ بيحصل في قاعدة البيانات — من غير كده كنا بننزّل كتالوج كامل لكل
-  // نسخة من الـ 15 (ممكن يوصل لميجابايتات) عشان نعرض رقمين بس.
-  const summary = await rest<BackupSummaryRow[]>(`rpc/list_catalog_backups`, {
-    method: "POST",
-    body: { p_limit: safeLimit },
-    ...serviceOptions(),
-  });
-  if (summary.ok && Array.isArray(summary.data)) {
-    return summary.data.map((row) => ({
-      id: row.id,
-      createdAt: row.created_at,
-      reason: row.reason,
-      itemCount: Number(row.item_count) || 0,
-      categoryCount: Number(row.category_count) || 0,
-    }));
-  }
-
-  // احتياطي: قواعد البيانات اللي لسه ما اتعملها migration مفيهاش الدالة
-  const result = await rest<BackupRow[]>(`${BACKUPS_TABLE}?select=id,created_at,reason,data&order=created_at.desc&limit=${safeLimit}`, serviceOptions());
-  if (!result.ok) throw new Error(result.message || "تعذّر قراءة النسخ الاحتياطية");
-  return (result.data ?? []).map(summarize);
+  const backups = await firestoreDb().collection("catalog_backups").orderBy("createdAt", "desc")
+    .limit(safeLimit).get();
+  return backups.docs.map((backup) => backup.data() as CatalogBackupSummary);
 }
 
 export async function getCatalogBackup(id: string): Promise<MenuData | null> {
-  if (!configured()) throw new Error("SUPABASE_SERVICE_ROLE_KEY غير مضبوط");
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
-  const result = await rest<BackupRow[]>(`${BACKUPS_TABLE}?id=eq.${encodeURIComponent(id)}&select=id,data&limit=1`, serviceOptions());
-  if (!result.ok) throw new Error(result.message || "تعذّر قراءة النسخة الاحتياطية");
-  return result.data?.[0]?.data ?? null;
-}
-
-async function pruneCatalogBackups() {
-  const result = await rest<Array<{ id: string }>>(`${BACKUPS_TABLE}?select=id&order=created_at.desc&limit=100`, serviceOptions());
-  if (!result.ok || !result.data || result.data.length <= RETENTION_COUNT) return;
-  const stale = result.data.slice(RETENTION_COUNT).map((row) => row.id).filter((id) => /^[0-9a-f-]{36}$/i.test(id));
-  if (!stale.length) return;
-  // UUID values are validated before being interpolated into the PostgREST filter.
-  await rest<null>(`${BACKUPS_TABLE}?id=in.(${stale.join(",")})`, { method: "DELETE", ...serviceOptions() });
+  const backup = firestoreDb().collection("catalog_backups").doc(id);
+  return decodePayload(await payloadChunks(backup).get()) as MenuData | null;
 }

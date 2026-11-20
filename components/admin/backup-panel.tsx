@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ArchiveRestore, Clock3, Download, LoaderCircle, RefreshCw, ShieldCheck } from "lucide-react";
-import { authenticatedFetch } from "@/lib/supabase-auth-core";
+import { authenticatedFetch } from "@/lib/firebase-auth-core";
 import { useMenu } from "@/lib/use-menu";
 import { Button, Panel } from "@/components/ui";
 

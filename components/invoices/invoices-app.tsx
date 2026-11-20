@@ -21,10 +21,9 @@ import {
 import { useMenu } from "@/lib/use-menu";
 import { usePoll } from "@/lib/use-poll";
 import { useStaffSession } from "@/lib/use-staff-session";
-import { authenticatedFetch } from "@/lib/supabase-auth-core";
+import { authenticatedFetch } from "@/lib/firebase-auth-core";
 import { formatPrice, ORDER_STATUS_LABEL, ORDER_TYPE_LABEL, orderStatusOf } from "@/lib/format";
 import { subscribeRealtime } from "@/lib/realtime";
-import { ORDERS_TABLE } from "@/lib/supabase";
 import { flashTitle, playOrderChime, primeAlertAudio, stopTitleFlash } from "@/lib/alerts";
 import { cx } from "@/lib/cx";
 import type { OrderStatus, SavedOrder } from "@/lib/types";
@@ -170,7 +169,7 @@ function StaffLogin({
 
         {!session.configured ? (
           <p className="mt-3 rounded-xl border border-red-500/25 bg-red-500/8 p-2.5 text-[11px] leading-relaxed text-red-300">
-            متغيرات Supabase غير موجودة في البيئة دي.
+            متغيرات Firebase غير موجودة في البيئة دي.
           </p>
         ) : null}
       </form>
@@ -235,13 +234,9 @@ function InvoicesWorkspace({
 
   useEffect(() => {
     // Realtime الموجود أصلاً في المشروع — من غير polling عدواني.
-    // فيه فحص احتياطي كل دقيقتين بس لو الـWebSocket اتقطع.
+    // فيه فحص احتياطي كل دقيقتين بس لو الـRealtime اتقطع.
     const unsubscribe = subscribeRealtime(
-      "realtime:invoices-orders",
-      [
-        { table: ORDERS_TABLE, event: "INSERT" },
-        { table: ORDERS_TABLE, event: "UPDATE" },
-      ],
+      "orders",
       () => void load(),
     );
     const prime = () => primeAlertAudio();

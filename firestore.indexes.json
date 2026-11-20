@@ -1,0 +1,16 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "phoneKey", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": [
+    { "collectionGroup": "payload", "fieldPath": "bytes", "indexes": [] },
+    { "collectionGroup": "orders", "fieldPath": "data", "indexes": [] }
+  ]
+}

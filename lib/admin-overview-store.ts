@@ -1,8 +1,7 @@
 "use client";
 
-import { authenticatedFetch } from "./supabase-auth-core";
+import { authenticatedFetch } from "./firebase-auth-core";
 import { subscribeRealtime } from "./realtime";
-import { ORDERS_TABLE } from "./supabase";
 import type { AdminOverview, SavedOrder } from "./types";
 
 /**
@@ -151,11 +150,7 @@ function ensureInit(): void {
 
   // اشتراك Realtime واحد لكل اللوحة بدل تلاتة
   unsubscribeRealtime = subscribeRealtime(
-    "realtime:admin-overview",
-    [
-      { table: ORDERS_TABLE, event: "INSERT" },
-      { table: ORDERS_TABLE, event: "UPDATE" },
-    ],
+    "orders",
     () => void refreshAdminOverview(),
   );
 

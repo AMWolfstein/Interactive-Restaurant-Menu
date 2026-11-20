@@ -1,12 +1,13 @@
-import { createBrowserClient, isSupabaseConfigured } from "./supabase";
+import { onIdTokenChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { getFirebaseBrowser, isFirebaseConfigured } from "./firebase-browser";
 
 /**
- * حالة دخول صاحب المحل عن طريق Supabase Auth (إيميل + باسورد).
+ * حالة دخول صاحب المحل عن طريق Firebase Auth (إيميل + باسورد).
  * دي الطريقة الوحيدة للدخول للوحة التحكم — مفيش أي دخول محلي أو رقم سري.
  * كل طلب بيتبعت للـ API المحمي بيتحمل معاه access token والسيرفر بيتحقق منه.
  */
 export interface AuthState {
-  /** متغيرات Supabase موجودة */
+  /** متغيرات Firebase موجودة */
   configured: boolean;
   /** خلّصنا قراءة الجلسة من المتصفح */
   checked: boolean;
@@ -26,7 +27,7 @@ export const AUTH_SERVER_STATE: AuthState = {
 };
 
 export const MISSING_ENV_MESSAGE =
-  "إعدادات Supabase غير موجودة على السيرفر — أضف NEXT_PUBLIC_SUPABASE_URL و NEXT_PUBLIC_SUPABASE_ANON_KEY";
+  "إعدادات Firebase غير موجودة على السيرفر — أضف NEXT_PUBLIC_FIREBASE_PROJECT_ID و NEXT_PUBLIC_FIREBASE_API_KEY";
 
 let state: AuthState = AUTH_SERVER_STATE;
 let initialized = false;
@@ -45,12 +46,12 @@ function ensureInit() {
   if (initialized || typeof window === "undefined") return;
   initialized = true;
 
-  if (!isSupabaseConfigured()) {
+  if (!isFirebaseConfigured()) {
     set({ configured: false, checked: true, error: MISSING_ENV_MESSAGE });
     return;
   }
 
-  const client = createBrowserClient();
+  const client = getFirebaseBrowser();
   if (!client) {
     set({ configured: false, checked: true, error: MISSING_ENV_MESSAGE });
     return;
@@ -58,25 +59,8 @@ function ensureInit() {
 
   set({ configured: true });
 
-  client.auth
-    .getSession()
-    .then(({ data }) => {
-      set({
-        checked: true,
-        email: data.session?.user.email ?? null,
-        userId: data.session?.user.id ?? null,
-      });
-    })
-    .catch(() => {
-      set({ checked: true });
-    });
-
-  client.auth.onAuthStateChange((_event, session) => {
-    set({
-      checked: true,
-      email: session?.user.email ?? null,
-      userId: session?.user.id ?? null,
-    });
+  onIdTokenChanged(client.auth, (user) => {
+    set({ checked: true, email: user?.email ?? null, userId: user?.uid ?? null });
   });
 }
 
@@ -93,27 +77,15 @@ export function getAuthSnapshot(): AuthState {
 }
 
 export async function signInWithPassword(email: string, password: string): Promise<boolean> {
-  const client = createBrowserClient();
+  const client = getFirebaseBrowser();
   if (!client) {
     set({ error: MISSING_ENV_MESSAGE });
     return false;
   }
   set({ busy: true, error: null });
   try {
-    const { data, error } = await client.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
-    if (error) {
-      set({ busy: false, error: translateAuthError(error.message) });
-      return false;
-    }
-    set({
-      busy: false,
-      error: null,
-      email: data.user?.email ?? null,
-      userId: data.user?.id ?? null,
-    });
+    const { user } = await signInWithEmailAndPassword(client.auth, email.trim(), password);
+    set({ busy: false, error: null, email: user.email, userId: user.uid });
     return true;
   } catch (error) {
     set({
@@ -125,11 +97,11 @@ export async function signInWithPassword(email: string, password: string): Promi
 }
 
 export async function signOutFromCloud() {
-  const client = createBrowserClient();
+  const client = getFirebaseBrowser();
   if (!client) return;
   set({ busy: true });
   try {
-    await client.auth.signOut();
+    await signOut(client.auth);
   } catch {
     /* حتى لو الشبكة فشلت بنمسح الحالة من المتصفح */
   }
@@ -142,10 +114,10 @@ export function clearAuthError() {
 
 /** access token الحالي — بيتحط في Authorization لكل طلبات الأدمن */
 export async function currentAccessToken(): Promise<string | null> {
-  const client = createBrowserClient();
+  const client = getFirebaseBrowser();
   if (!client) return null;
-  const { data } = await client.auth.getSession();
-  return data.session?.access_token ?? null;
+  await client.auth.authStateReady();
+  return client.auth.currentUser?.getIdToken() ?? null;
 }
 
 /** fetch بيضيف access token الحالي للطلبات المحمية */
@@ -158,9 +130,9 @@ export async function authenticatedFetch(input: RequestInfo | URL, init: Request
 
 function translateAuthError(message: string): string {
   const text = message.toLowerCase();
-  if (text.includes("invalid login")) return "الإيميل أو الباسورد غلط";
+  if (text.includes("invalid login") || text.includes("invalid-credential") || text.includes("wrong-password") || text.includes("user-not-found")) return "الإيميل أو الباسورد غلط";
   if (text.includes("email not confirmed")) return "الإيميل لسه متأكدش — افتح رسالة التأكيد";
-  if (text.includes("rate limit") || text.includes("too many")) return "محاولات كتير — استنى شوية وجرّب تاني";
+  if (text.includes("rate limit") || text.includes("too many") || text.includes("too-many-requests")) return "محاولات كتير — استنى شوية وجرّب تاني";
   if (text.includes("failed to fetch") || text.includes("network")) return "مفيش اتصال بسيرفر المصادقة";
   return message;
 }

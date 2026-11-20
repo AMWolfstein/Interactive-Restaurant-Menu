@@ -1,0 +1,13 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /store_signals/catalog {
+      allow get: if true;
+    }
+    match /store_signals/orders {
+      allow get: if request.auth != null
+        && request.auth.token.role in ['admin', 'invoice_staff'];
+    }
+  }
+}

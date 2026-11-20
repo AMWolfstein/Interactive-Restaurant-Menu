@@ -233,6 +233,8 @@ export interface MenuData {
 }
 
 /** طلب مسجّل في الباك إند قبل فتح رسالة واتساب */
+export type LoyaltyAdjustment = Pick<CustomerRecord, "spent" | "lifetime" | "ordersCount" | "rewardsUsed" | "discountTotal">;
+
 export interface SavedOrder {
   id: string;
   createdAt: string;
@@ -255,11 +257,13 @@ export interface SavedOrder {
   paymentMethod?: string;
   /** لقطة خصم «كاشك» لو العميل كان مستحق وقت الطلب */
   loyalty?: LoyaltySnapshot;
+  /** الفرق الفعلي المحفوظ عند تغيير الحالة عشان يرجع الرصيد بدقة. */
+  loyaltyAdjustment?: LoyaltyAdjustment;
 }
 
 export interface AdminOverview {
   orders: SavedOrder[];
-  storage: { driver: "supabase" | "file"; persistent: boolean };
+  storage: { driver: "firestore" | "file"; persistent: boolean };
 }
 
 /** السلة بتخزّن المعرّف والكمية فقط، وكل حاجة تانية بتتاشتق من البيانات الحالية */

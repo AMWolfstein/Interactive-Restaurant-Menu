@@ -7,9 +7,9 @@ import { getClientIp, rateLimit, LIMITS } from "./rate-limit";
 /**
  * حارس صفحة الفواتير على السيرفر.
  *
- * كل endpoint تحت /api/invoices بيعدّي من هنا: لازم Supabase access token صالح
- * لحساب دوره `admin` أو `invoice_staff`. الدور بيتقرا من `app_metadata` عند
- * Supabase نفسه — مش من أي حاجة الواجهة بتبعتها، فتعديل الـURL أو الـlocalStorage
+ * كل endpoint تحت /api/invoices بيعدّي من هنا: لازم Firebase ID token صالح
+ * لحساب دوره `admin` أو `invoice_staff`. الدور بيتقرا من `custom claims` عند
+ * Firebase نفسه — مش من أي حاجة الواجهة بتبعتها، فتعديل الـURL أو الـlocalStorage
  * مش بيدّي أي صلاحية.
  *
  * ملاحظة مهمة: ده بيفتح الطلبات بس. أي endpoint إداري (المنتجات، الأسعار،

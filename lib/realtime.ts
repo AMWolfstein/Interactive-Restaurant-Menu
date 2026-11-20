@@ -1,57 +1,22 @@
-import { createBrowserClient } from "./supabase";
+import { doc, onSnapshot } from "firebase/firestore";
+import { getFirebaseBrowser } from "./firebase-browser";
 
-/**
- * تحديث لحظي (Supabase Realtime / Postgres logical replication).
- *
- * أي تغيير في الجداول المفعّلة في publication "supabase_realtime" بيوصل
- * لكل الأجهزة فوراً عن طريق WebSocket — من غير ريفريش ومن غير polling:
- *   - catalog_data → العملاء بيستلموا تعديلات الكتالوج فوراً
- *   - orders    → لوحة الأدمن بتستلم الطلب الجديد فوراً
- *
- * الصلاحيات بتحكمها RLS حتى على الـ Realtime:
- *   - anon يقدر يستمع على catalog_data (قراءة عامة)
- *   - authenticated (الأدمن) بس يقدر يستمع على orders
- *
- * لازم الجداول تكون مضافة لـ publication في قاعدة البيانات — شوف supabase/schema.sql.
- */
+export type StoreSignal = "catalog" | "orders";
 
-export interface RealtimeTableSubscription {
-  table: string;
-  /** نوع الحدث — افتراضي "*" (أي تغيير) */
-  event?: "INSERT" | "UPDATE" | "DELETE" | "*";
-  /** فلتر PostgREST على الصف، مثال: "slug=eq.main" */
-  filter?: string;
-}
-
-/**
- * يشترك في تغييرات جداول معيّنة وينادي onChange فور أي تغيير.
- * بيرجّع دالة الإلغاء — استخدمها في cleanup بتاع useEffect.
- */
-export function subscribeRealtime(
-  channelName: string,
-  subscriptions: RealtimeTableSubscription[],
-  onChange: (table: string) => void,
-): () => void {
-  if (typeof window === "undefined") return () => {};
-  const client = createBrowserClient();
+/** Realtime يحمل علامة تغيّر بس. بيانات الطلبات بتتحمّل من الـ API بعد التحقق من الصلاحيات. */
+export function subscribeRealtime(signal: StoreSignal, onChange: () => void): () => void {
+  const client = getFirebaseBrowser();
   if (!client) return () => {};
 
-  const channel = client.channel(channelName);
-  for (const sub of subscriptions) {
-    channel.on(
-      "postgres_changes",
-      {
-        event: sub.event ?? "*",
-        schema: "public",
-        table: sub.table,
-        ...(sub.filter ? { filter: sub.filter } : {}),
-      },
-      () => onChange(sub.table),
-    );
-  }
-  channel.subscribe();
-
-  return () => {
-    void client.removeChannel(channel);
-  };
+  let lastVersion: string | undefined;
+  return onSnapshot(doc(client.firestore, "store_signals", signal), { includeMetadataChanges: true }, (snapshot) => {
+    if (snapshot.metadata.fromCache) return;
+    const changedAt = snapshot.get("changedAt");
+    const version = changedAt ? `${changedAt.seconds}:${changedAt.nanoseconds}` : "empty";
+    if (version === lastVersion) return;
+    lastVersion = version;
+    onChange();
+  }, (error) => {
+    console.warn(`[realtime] ${signal} listener unavailable; polling stays active`, error.code);
+  });
 }

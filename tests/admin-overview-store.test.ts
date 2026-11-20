@@ -13,7 +13,7 @@ const fetchMock = vi.fn();
 const realtimeUnsubscribe = vi.fn();
 const subscribeRealtimeMock = vi.fn(() => realtimeUnsubscribe);
 
-vi.mock("../lib/supabase-auth-core", () => ({
+vi.mock("../lib/firebase-auth-core", () => ({
   authenticatedFetch: (...args: unknown[]) => fetchMock(...args),
 }));
 
@@ -21,13 +21,11 @@ vi.mock("../lib/realtime", () => ({
   subscribeRealtime: (...args: unknown[]) => subscribeRealtimeMock(...(args as [])),
 }));
 
-vi.mock("../lib/supabase", () => ({ ORDERS_TABLE: "orders" }));
-
 const order = (id: string): SavedOrder => ({ id, status: "new" }) as SavedOrder;
 
 const okReply = (orders: SavedOrder[]) => ({
   ok: true,
-  json: async () => ({ orders, storage: { driver: "supabase", persistent: true } }),
+  json: async () => ({ orders, storage: { driver: "firestore", persistent: true } }),
 });
 
 type Store = typeof import("../lib/admin-overview-store");

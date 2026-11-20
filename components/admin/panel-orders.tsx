@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { useMenu } from "@/lib/use-menu";
 import { orderStatusOf, ORDER_STATUS_LABEL } from "@/lib/format";
-import { authenticatedFetch } from "@/lib/supabase-auth-core";
+import { authenticatedFetch } from "@/lib/firebase-auth-core";
 import {
   applyOrderUpdate,
   getAdminOverviewServerSnapshot,

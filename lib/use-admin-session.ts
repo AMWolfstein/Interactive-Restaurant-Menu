@@ -9,16 +9,16 @@ import {
   signInWithPassword,
   signOutFromCloud,
   subscribeAuth,
-} from "./supabase-auth-core";
+} from "./firebase-auth-core";
 import { refreshMenu } from "./menu-store-core";
 
 /**
- * جلسة الأدمن — دخول حصري عن طريق Supabase Auth (إيميل + باسورد)
- * من الحساب الموجود في Supabase → Authentication → Users.
+ * جلسة الأدمن — دخول حصري عن طريق Firebase Authentication (إيميل + باسورد)
+ * من الحساب الموجود في Firebase → Authentication → Users.
  *
  * بنسأل السيرفر كمان عن صلاحية الحساب: لو الحساب دوره invoice_staff
  * السيرفر بيرد 403 وكل الـAPI الإدارية بترفضه — فاللوحة بتوجّهه لـ/invoices
- * بدل ما تفتحله شاشة فاضية. الحماية الحقيقية على السيرفر و RLS.
+ * بدل ما تفتحله شاشة فاضية. الحماية الحقيقية على السيرفر وFirestore Rules.
  */
 export function useAdminSession() {
   const auth = useSyncExternalStore(subscribeAuth, getAuthSnapshot, () => AUTH_SERVER_STATE);

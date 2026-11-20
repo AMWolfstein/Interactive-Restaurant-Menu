@@ -25,11 +25,12 @@ import {
   getAdminOverviewSnapshot,
   subscribeAdminOverview,
 } from "@/lib/admin-overview-store";
+import { isFirebaseConfigured } from "@/lib/firebase-browser";
 import type { SavedOrder } from "@/lib/types";
 
 interface OverviewState {
   orders: SavedOrder[];
-  storage: { driver: "supabase" | "file"; persistent: boolean };
+  storage: { driver: "firestore" | "file"; persistent: boolean };
 }
 
 const ORDER_TYPE_LABEL: Record<string, string> = {
@@ -44,7 +45,7 @@ const DAY = 86_400_000;
 export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: string) => void }) {
   const { data, isCustomized, storageKb } = useMenu();
   const { items, categories, brand, contact, commerce } = data;
-  const supabaseAuth = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  const firebaseAuth = isFirebaseConfigured();
   // مصدر واحد مشترك مع تبويب الطلبات وتنبيهات الأدمن — اشتراك Realtime
   // واحد ومؤقّت واحد بدل تلاتة بيضربوا نفس النقطة.
   const { orders: overviewOrders, storage, error: overviewError } = useSyncExternalStore(
@@ -153,15 +154,15 @@ export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: str
       tab: "ordering",
     },
     {
-      ok: supabaseAuth,
+      ok: firebaseAuth,
       label: "مصادقة الأدمن",
-      fix: "أضف NEXT_PUBLIC_SUPABASE_URL و NEXT_PUBLIC_SUPABASE_ANON_KEY",
+      fix: "أضف NEXT_PUBLIC_FIREBASE_PROJECT_ID و NEXT_PUBLIC_FIREBASE_API_KEY",
       tab: "data",
     },
     {
       ok: overview.storage.persistent,
       label: "قاعدة البيانات",
-      fix: "التخزين الحالي مؤقت — نفّذ supabase/schema.sql في Supabase",
+      fix: "التخزين الحالي مؤقت — اضبط إعدادات مشروع Firebase وبيانات اعتماد السيرفر",
       tab: "data",
     },
   ];
@@ -258,8 +259,7 @@ export function DashboardPanel({ onJump }: { onJump: (tab: string, payload?: str
           <p className="font-black">قاعدة البيانات الحالية تخزين مؤقت</p>
           <p className="mt-1">
             البيانات بتتحفظ في ملف مؤقت على السيرفر وهتضيع مع كل إعادة تشغيل. عشان الحفظ يبقى دائم على Vercel
-            نفّذ محتوى <span dir="ltr" className="font-mono">supabase/schema.sql</span> مرة واحدة في Supabase → SQL Editor،
-            وبعدها الكتالوج والطلبات هيتحفظوا في Postgres.
+            اضبط مشروع Firebase وبيانات اعتماد السيرفر عشان الكتالوج والطلبات يتحفظوا في Cloud Firestore.
           </p>
         </div>
       ) : null}

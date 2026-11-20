@@ -9,16 +9,16 @@ import {
   signInWithPassword,
   signOutFromCloud,
   subscribeAuth,
-} from "./supabase-auth-core";
+} from "./firebase-auth-core";
 import type { AppRole } from "./server-auth-types";
 
 /**
- * جلسة الموظف — نفس Supabase Auth بتاع اللوحة بالظبط (مفيش نظام دخول تاني).
+ * جلسة الموظف — نفس Firebase Authentication بتاع اللوحة بالظبط (مفيش نظام دخول تاني).
  * الفرق الوحيد إننا بنسأل السيرفر عن دور الحساب بعد الدخول، لأن الدور
- * مصدره `app_metadata` عند Supabase والسيرفر هو اللي بيحسمه.
+ * مصدره `custom claims` عند Firebase والسيرفر هو اللي بيحسمه.
  *
  * الواجهة بتستخدم الدور للتوجيه وإخفاء الأزرار بس — الحماية الحقيقية على
- * السيرفر و RLS (أي endpoint إداري بيرفض invoice_staff بـ403).
+ * السيرفر وFirestore Rules (أي endpoint إداري بيرفض invoice_staff بـ403).
  */
 export interface StaffSession {
   configured: boolean;

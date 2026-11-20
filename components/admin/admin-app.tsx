@@ -258,7 +258,7 @@ export function AdminApp() {
 
 /**
  * تنبيهات الطلبات الجديدة على مستوى اللوحة كلها (أي تبويب مفتوح):
- *  - Realtime لحظي لما يكون Supabase مفعّل
+ *  - Realtime لحظي لما يكون Firebase مفعّل
  *  - فحص دوري كل دقيقة كشبكة أمان (يغطي كمان وضع الملف المحلي)
  * التنبيه = نغمة + وميض عنوان التاب + عداد أحمر على تبويب الطلبات.
  */
@@ -367,7 +367,7 @@ function AdminLogin({
         </span>
         <h1 className="text-lg font-black">لوحة تحكم {siteName}</h1>
         <p className="mt-1 text-xs leading-relaxed text-muted">
-          الدخول بحساب الأدمن المحفوظ في Supabase (Authentication → Users) بالإيميل والباسورد.
+          الدخول بحساب الأدمن المحفوظ في Firebase (Authentication → Users) بالإيميل والباسورد.
         </p>
 
         <div className="mt-4 space-y-3">
@@ -397,13 +397,13 @@ function AdminLogin({
         </Button>
 
         <p className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/8 p-2.5 text-[11px] leading-relaxed text-emerald-300">
-          كل طلب تعديل للكتالوج أو قراءة لبيانات اللوحة بيتحقق من Supabase access token على السيرفر —
+          كل طلب تعديل للكتالوج أو قراءة لبيانات اللوحة بيتحقق من Firebase ID token على السيرفر —
           أي طلب من غير توكن صالح بيرجع 401.
         </p>
 
         {!configured ? (
           <p className="mt-3 rounded-xl border border-red-500/25 bg-red-500/8 p-2.5 text-[11px] leading-relaxed text-red-300">
-            متغيرات Supabase غير موجودة في البيئة دي — أضف NEXT_PUBLIC_SUPABASE_URL و NEXT_PUBLIC_SUPABASE_ANON_KEY.
+            متغيرات Firebase غير موجودة في البيئة دي — أضف NEXT_PUBLIC_FIREBASE_PROJECT_ID و NEXT_PUBLIC_FIREBASE_API_KEY.
           </p>
         ) : null}
       </form>

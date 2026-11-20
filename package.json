@@ -10,11 +10,14 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "cloudinary:whoami": "node scripts/cloudinary-whoami.mjs"
+    "cloudinary:whoami": "node scripts/cloudinary-whoami.mjs",
+    "firestore:migrate": "node --env-file-if-exists=.env.local scripts/migrate-supabase.mjs",
+    "firestore:role": "node --env-file-if-exists=.env.local scripts/firebase-role.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.119.2",
     "canvas-confetti": "^1.9.4",
+    "firebase": "12.19.0",
+    "firebase-admin": "^14.5.1",
     "html-to-image": "^1.11.13",
     "lucide-react": "^1.77.0",
     "next": "^16.4.6",
@@ -44,5 +47,12 @@
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "typescript-eslint": "^8.73.0",
     "vitest": "^5.1.1"
+  },
+  "overrides": {
+    "firebase-admin": {
+      "@firebase/database-compat": "2.1.7"
+    },
+    "@firebase/app": "0.16.2",
+    "@firebase/app-compat": "0.5.18"
   }
 }

@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
   const denied = await requireAdmin(request);
   if (denied) return denied;
   try {
-    const backup = await createCatalogBackup(await getMenu(bearerToken(request)), "manual");
+    const backup = await createCatalogBackup(await getMenu(), "manual");
     return NextResponse.json({ backup }, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "تعذّر إنشاء النسخة الاحتياطية" }, { status: 503 });

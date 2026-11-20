@@ -6,89 +6,27 @@ import { cache } from "react";
 import { DEFAULT_DATA } from "./defaults";
 import { normalizeData } from "./normalize";
 import {
-  fetchAdminOverview,
-  fetchCustomerLoyalty,
+  customerMatches,
+  fetchCustomer,
   fetchCustomerOrders,
+  fetchLatestOrders,
   fetchPublishedMenu,
-  isSupabaseStoreConfigured,
   placeOrder,
-  searchCustomers,
-  probeSupabaseStore,
   savePublishedMenu,
+  searchCustomers,
   updateOrderStatus,
-  type PlaceOrderInput,
-} from "./supabase-store";
-import { checkOrderRules, resolveDeliveryZone } from "./order-rules";
+} from "./firestore-store";
+import { firebaseProjectId } from "./firebase-admin";
+import { changeOrderStatus, orderNumber, prepareOrder, type PlaceOrderInput } from "./order-write";
 import { isValidOrderType, sanitizeText } from "./validation";
-import { generateOrderNumber, orderPrefixFrom } from "./order-number";
-import {
-  computeLoyaltyDiscount,
-  isUsablePhone,
-  loyaltyStatus,
-  nextBalance,
-  normalizePhone,
-  type LoyaltyStatus,
-} from "./loyalty";
-import type {
-  AdminOverview,
-  CustomerRecord,
-  MenuData,
-  OrderStatus,
-  SavedOrder,
-} from "./types";
+import { isUsablePhone, loyaltyStatus, normalizePhone, type LoyaltyStatus } from "./loyalty";
+import { StoreError } from "./store-error";
+import type { AdminOverview, CustomerRecord, MenuData, OrderStatus, SavedOrder } from "./types";
 
-/**
- * طبقة الباك إند لحفظ بيانات المتجر والكتالوج والطلبات.
- *
- * السائق الأساسي هو Supabase (Postgres) — هو اللي بيشتغل على Vercel وبيحفظ
- * البيانات بشكل دائم. ولو Supabase غير مُعدّ (تطوير محلي من غير مفاتيح) بيتم
- * استخدام ملف JSON محلي، وتظهر الحالة في لوحة التحكم.
- */
-
-export class StoreError extends Error {
-  status: number;
-  constructor(message: string, status = 500) {
-    super(message);
-    this.name = "StoreError";
-    this.status = status;
-  }
-}
-
-export interface StorageStatus {
-  driver: "supabase" | "file";
-  /** هل البيانات محفوظة بشكل دائم (Supabase) ولا في ملف مؤقت (تطوير محلي) */
-  persistent: boolean;
-  /** Supabase مُعدّ لكن الجداول لسه مش جاهزة */
-  needsSchema: boolean;
-}
+export { StoreError } from "./store-error";
 
 const DATABASE_PATH = process.env.DATABASE_FILE || path.join(process.cwd(), "data", "store.json");
-const DRIVER_TTL = 60_000;
-/** أقصى عدد طلبات بيتحفظ في ملف التطوير المحلي (مفيش حد في Supabase) */
 const FILE_ORDER_LIMIT = 500;
-let driverCache: { status: StorageStatus; at: number } | null = null;
-
-async function storageStatus(force = false): Promise<StorageStatus> {
-  if (!force && driverCache && Date.now() - driverCache.at < DRIVER_TTL) return driverCache.status;
-
-  let status: StorageStatus = { driver: "file", persistent: false, needsSchema: false };
-  if (isSupabaseStoreConfigured()) {
-    status = (await probeSupabaseStore())
-      ? { driver: "supabase", persistent: true, needsSchema: false }
-      : { driver: "file", persistent: false, needsSchema: true };
-    if (status.needsSchema) {
-      console.error(
-        "[store] جداول Supabase غير جاهزة — نفّذ supabase/schema.sql في SQL Editor عشان الحفظ يبقى دائم.",
-      );
-    }
-  }
-  driverCache = { status, at: Date.now() };
-  return status;
-}
-
-/* ------------------------------------------------------------------ */
-/* ملف التطوير المحلي                                                  */
-/* ------------------------------------------------------------------ */
 
 interface FileDatabase {
   menu: MenuData;
@@ -142,47 +80,6 @@ async function writeFileDatabase(database: FileDatabase) {
   await fs.rename(temporary, DATABASE_PATH);
 }
 
-/* ------------------------------------------------------------------ */
-/* حساب الإجمالي على السيرفر (مكافحة التلاعب)                         */
-/* ------------------------------------------------------------------ */
-
-interface ServerTotals {
-  subtotal: number;
-  delivery: number;
-  service: number;
-  total: number;
-}
-
-/**
- * @param discount خصم «كاشك» — بيتخصم من قيمة الأصناف قبل حساب رسوم الخدمة
- *                 عشان العميل يستفيد بالمكافأة كاملة. التوصيل مش بيتأثر بيه.
- */
-function computeServerTotals(
-  lines: { price: number; quantity: number }[],
-  commerce: MenuData["commerce"],
-  orderType: string,
-  zoneFee?: number | null,
-  discount = 0,
-): ServerTotals {
-  const subtotal = lines.reduce((s, l) => s + l.price * l.quantity, 0);
-  const isDelivery = orderType === "delivery";
-  const qualifiesFree =
-    isDelivery && commerce.freeDeliveryOver > 0 && subtotal >= commerce.freeDeliveryOver;
-  const baseFee = typeof zoneFee === "number" && zoneFee >= 0 ? zoneFee : commerce.deliveryFee;
-  const delivery = isDelivery && !qualifiesFree ? Math.max(0, baseFee) : 0;
-  const safeDiscount = Math.max(0, Math.min(subtotal, discount));
-  const service =
-    commerce.serviceChargePercent > 0
-      ? Math.round(((subtotal - safeDiscount + delivery) * commerce.serviceChargePercent) / 100)
-      : 0;
-  return {
-    subtotal,
-    delivery,
-    service,
-    total: Math.max(0, subtotal - safeDiscount + delivery + service),
-  };
-}
-
 // حالتان بس: الطلب من الموقع هيتنفذ (توصيل أو استلام)، والملغي هو اللي
 // الأدمن لغاه — «مؤكد» و«تم التسليم» اتشالوا.
 const ORDER_STATUSES: OrderStatus[] = ["new", "cancelled"];
@@ -195,21 +92,9 @@ function isValidStatus(value: string): value is OrderStatus {
 /* الواجهة الموحّدة                                                    */
 /* ------------------------------------------------------------------ */
 
-async function readMenu(token: string | null = null): Promise<MenuData> {
-  const status = await storageStatus();
-  if (status.driver === "supabase") {
-    const result = await fetchPublishedMenu();
-    if (result.ok && result.data) return result.data;
-    if (result.code === "EMPTY") {
-      // أول تشغيل: بيانات البداية بتتحفظ في قاعدة البيانات بأول جلسة أدمن
-      const seed = normalizeData(structuredClone(DEFAULT_DATA));
-      if (token) {
-        const saved = await savePublishedMenu(seed, token);
-        if (saved.ok && saved.data) return saved.data;
-      }
-      return seed;
-    }
-    throw new StoreError("تعذّر قراءة الكتالوج", result.status === 404 ? 404 : 502);
+async function readMenu(): Promise<MenuData> {
+  if (firebaseProjectId()) {
+    return (await fetchPublishedMenu()) ?? normalizeData(structuredClone(DEFAULT_DATA));
   }
   return (await readFileDatabase()).menu;
 }
@@ -222,17 +107,14 @@ async function readMenu(token: string | null = null): Promise<MenuData> {
 export const getMenu = cache(readMenu);
 
 export async function replaceMenu(menu: MenuData, token: string | null): Promise<MenuData> {
-  const status = await storageStatus();
   // حماية من حمولة كبيرة (DoS عبر JSON ضخم أو صور dataURL كبيرة)
   const size = JSON.stringify(menu).length;
   if (size > 4_000_000) throw new StoreError("البيانات كبيرة جداً (الحد 4MB)", 413);
   const normalized = normalizeData({ ...menu, updatedAt: new Date().toISOString() });
 
-  if (status.driver === "supabase") {
+  if (firebaseProjectId()) {
     if (!token) throw new StoreError("غير مصرّح", 401);
-    const result = await savePublishedMenu(normalized, token);
-    if (!result.ok) throw new StoreError("تعذّر حفظ الكتالوج", result.status || 502);
-    return result.data ?? normalized;
+    return savePublishedMenu(normalized);
   }
 
   return serialized(async () => {
@@ -243,23 +125,24 @@ export async function replaceMenu(menu: MenuData, token: string | null): Promise
   });
 }
 
-export async function createOrder(input: PlaceOrderInput): Promise<{ order: SavedOrder }> {
+export async function createOrder(input: Partial<PlaceOrderInput>): Promise<{ order: SavedOrder }> {
   // تحقق أساسي من نوع الطلب
-  if (!isValidOrderType(input.orderType)) throw new StoreError("نوع الطلب غير صالح", 400);
+  const orderType = input?.orderType;
+  if (!orderType || !isValidOrderType(orderType)) throw new StoreError("نوع الطلب غير صالح", 400);
   if (!Array.isArray(input.lines) || input.lines.length === 0) throw new StoreError("السلة فارغة", 400);
   if (input.lines.length > 50) throw new StoreError("عدد المنتجات كبير جداً (الحد 50)", 400);
 
   // تعقيم بيانات العميل
   const sanitizedInput: PlaceOrderInput = {
-    ...input,
     customer: {
       name: sanitizeText(input.customer?.name ?? "", 100),
       phone: sanitizeText(input.customer?.phone ?? "", 30),
       address: sanitizeText(input.customer?.address ?? "", 500),
       notes: sanitizeText(input.customer?.notes ?? "", 500),
     },
-    orderType: input.orderType,
+    orderType,
     lines: input.lines.map((l) => {
+      if (!l || typeof l.itemId !== "string") throw new StoreError("منتج غير صالح", 400);
       const rawQty = Math.floor(Number(l.quantity) || 0);
       if (rawQty < 1 || rawQty > 50) throw new StoreError("الكمية يجب أن تكون بين 1 و 50", 400);
       return {
@@ -267,214 +150,39 @@ export async function createOrder(input: PlaceOrderInput): Promise<{ order: Save
         quantity: rawQty,
       };
     }),
-    total: Number(input.total) || 0,
     zoneId: sanitizeText(input.zoneId ?? "", 60) || undefined,
     paymentMethod: sanitizeText(input.paymentMethod ?? "", 40) || undefined,
   };
 
-  const status = await storageStatus();
-
-  if (status.driver === "supabase") {
-    // تحقق من قواعد المحل + مناطق التوصيل + حساب الإجمالي من الكتالوج الحقيقي (مكافحة تلاعب)
-    try {
-      const menu = await getMenu();
-
-      // منطقة التوصيل لازم تكون صالحة لو المناطق مفعّلة
-      const { required: zoneRequired, zone } = resolveDeliveryZone(
-        menu.commerce,
-        sanitizedInput.orderType,
-        sanitizedInput.zoneId,
-      );
-      if (zoneRequired && !zone) throw new StoreError("اختار منطقة التوصيل", 400);
-
-      const linesWithPrice = sanitizedInput.lines.map((l) => {
-        const item = menu.items.find((m) => m.id === l.itemId);
-        return { price: item?.price ?? 0, quantity: l.quantity };
-      });
-      const totals = computeServerTotals(
-        linesWithPrice,
-        menu.commerce,
-        sanitizedInput.orderType,
-        zone?.fee,
-      );
-
-      // قواعد المحل (مفتوح/مقفول، نوع الطلب، الحد الأدنى، بيانات العميل المطلوبة).
-      // بتتحسب على الإجمالي اللي السيرفر حسبه — مش على الرقم الجاي من العميل.
-      const violation = checkOrderRules(menu, {
-        orderType: sanitizedInput.orderType,
-        customer: sanitizedInput.customer,
-        subtotal: totals.subtotal,
-        zone,
-      });
-      if (violation) throw new StoreError(violation.message, violation.status);
-
-      // اسمح بفارق بسيط (تقريب) لكن ارفض التلاعب الكبير
-      if (Math.abs(totals.total - sanitizedInput.total) > 5 && sanitizedInput.total < totals.total * 0.5) {
-        console.warn(`[order] total mismatch client=${sanitizedInput.total} server=${totals.total} - using server total`);
-      }
-      sanitizedInput.total = totals.total;
-    } catch (error) {
-      if (error instanceof StoreError) throw error;
-      // لو فشل الحساب، استمر لكن الـ DB سيعيد الحساب أيضاً
-    }
-
-    const result = await placeOrder(sanitizedInput);
-    if (!result.ok || !result.data) throw new StoreError("تعذّر تسجيل الطلب", result.status || 400);
-    return { order: result.data.order };
-  }
-
-  const order = await serialized(() => createOrderInFile(sanitizedInput));
+  const order = firebaseProjectId()
+    ? await placeOrder(sanitizedInput)
+    : await serialized(() => createOrderInFile(sanitizedInput));
   return { order };
 }
 
-/** تسجيل الطلب في ملف التطوير المحلي */
 async function createOrderInFile(input: PlaceOrderInput) {
   const database = await readFileDatabase();
-  if (!Array.isArray(input.lines) || input.lines.length === 0) throw new StoreError("السلة فارغة", 400);
-  if (input.lines.length > 50) throw new StoreError("عدد المنتجات كبير جداً", 400);
-
-  // منطقة التوصيل لازم تكون موجودة لو المناطق مفعّلة
-  const { required: zoneRequired, zone: resolvedZone } = resolveDeliveryZone(
-    database.menu.commerce,
-    input.orderType,
-    input.zoneId,
-  );
-  if (zoneRequired && !resolvedZone) throw new StoreError("اختار منطقة التوصيل", 400);
-  const zone = resolvedZone ?? undefined;
-
-  // بنبني سطور الطلب الأول من غير ما نعدّل `salesCount` — عشان لو الطلب اترفض
-  // في تحقق القواعد تحت ما يكونش عدّاد المبيعات اتزوّد بالباطل.
-  const orderLines: SavedOrder["lines"] = [];
-  const soldQuantities = new Map<string, number>();
-
-  for (const line of input.lines) {
-    const item = database.menu.items.find((candidate) => candidate.id === line.itemId);
-    if (!item || !item.available) throw new StoreError("أحد المنتجات لم يعد متاحاً", 409);
-
-    const rawQty = Math.floor(Number(line.quantity) || 0);
-    if (rawQty < 1 || rawQty > 50) throw new StoreError(`الحد الأقصى 50 قطعة للمنتج: ${item.name}`, 400);
-    const quantity = rawQty;
-    orderLines.push({ itemId: item.id, name: item.name, quantity, unitPrice: item.price });
-    soldQuantities.set(item.id, (soldQuantities.get(item.id) ?? 0) + quantity);
-  }
-
-  // احسب الإجمالي على السيرفر - تجاهل total القادم من العميل
-  const rawPhone = sanitizeText(input.customer?.phone ?? "", 30);
-  const customerName = sanitizeText(input.customer?.name ?? "", 100);
-
-  // قواعد المحل (مفتوح/مقفول، نوع الطلب، الحد الأدنى، بيانات العميل المطلوبة) —
-  // نفس الدالة المستخدمة في سائق Supabase عشان السلوك يبقى واحد.
-  const ruleSubtotal = orderLines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0);
-  const violation = checkOrderRules(database.menu, {
-    orderType: input.orderType,
-    customer: { name: customerName, phone: rawPhone, address: input.customer?.address ?? "" },
-    subtotal: ruleSubtotal,
-    zone,
-  });
-  if (violation) throw new StoreError(violation.message, violation.status);
-
-  // القواعد عدّت — دلوقتي بس نزوّد عدّاد المبيعات
-  for (const [itemId, quantity] of soldQuantities) {
-    const item = database.menu.items.find((candidate) => candidate.id === itemId);
-    if (item) item.salesCount = Math.max(0, item.salesCount ?? 0) + quantity;
-  }
-
-  // ── خصم «كاشك» ──────────────────────────────────────────────────────────
-  // نفس منطق دالة place_order في Supabase بالظبط عشان السلوك ميختلفش بين
-  // التطوير المحلي والإنتاج.
-  const loyaltySettings = database.menu.commerce.loyalty;
-  const phoneKey = normalizePhone(rawPhone);
-  const loyaltyActive = loyaltySettings.enabled && isUsablePhone(rawPhone);
-  const customer = loyaltyActive
-    ? database.customers.find((row) => row.phone === phoneKey)
-    : undefined;
-
-  const subtotalOnly = orderLines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0);
-  const snapshot = loyaltyActive
-    ? computeLoyaltyDiscount(loyaltySettings, subtotalOnly, customer?.spent ?? 0)
-    : null;
-  const discount = snapshot?.discount ?? 0;
-
-  const totals = computeServerTotals(
-    orderLines.map((l) => ({ price: l.unitPrice, quantity: l.quantity })),
-    database.menu.commerce,
-    input.orderType,
-    zone?.fee,
-    discount,
-  );
-
-  // نفس شكل رقم الطلب اللي بتولّده قاعدة البيانات: BF-7K4P2
+  const phoneKey = database.menu.commerce.loyalty.enabled && isUsablePhone(input.customer.phone)
+    ? normalizePhone(input.customer.phone)
+    : "";
+  const customerIndex = database.customers.findIndex((row) => row.phone === phoneKey);
   const existingIds = new Set(database.orders.map((candidate) => candidate.id));
-  const order: SavedOrder = {
-    id: generateOrderNumber(
-      orderPrefixFrom({
-        orderPrefix: database.menu.commerce.orderPrefix,
-        storeNameEn: database.menu.brand.storeNameEn,
-        storeName: database.menu.brand.storeName,
-      }),
-      (candidate) => existingIds.has(candidate),
-    ),
-    createdAt: new Date().toISOString(),
-    customer: {
-      name: customerName,
-      phone: rawPhone,
-      address: sanitizeText(input.customer?.address ?? "", 500),
-      notes: sanitizeText(input.customer?.notes ?? "", 500),
-    },
-    orderType: input.orderType,
-    lines: orderLines,
-    total: totals.total,
-    subtotal: totals.subtotal,
-    deliveryFee: totals.delivery,
-    serviceFee: totals.service,
-    currency: database.menu.commerce.currency,
-    status: "new",
-    ...(zone ? { zoneName: zone.name } : {}),
-    ...(input.paymentMethod ? { paymentMethod: input.paymentMethod } : {}),
-    ...(snapshot ? { loyalty: snapshot } : {}),
-  };
+  const now = new Date().toISOString();
+  const { order, updatedCustomer, soldQuantities } = prepareOrder(
+    database.menu, input, orderNumber(database.menu, (id) => existingIds.has(id)), now,
+    phoneKey, database.customers[customerIndex],
+  );
 
-  // تحديث ملف العميل في نظام كاشك
-  if (loyaltyActive) {
-    const now = new Date().toISOString();
-    const balanceAfter = snapshot ? snapshot.balanceAfter : nextBalance(customer?.spent ?? 0, subtotalOnly);
-    if (customer) {
-      customer.name = customerName || customer.name;
-      customer.spent = balanceAfter;
-      customer.lifetime += subtotalOnly;
-      customer.ordersCount += 1;
-      if (discount > 0) {
-        customer.rewardsUsed += 1;
-        customer.discountTotal += discount;
-      }
-      customer.updatedAt = now;
-    } else {
-      database.customers.push({
-        phone: phoneKey,
-        name: customerName,
-        spent: balanceAfter,
-        lifetime: subtotalOnly,
-        ordersCount: 1,
-        rewardsUsed: discount > 0 ? 1 : 0,
-        discountTotal: discount,
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
+  for (const item of database.menu.items) {
+    item.salesCount = Math.max(0, item.salesCount ?? 0) + (soldQuantities.get(item.id) ?? 0);
   }
-
+  if (updatedCustomer) {
+    if (customerIndex === -1) database.customers.push(updatedCustomer);
+    else database.customers[customerIndex] = updatedCustomer;
+  }
   database.orders.push(order);
-  // احتفظ بآخر 500 طلب فقط في وضع الملف (منع تضخم).
-  // ده سائق التطوير المحلي بس — في الإنتاج (Supabase) مفيش أي قص للطلبات.
-  if (database.orders.length > FILE_ORDER_LIMIT) {
-    const dropped = database.orders.length - FILE_ORDER_LIMIT;
-    database.orders = database.orders.slice(-FILE_ORDER_LIMIT);
-    console.warn(
-      `[store] ملف التطوير المحلي: اتشال ${dropped} طلب قديم (الحد ${FILE_ORDER_LIMIT}). ` +
-      `للاحتفاظ بكل الطلبات استخدم Supabase.`,
-    );
-  }
-  database.menu.updatedAt = new Date().toISOString();
+  database.orders = database.orders.slice(-FILE_ORDER_LIMIT);
+  database.menu.updatedAt = now;
   await writeFileDatabase(database);
   return order;
 }
@@ -489,48 +197,23 @@ export async function setOrderStatus(
   if (!id) throw new StoreError("رقم الطلب مطلوب", 400);
   if (!isValidStatus(status)) throw new StoreError("حالة الطلب غير صالحة", 400);
 
-  const storage = await storageStatus();
-
-  if (storage.driver === "supabase") {
+  if (firebaseProjectId()) {
     if (!token) throw new StoreError("غير مصرّح", 401);
-    const result = await updateOrderStatus(id, status, token);
-    if (!result.ok || !result.data?.order) {
-      throw new StoreError("تعذّر تحديث حالة الطلب", result.status || 502);
-    }
-    return result.data.order;
+    return updateOrderStatus(id, status);
   }
 
   return serialized(async () => {
     const database = await readFileDatabase();
-    const order = database.orders.find((candidate) => candidate.id === id);
-    if (!order) throw new StoreError("الطلب غير موجود", 404);
-
-    // عكس أثر كاشك عند الإلغاء — من غير كده حد يقدر يعمل طلبات كبيرة ويلغيها
-    // ويجمع رصيد من غير ما يشتري حاجة.
-    const was = order.status === "cancelled" ? "cancelled" : "new";
-    if (was !== status) {
-      const phoneKey = normalizePhone(order.customer?.phone ?? "");
-      const customer = database.customers.find((row) => row.phone === phoneKey);
-      if (customer) {
-        const base = Math.max(0, order.subtotal ?? 0);
-        const sign = status === "cancelled" ? -1 : 1;
-        // لو الطلب كان صرف مكافأة، الإلغاء بيرجّع العتبة لرصيد العميل تاني
-        const delta = sign * (base - (order.loyalty?.threshold ?? 0));
-        customer.spent = Math.max(0, customer.spent + delta);
-        customer.lifetime = Math.max(0, customer.lifetime + sign * base);
-        customer.ordersCount = Math.max(0, customer.ordersCount + sign);
-        if (order.loyalty) {
-          customer.rewardsUsed = Math.max(0, customer.rewardsUsed + sign);
-          customer.discountTotal = Math.max(0, customer.discountTotal + sign * order.loyalty.discount);
-        }
-        customer.updatedAt = new Date().toISOString();
-      }
-    }
-
-    order.status = status;
-    order.statusUpdatedAt = new Date().toISOString();
+    const index = database.orders.findIndex((candidate) => candidate.id === id);
+    if (index === -1) throw new StoreError("الطلب غير موجود", 404);
+    const order = database.orders[index];
+    const phoneKey = normalizePhone(order.customer?.phone ?? "");
+    const customerIndex = database.customers.findIndex((row) => row.phone === phoneKey);
+    const result = changeOrderStatus(order, status, new Date().toISOString(), database.customers[customerIndex]);
+    database.orders[index] = result.order;
+    if (result.updatedCustomer) database.customers[customerIndex] = result.updatedCustomer;
     await writeFileDatabase(database);
-    return order;
+    return result.order;
   });
 }
 
@@ -544,13 +227,10 @@ export async function getOrdersForInvoices(token: string | null): Promise<SavedO
 }
 
 export async function getAdminOverview(token: string | null): Promise<AdminOverview> {
-  const status = await storageStatus();
 
-  if (status.driver === "supabase") {
+  if (firebaseProjectId()) {
     if (!token) throw new StoreError("غير مصرّح", 401);
-    const result = await fetchAdminOverview(token);
-    if (!result.ok || !result.data) throw new StoreError("تعذّر قراءة بيانات اللوحة", result.status || 502);
-    return result.data;
+    return { orders: await fetchLatestOrders(), storage: { driver: "firestore", persistent: true } };
   }
 
   const database = await readFileDatabase();
@@ -577,17 +257,10 @@ export async function getLoyaltyStatus(phone: string): Promise<LoyaltyStatus> {
   const off = loyaltyStatus({ ...settings, enabled: false }, 0);
   if (!settings.enabled || !isUsablePhone(phone)) return off;
 
-  const status = await storageStatus();
-
-  if (status.driver === "supabase") {
-    const result = await fetchCustomerLoyalty(phone);
-    if (!result.ok || !result.data) return off;
-    return loyaltyStatus(settings, Number(result.data.balance) || 0);
-  }
-
-  const database = await readFileDatabase();
   const key = normalizePhone(phone);
-  const customer = database.customers.find((row) => row.phone === key);
+  const customer = firebaseProjectId()
+    ? await fetchCustomer(key)
+    : (await readFileDatabase()).customers.find((row) => row.phone === key);
   return loyaltyStatus(settings, customer?.spent ?? 0);
 }
 
@@ -597,28 +270,18 @@ export async function listCustomers(
   token: string | null,
   limit = 50,
 ): Promise<CustomerRecord[]> {
-  const status = await storageStatus();
   const safeLimit = Math.min(200, Math.max(1, Math.floor(limit) || 50));
   const search = sanitizeText(query, 60);
 
-  if (status.driver === "supabase") {
+  if (firebaseProjectId()) {
     if (!token) throw new StoreError("غير مصرّح", 401);
-    const result = await searchCustomers(search, safeLimit, token);
-    if (!result.ok) throw new StoreError("تعذّر قراءة العملاء", result.status || 502);
-    return result.data ?? [];
+    return searchCustomers(search, safeLimit);
   }
-
   const database = await readFileDatabase();
-  const needle = search.trim().toLowerCase();
+  const needle = search.toLowerCase();
   const digits = normalizePhone(search);
   return database.customers
-    .filter((row) => {
-      if (!needle) return true;
-      return (
-        (digits.length > 0 && row.phone.includes(digits)) ||
-        row.name.toLowerCase().includes(needle)
-      );
-    })
+    .filter((row) => customerMatches(row, needle, digits))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     .slice(0, safeLimit);
 }
@@ -629,18 +292,15 @@ export async function getCustomerOrders(
   token: string | null,
   limit = 100,
 ): Promise<SavedOrder[]> {
-  const status = await storageStatus();
   const safeLimit = Math.min(500, Math.max(1, Math.floor(limit) || 100));
   if (!isUsablePhone(phone)) return [];
 
-  if (status.driver === "supabase") {
+  const key = normalizePhone(phone);
+  if (firebaseProjectId()) {
     if (!token) throw new StoreError("غير مصرّح", 401);
-    const result = await fetchCustomerOrders(phone, safeLimit, token);
-    if (!result.ok) throw new StoreError("تعذّر قراءة طلبات العميل", result.status || 502);
-    return result.data ?? [];
+    return fetchCustomerOrders(key, safeLimit);
   }
 
-  const key = normalizePhone(phone);
   const database = await readFileDatabase();
   return database.orders
     .filter((order) => normalizePhone(order.customer?.phone ?? "") === key)
